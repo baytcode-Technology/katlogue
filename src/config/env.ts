@@ -18,4 +18,6 @@ export const env = {
   SUPABASE_URL: requireEnv('SUPABASE_URL'),
   SUPABASE_ANON_KEY: requireEnv('SUPABASE_ANON_KEY'),
   SUPABASE_SERVICE_ROLE_KEY: requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
+  /** Base domain for store subdomains, e.g. katlogue.com → my-shop.katlogue.com */
+  STOREFRONT_BASE_DOMAIN: process.env.STOREFRONT_BASE_DOMAIN ?? 'localhost',
 } as const

@@ -76,3 +76,19 @@ export async function insertProduct(input: CreateProductInput): Promise<Product>
 
   return data as Product
 }
+
+export async function findActiveProductsByStoreId(storeId: string): Promise<Product[]> {
+  const { data, error } = await supabaseAdmin
+    .from('products')
+    .select('*')
+    .eq('store_id', storeId)
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    throw new AppError(400, error.message, 'PRODUCT_LIST_FAILED')
+  }
+
+  return (data ?? []) as Product[]
+}

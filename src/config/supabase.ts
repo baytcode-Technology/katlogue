@@ -1,11 +1,25 @@
 import { createClient } from '@supabase/supabase-js'
-import dotenv from 'dotenv'
+import { env } from './env.js'
 
-dotenv.config()
+const authOptions = {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+} as const
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+/** Client for OTP sign-in / verify (uses anon key). */
+export const supabaseAuth = createClient(
+  env.SUPABASE_URL,
+  env.SUPABASE_ANON_KEY,
+  authOptions
 )
 
-export default supabase
+/** Admin client for privileged operations after auth. */
+export const supabaseAdmin = createClient(
+  env.SUPABASE_URL,
+  env.SUPABASE_SERVICE_ROLE_KEY,
+  authOptions
+)
+
+export default supabaseAdmin

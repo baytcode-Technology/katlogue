@@ -34,3 +34,20 @@ export type CreateProductInput = {
   sort_order: number
   metadata: Record<string, unknown>
 }
+
+/** Only fields present in the request are updated (partial PATCH). */
+export type UpdateProductInput = {
+  name?: string
+  base_price?: number
+  category_id?: string | null
+  description?: string | null
+  sku?: string | null
+  compare_at_price?: number | null
+  track_inventory?: boolean
+  stock_qty?: number
+  images?: string[]
+  thumbnail_url?: string | null
+  is_active?: boolean
+  sort_order?: number
+  metadata?: Record<string, unknown>
+}

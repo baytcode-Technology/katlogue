@@ -1,17 +1,17 @@
 import { z } from 'zod'
-
-const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+import { isValidSubdomainSlug } from '../../../shared/utils/storefront.js'
 
 export const createStoreSchema = z.object({
   name: z.string().trim().min(1, 'Store name is required').max(200),
   slug: z
     .string()
     .trim()
-    .min(1, 'Slug is required')
-    .max(100)
+    .min(3, 'Slug must be at least 3 characters')
+    .max(63, 'Slug must be at most 63 characters')
     .transform((s) => s.toLowerCase())
-    .refine((s) => slugRegex.test(s), {
-      message: 'Slug must be lowercase letters, numbers, and hyphens only',
+    .refine((s) => isValidSubdomainSlug(s), {
+      message:
+        'Slug must be 3–63 chars, lowercase letters/numbers/hyphens only, and not a reserved name (e.g. api, app, www)',
     }),
   whatsapp_number: z
     .string()

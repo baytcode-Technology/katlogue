@@ -73,3 +73,19 @@ export async function findCategoriesByStoreId(storeId: string): Promise<Category
 
   return (data ?? []) as Category[]
 }
+
+export async function findActiveCategoriesByStoreId(storeId: string): Promise<Category[]> {
+  const { data, error } = await supabaseAdmin
+    .from('categories')
+    .select('*')
+    .eq('store_id', storeId)
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    throw new AppError(400, error.message, 'CATEGORY_LIST_FAILED')
+  }
+
+  return (data ?? []) as Category[]
+}

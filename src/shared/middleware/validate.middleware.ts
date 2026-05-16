@@ -13,3 +13,15 @@ export function validateBody<T>(schema: ZodType<T>) {
     next()
   }
 }
+
+export function validateQuery<T>(schema: ZodType<T>) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    const result = schema.safeParse(req.query)
+    if (!result.success) {
+      const message = result.error.issues.map((i) => i.message).join(', ')
+      return next(new AppError(400, message, 'VALIDATION_ERROR'))
+    }
+    req.query = result.data as typeof req.query
+    next()
+  }
+}

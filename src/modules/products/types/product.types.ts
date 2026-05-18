@@ -18,6 +18,8 @@ export type Product = {
   updated_at: string
 }
 
+import type { CreateProductVariantInput, ProductVariant } from './product-variant.types.js'
+
 export type CreateProductInput = {
   store_id: string
   name: string
@@ -33,6 +35,12 @@ export type CreateProductInput = {
   is_active: boolean
   sort_order: number
   metadata: Record<string, unknown>
+  variants?: CreateProductVariantInput[]
+}
+
+export type CreateProductResult = {
+  product: Product
+  variants: ProductVariant[]
 }
 
 /** Only fields present in the request are updated (partial PATCH). */

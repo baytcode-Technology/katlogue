@@ -93,6 +93,25 @@ export async function findActiveProductsByStoreId(storeId: string): Promise<Prod
   return (data ?? []) as Product[]
 }
 
+export async function findProductsByIds(
+  storeId: string,
+  productIds: string[]
+): Promise<Product[]> {
+  if (productIds.length === 0) return []
+
+  const { data, error } = await supabaseAdmin
+    .from('products')
+    .select('*')
+    .eq('store_id', storeId)
+    .in('id', productIds)
+
+  if (error) {
+    throw new AppError(400, error.message, 'PRODUCT_LOOKUP_FAILED')
+  }
+
+  return (data ?? []) as Product[]
+}
+
 export async function findProductById(productId: string): Promise<Product | null> {
   const { data, error } = await supabaseAdmin
     .from('products')

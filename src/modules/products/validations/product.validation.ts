@@ -1,5 +1,16 @@
 import { z } from 'zod'
 
+export const createProductVariantSchema = z.object({
+  name: z.string().trim().min(1, 'Variant name is required').max(200),
+  options: z.record(z.string(), z.unknown()).default({}),
+  price_delta: z.coerce.number().default(0),
+  stock_qty: z.coerce.number().int().min(0, 'Stock must be 0 or greater').default(0),
+  sku: z.string().trim().max(100).optional(),
+  image_url: z.string().url('Variant image must be a valid URL').optional(),
+  is_active: z.boolean().default(true),
+  sort_order: z.coerce.number().int().default(0),
+})
+
 export const createProductSchema = z.object({
   store_id: z.uuid('Invalid store id'),
   name: z.string().trim().min(1, 'Product name is required').max(500),
@@ -18,6 +29,7 @@ export const createProductSchema = z.object({
   is_active: z.boolean().default(true),
   sort_order: z.coerce.number().int().default(0),
   metadata: z.record(z.string(), z.unknown()).default({}),
+  variants: z.array(createProductVariantSchema).default([]),
 })
 
 export type CreateProductBody = z.infer<typeof createProductSchema>

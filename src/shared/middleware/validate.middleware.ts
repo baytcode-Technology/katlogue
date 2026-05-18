@@ -25,3 +25,15 @@ export function validateQuery<T>(schema: ZodType<T>) {
     next()
   }
 }
+
+export function validateParams<T>(schema: ZodType<T>) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    const result = schema.safeParse(req.params)
+    if (!result.success) {
+      const message = result.error.issues.map((i) => i.message).join(', ')
+      return next(new AppError(400, message, 'VALIDATION_ERROR'))
+    }
+    Object.assign(req.params, result.data)
+    next()
+  }
+}

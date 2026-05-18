@@ -1,10 +1,11 @@
 import * as productRepository from '../repositories/product.repository.js'
-import type { CreateProductInput, Product } from '../types/product.types.js'
+import * as variantRepository from '../repositories/product-variant.repository.js'
+import type { CreateProductInput, CreateProductResult } from '../types/product.types.js'
 
 export async function createProduct(
   ownerId: string,
   input: CreateProductInput
-): Promise<Product> {
+): Promise<CreateProductResult> {
   await productRepository.assertStoreOwner(input.store_id, ownerId)
 
   if (input.category_id) {
@@ -14,5 +15,11 @@ export async function createProduct(
     )
   }
 
-  return productRepository.insertProduct(input)
+  const product = await productRepository.insertProduct(input)
+  const variants = await variantRepository.insertVariants(
+    product.id,
+    input.variants ?? []
+  )
+
+  return { product, variants }
 }

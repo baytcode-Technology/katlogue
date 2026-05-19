@@ -82,6 +82,7 @@ export function buildOpenApiDocument() {
             timezone: { type: 'string', example: 'Asia/Kolkata' },
             ai_language: { type: 'string', nullable: true, example: 'en' },
             ai_system_prompt: { type: 'string', nullable: true },
+            industry: { type: 'string', nullable: true, example: 'Fashion' },
           },
         },
         CreateProductBody: {

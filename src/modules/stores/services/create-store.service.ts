@@ -8,5 +8,6 @@ export async function createStore(
   return storeRepository.insertStore(ownerId, {
     ...input,
     description: input.description?.trim() || null,
+    industry: input.industry?.trim() || null,
   })
 }

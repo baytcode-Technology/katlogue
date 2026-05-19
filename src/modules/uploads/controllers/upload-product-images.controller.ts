@@ -1,0 +1,37 @@
+import type { Request, Response } from 'express'
+import { asyncHandler } from '../../../shared/helpers/async-handler.js'
+import { AppError } from '../../../shared/errors/app.error.js'
+import { z } from 'zod'
+import * as uploadService from '../services/upload-product-images.service.js'
+
+const bodySchema = z.object({
+  store_id: z.uuid('Invalid store id'),
+})
+
+export const uploadProductImages = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.authUser) {
+    throw new AppError(401, 'Unauthorized', 'UNAUTHORIZED')
+  }
+
+  const parsed = bodySchema.safeParse(req.body)
+  if (!parsed.success) {
+    throw new AppError(400, parsed.error.issues[0]?.message ?? 'Invalid request', 'VALIDATION_ERROR')
+  }
+
+  const files = req.files as { buffer: Buffer; mimetype: string; originalname: string }[] | undefined
+  if (!files?.length) {
+    throw new AppError(400, 'At least one image file is required', 'NO_FILES')
+  }
+
+  const urls = await uploadService.uploadProductImages(
+    req.authUser.id,
+    parsed.data.store_id,
+    files
+  )
+
+  res.status(201).json({
+    success: true,
+    message: 'Images uploaded successfully',
+    data: { urls },
+  })
+})

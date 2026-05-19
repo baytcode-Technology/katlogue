@@ -2,4 +2,5 @@ node_modules
 dist
 .env
 logs
-uploads
+# Local disk uploads only — do not ignore src/modules/uploads (API module)
+/uploads

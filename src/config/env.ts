@@ -25,4 +25,7 @@ export const env = {
    * e.g. https://aishopy.up.railway.app — Railway may also set RAILWAY_PUBLIC_DOMAIN.
    */
   API_PUBLIC_URL: process.env.API_PUBLIC_URL?.trim() || undefined,
+  /** Supabase Storage bucket for product images (must exist and be public) */
+  SUPABASE_STORAGE_BUCKET:
+    process.env.SUPABASE_STORAGE_BUCKET?.trim() || 'product-images',
 } as const

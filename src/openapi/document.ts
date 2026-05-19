@@ -40,6 +40,7 @@ export function buildOpenApiDocument() {
       { name: 'Stores', description: 'Merchant store management' },
       { name: 'Products', description: 'Product catalog (merchant)' },
       { name: 'Categories', description: 'Categories (merchant)' },
+      { name: 'Uploads', description: 'File uploads (merchant)' },
       { name: 'Public', description: 'Storefront (guest) — requires store context' },
     ],
     components: {
@@ -87,7 +88,7 @@ export function buildOpenApiDocument() {
         },
         CreateProductBody: {
           type: 'object',
-          required: ['store_id', 'name', 'base_price'],
+          required: ['store_id', 'name', 'base_price', 'images', 'thumbnail_url'],
           properties: {
             store_id: { type: 'string', format: 'uuid' },
             name: { type: 'string' },
@@ -97,7 +98,17 @@ export function buildOpenApiDocument() {
             sku: { type: 'string' },
             track_inventory: { type: 'boolean' },
             stock_qty: { type: 'integer', minimum: 0 },
-            images: { type: 'array', items: { type: 'string', format: 'uri' } },
+            images: {
+              type: 'array',
+              minItems: 1,
+              items: { type: 'string', format: 'uri' },
+              description: 'At least one image URL (from POST /api/uploads/product-images)',
+            },
+            thumbnail_url: {
+              type: 'string',
+              format: 'uri',
+              description: 'Required; must be one of the image URLs',
+            },
             is_active: { type: 'boolean' },
             variants: { type: 'array', items: { type: 'object' } },
           },
@@ -364,6 +375,67 @@ export function buildOpenApiDocument() {
             },
           },
           responses: { '201': { description: 'Product created' } },
+        },
+      },
+      '/api/uploads/product-images': {
+        post: {
+          tags: ['Uploads'],
+          summary: 'Upload product images',
+          description:
+            'Multipart upload. Returns public URLs to pass as `images` and `thumbnail_url` on POST /api/products. Requires store ownership.',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'multipart/form-data': {
+                schema: {
+                  type: 'object',
+                  required: ['store_id', 'images'],
+                  properties: {
+                    store_id: { type: 'string', format: 'uuid' },
+                    images: {
+                      type: 'array',
+                      items: { type: 'string', format: 'binary' },
+                      description: 'One or more image files (JPEG, PNG, WebP, GIF; max 5MB each)',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '201': {
+              description: 'Uploaded image URLs',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      message: { type: 'string' },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          urls: {
+                            type: 'array',
+                            items: { type: 'string', format: 'uri' },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            '400': {
+              description: 'Validation or upload error',
+              content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+            },
+            '401': {
+              description: 'Unauthorized',
+              content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+            },
+          },
         },
       },
       '/api/products/{productId}': {

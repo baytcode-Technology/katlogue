@@ -24,13 +24,19 @@ export const createProductSchema = z.object({
     .optional(),
   track_inventory: z.boolean().default(false),
   stock_qty: z.coerce.number().int().min(0, 'Stock quantity must be 0 or greater').default(0),
-  images: z.array(z.string().url('Each image must be a valid URL')).default([]),
-  thumbnail_url: z.string().url('Thumbnail must be a valid URL').optional(),
+  images: z
+    .array(z.string().url('Each image must be a valid URL'))
+    .min(1, 'At least one product image is required'),
+  thumbnail_url: z.string().url('Thumbnail URL is required'),
   is_active: z.boolean().default(true),
   sort_order: z.coerce.number().int().default(0),
   metadata: z.record(z.string(), z.unknown()).default({}),
   variants: z.array(createProductVariantSchema).default([]),
 })
+  .refine((data) => data.images.includes(data.thumbnail_url), {
+    message: 'Thumbnail URL must be one of the product images',
+    path: ['thumbnail_url'],
+  })
 
 export type CreateProductBody = z.infer<typeof createProductSchema>
 

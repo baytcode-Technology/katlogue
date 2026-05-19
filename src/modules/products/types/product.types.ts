@@ -31,7 +31,7 @@ export type CreateProductInput = {
   track_inventory: boolean
   stock_qty: number
   images: string[]
-  thumbnail_url?: string
+  thumbnail_url: string
   is_active: boolean
   sort_order: number
   metadata: Record<string, unknown>

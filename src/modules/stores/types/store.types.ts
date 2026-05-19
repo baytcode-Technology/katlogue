@@ -30,4 +30,10 @@ export type CreateStoreInput = {
   slug: string
   whatsapp_number: string
   currency: string
+  description?: string | null
+  logo_url?: string | null
+  banner_url?: string | null
+  timezone?: string | null
+  ai_language?: string | null
+  ai_system_prompt?: string | null
 }

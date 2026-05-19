@@ -24,6 +24,20 @@ export const createStoreSchema = z.object({
     .min(3, 'Currency is required')
     .max(3, 'Use a 3-letter currency code')
     .transform((s) => s.toUpperCase()),
+  description: z.string().trim().max(2000).optional().nullable(),
+  logo_url: z
+    .union([z.string().trim().url('Logo must be a valid URL'), z.literal('')])
+    .optional()
+    .nullable()
+    .transform((v) => (v === '' ? null : v ?? null)),
+  banner_url: z
+    .union([z.string().trim().url('Banner must be a valid URL'), z.literal('')])
+    .optional()
+    .nullable()
+    .transform((v) => (v === '' ? null : v ?? null)),
+  timezone: z.string().trim().min(1).max(64).optional(),
+  ai_language: z.string().trim().max(16).optional().nullable(),
+  ai_system_prompt: z.string().trim().max(8000).optional().nullable(),
 })
 
 export type CreateStoreBody = z.infer<typeof createStoreSchema>

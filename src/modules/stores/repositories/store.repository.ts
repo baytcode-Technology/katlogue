@@ -45,6 +45,12 @@ export async function insertStore(
       slug: input.slug,
       whatsapp_number: input.whatsapp_number,
       currency: input.currency,
+      description: input.description ?? null,
+      logo_url: input.logo_url ?? null,
+      banner_url: input.banner_url ?? null,
+      timezone: input.timezone ?? 'Asia/Kolkata',
+      ai_language: input.ai_language ?? null,
+      ai_system_prompt: input.ai_system_prompt ?? null,
     })
     .select()
     .single()

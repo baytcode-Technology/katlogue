@@ -3,6 +3,7 @@ import { z } from 'zod'
 export const catalogQuerySchema = z
   .object({
     category_id: z.uuid('Invalid category id').optional(),
+    product_id: z.uuid('Invalid product id').optional(),
     sort: z
       .enum(['default', 'name_asc', 'name_desc', 'price_asc', 'price_desc'])
       .optional()

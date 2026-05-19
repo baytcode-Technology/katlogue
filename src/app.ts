@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import morgan from 'morgan'
+import { setupApiDocs } from './openapi/setup-docs.js'
 import { authRoutes } from './modules/auth/index.js'
 import { storeRoutes } from './modules/stores/index.js'
 import { productRoutes } from './modules/products/index.js'
@@ -10,6 +11,8 @@ import { publicRoutes } from './modules/storefront/index.js'
 import { errorMiddleware } from './shared/middleware/error.middleware.js'
 
 const app = express()
+
+setupApiDocs(app)
 
 app.use(cors())
 app.use(helmet())

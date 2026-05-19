@@ -20,4 +20,9 @@ export const env = {
   SUPABASE_SERVICE_ROLE_KEY: requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
   /** Base domain for store subdomains, e.g. katlogue.com → my-shop.katlogue.com */
   STOREFRONT_BASE_DOMAIN: process.env.STOREFRONT_BASE_DOMAIN ?? 'localhost',
+  /**
+   * Public API URL for OpenAPI docs (optional).
+   * e.g. https://aishopy.up.railway.app — Railway may also set RAILWAY_PUBLIC_DOMAIN.
+   */
+  API_PUBLIC_URL: process.env.API_PUBLIC_URL?.trim() || undefined,
 } as const

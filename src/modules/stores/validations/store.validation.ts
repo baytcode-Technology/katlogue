@@ -38,6 +38,7 @@ export const createStoreSchema = z.object({
   timezone: z.string().trim().min(1).max(64).optional(),
   ai_language: z.string().trim().max(16).optional().nullable(),
   ai_system_prompt: z.string().trim().max(8000).optional().nullable(),
+  industry: z.string().trim().max(100).optional().nullable(),
 })
 
 export type CreateStoreBody = z.infer<typeof createStoreSchema>

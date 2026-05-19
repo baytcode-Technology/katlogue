@@ -82,6 +82,7 @@ export function buildOpenApiDocument() {
             timezone: { type: 'string', example: 'Asia/Kolkata' },
             ai_language: { type: 'string', nullable: true, example: 'en' },
             ai_system_prompt: { type: 'string', nullable: true },
+            industry: { type: 'string', nullable: true, example: 'Fashion' },
           },
         },
         CreateProductBody: {
@@ -332,6 +333,12 @@ export function buildOpenApiDocument() {
             { name: 'X-Store-Slug', in: 'header', schema: { type: 'string' } },
             { name: 'category_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
             {
+              name: 'product_id',
+              in: 'query',
+              schema: { type: 'string', format: 'uuid' },
+              description: 'Return only this product in products (categories unchanged)',
+            },
+            {
               name: 'sort',
               in: 'query',
               schema: {
@@ -342,7 +349,39 @@ export function buildOpenApiDocument() {
             { name: 'min_price', in: 'query', schema: { type: 'number' } },
             { name: 'max_price', in: 'query', schema: { type: 'number' } },
           ],
-          responses: { '200': { description: 'Catalog' } },
+          responses: {
+            '200': {
+              description:
+                'Catalog with all categories; products filtered by product_id or category_id when set',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean' },
+                      message: { type: 'string' },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          categories: {
+                            type: 'array',
+                            description: 'All active categories for the store',
+                            items: { type: 'object' },
+                          },
+                          products: {
+                            type: 'array',
+                            description:
+                              'All products, one product when product_id is set, or category filter when category_id is set',
+                            items: { type: 'object' },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
       '/api/public/categories': {

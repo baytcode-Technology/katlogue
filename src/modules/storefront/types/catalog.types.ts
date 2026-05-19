@@ -10,23 +10,13 @@ export type CatalogSort =
 
 export type CatalogQuery = {
   category_id?: string
+  product_id?: string
   sort: CatalogSort
   min_price?: number
   max_price?: number
 }
 
-export type CategoryWithProducts = Category & {
+export type CatalogResponse = {
+  categories: Category[]
   products: Product[]
 }
-
-export type CatalogResponse =
-  | {
-      layout: 'products_only'
-      categories: []
-      products: Product[]
-    }
-  | {
-      layout: 'categories'
-      categories: CategoryWithProducts[]
-      uncategorizedProducts: Product[]
-    }

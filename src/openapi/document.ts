@@ -29,7 +29,7 @@ export function buildOpenApiDocument() {
     openapi: '3.1.0',
     info: {
       title: 'Katlogue API',
-      version: '1.0.0',
+      version: '1.1.0',
       description:
         'Merchant and storefront API for Katlogue. Authenticated routes require `Authorization: Bearer <access_token>` from `/api/auth/verify`. Public storefront routes resolve the store via subdomain host or `X-Store-Slug` header.',
     },
@@ -113,6 +113,66 @@ export function buildOpenApiDocument() {
             image_url: { type: 'string', format: 'uri' },
             sort_order: { type: 'integer' },
             is_active: { type: 'boolean' },
+          },
+        },
+        Category: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            store_id: { type: 'string', format: 'uuid' },
+            parent_id: { type: 'string', format: 'uuid', nullable: true },
+            name: { type: 'string', example: 'Electronics' },
+            slug: { type: 'string', example: 'electronics' },
+            image_url: { type: 'string', format: 'uri', nullable: true },
+            sort_order: { type: 'integer', example: 0 },
+            is_active: { type: 'boolean', example: true },
+            created_at: { type: 'string', format: 'date-time' },
+          },
+        },
+        Product: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            store_id: { type: 'string', format: 'uuid' },
+            category_id: { type: 'string', format: 'uuid', nullable: true },
+            name: { type: 'string', example: 'Premium Headphones' },
+            description: { type: 'string', nullable: true },
+            sku: { type: 'string', nullable: true },
+            base_price: { type: 'number', example: 299 },
+            compare_at_price: { type: 'number', nullable: true },
+            track_inventory: { type: 'boolean' },
+            stock_qty: { type: 'integer', example: 45 },
+            images: { type: 'array', items: { type: 'string', format: 'uri' } },
+            thumbnail_url: { type: 'string', format: 'uri', nullable: true },
+            is_active: { type: 'boolean' },
+            sort_order: { type: 'integer' },
+            metadata: { type: 'object', additionalProperties: true },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+          },
+        },
+        CatalogData: {
+          type: 'object',
+          required: ['categories', 'products'],
+          description:
+            'Always returns all active categories. Products are filtered when category_id or product_id is provided.',
+          properties: {
+            categories: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/Category' },
+            },
+            products: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/Product' },
+            },
+          },
+        },
+        CatalogSuccessResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            message: { type: 'string', example: 'Catalog fetched successfully' },
+            data: { $ref: '#/components/schemas/CatalogData' },
           },
         },
         CreateOrderBody: {
@@ -248,6 +308,51 @@ export function buildOpenApiDocument() {
         },
       },
       '/api/products': {
+        get: {
+          tags: ['Products'],
+          summary: 'List products (merchant)',
+          description: 'Requires Bearer token. Returns all products for the given store.',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: 'store_id',
+              in: 'query',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'Product list',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      message: { type: 'string' },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          store_id: { type: 'string', format: 'uuid' },
+                          products: {
+                            type: 'array',
+                            items: { $ref: '#/components/schemas/Product' },
+                          },
+                          count: { type: 'integer' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            '401': {
+              description: 'Unauthorized',
+              content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+            },
+          },
+        },
         post: {
           tags: ['Products'],
           summary: 'Create product',
@@ -329,14 +434,36 @@ export function buildOpenApiDocument() {
         get: {
           tags: ['Public'],
           summary: 'Get storefront catalog',
+          description: [
+            'Returns a single catalog shape:',
+            '',
+            '- **categories**: always all active categories for the store (empty array if none).',
+            '- **products**: all active products by default.',
+            '',
+            '**Filters (products only):**',
+            '- `category_id` — only products in that category.',
+            '- `product_id` — only that one product (array length 1).',
+            '',
+            'Requires store via subdomain or `X-Store-Slug` header.',
+          ].join('\n'),
           parameters: [
-            { name: 'X-Store-Slug', in: 'header', schema: { type: 'string' } },
-            { name: 'category_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+            {
+              name: 'X-Store-Slug',
+              in: 'header',
+              schema: { type: 'string', example: 'my-shop' },
+              description: 'Required when not calling from a store subdomain',
+            },
+            {
+              name: 'category_id',
+              in: 'query',
+              schema: { type: 'string', format: 'uuid' },
+              description: 'Filter products to this category only',
+            },
             {
               name: 'product_id',
               in: 'query',
               schema: { type: 'string', format: 'uuid' },
-              description: 'Return only this product in products (categories unchanged)',
+              description: 'Return only this product in the products array',
             },
             {
               name: 'sort',
@@ -344,42 +471,135 @@ export function buildOpenApiDocument() {
               schema: {
                 type: 'string',
                 enum: ['default', 'name_asc', 'name_desc', 'price_asc', 'price_desc'],
+                default: 'default',
               },
             },
-            { name: 'min_price', in: 'query', schema: { type: 'number' } },
-            { name: 'max_price', in: 'query', schema: { type: 'number' } },
+            { name: 'min_price', in: 'query', schema: { type: 'number', minimum: 0 } },
+            { name: 'max_price', in: 'query', schema: { type: 'number', minimum: 0 } },
           ],
           responses: {
             '200': {
-              description:
-                'Catalog with all categories; products filtered by product_id or category_id when set',
+              description: 'Catalog fetched successfully',
               content: {
                 'application/json': {
-                  schema: {
-                    type: 'object',
-                    properties: {
-                      success: { type: 'boolean' },
-                      message: { type: 'string' },
-                      data: {
-                        type: 'object',
-                        properties: {
-                          categories: {
-                            type: 'array',
-                            description: 'All active categories for the store',
-                            items: { type: 'object' },
-                          },
-                          products: {
-                            type: 'array',
-                            description:
-                              'All products, one product when product_id is set, or category filter when category_id is set',
-                            items: { type: 'object' },
-                          },
+                  schema: { $ref: '#/components/schemas/CatalogSuccessResponse' },
+                  examples: {
+                    fullCatalog: {
+                      summary: 'All categories and products',
+                      value: {
+                        success: true,
+                        message: 'Catalog fetched successfully',
+                        data: {
+                          categories: [
+                            {
+                              id: '11111111-1111-1111-1111-111111111111',
+                              store_id: '22222222-2222-2222-2222-222222222222',
+                              parent_id: null,
+                              name: 'Electronics',
+                              slug: 'electronics',
+                              image_url: null,
+                              sort_order: 0,
+                              is_active: true,
+                              created_at: '2026-05-19T10:00:00.000Z',
+                            },
+                          ],
+                          products: [
+                            {
+                              id: '33333333-3333-3333-3333-333333333333',
+                              store_id: '22222222-2222-2222-2222-222222222222',
+                              category_id: '11111111-1111-1111-1111-111111111111',
+                              name: 'Premium Headphones',
+                              description: 'Wireless noise cancelling',
+                              sku: 'SKU-001',
+                              base_price: 299,
+                              compare_at_price: 399,
+                              track_inventory: true,
+                              stock_qty: 45,
+                              images: [],
+                              thumbnail_url: null,
+                              is_active: true,
+                              sort_order: 0,
+                              metadata: {},
+                              created_at: '2026-05-19T10:00:00.000Z',
+                              updated_at: '2026-05-19T10:00:00.000Z',
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    singleProduct: {
+                      summary: 'With product_id — one product, all categories',
+                      value: {
+                        success: true,
+                        message: 'Catalog fetched successfully',
+                        data: {
+                          categories: [
+                            {
+                              id: '11111111-1111-1111-1111-111111111111',
+                              store_id: '22222222-2222-2222-2222-222222222222',
+                              parent_id: null,
+                              name: 'Electronics',
+                              slug: 'electronics',
+                              image_url: null,
+                              sort_order: 0,
+                              is_active: true,
+                              created_at: '2026-05-19T10:00:00.000Z',
+                            },
+                          ],
+                          products: [
+                            {
+                              id: '33333333-3333-3333-3333-333333333333',
+                              store_id: '22222222-2222-2222-2222-222222222222',
+                              category_id: '11111111-1111-1111-1111-111111111111',
+                              name: 'Premium Headphones',
+                              description: null,
+                              sku: null,
+                              base_price: 299,
+                              compare_at_price: null,
+                              track_inventory: false,
+                              stock_qty: 0,
+                              images: [],
+                              thumbnail_url: null,
+                              is_active: true,
+                              sort_order: 0,
+                              metadata: {},
+                              created_at: '2026-05-19T10:00:00.000Z',
+                              updated_at: '2026-05-19T10:00:00.000Z',
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    categoryFilter: {
+                      summary: 'With category_id — filtered products',
+                      value: {
+                        success: true,
+                        message: 'Catalog fetched successfully',
+                        data: {
+                          categories: [
+                            {
+                              id: '11111111-1111-1111-1111-111111111111',
+                              store_id: '22222222-2222-2222-2222-222222222222',
+                              parent_id: null,
+                              name: 'Electronics',
+                              slug: 'electronics',
+                              image_url: null,
+                              sort_order: 0,
+                              is_active: true,
+                              created_at: '2026-05-19T10:00:00.000Z',
+                            },
+                          ],
+                          products: [],
                         },
                       },
                     },
                   },
                 },
               },
+            },
+            '404': {
+              description: 'Store, category, or product not found',
+              content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
             },
           },
         },

@@ -4,6 +4,7 @@ import { buildOpenApiDocument } from './document.js'
 
 export function setupApiDocs(app: Express) {
   app.get('/openapi.json', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
     res.json(buildOpenApiDocument())
   })
 

@@ -20,7 +20,11 @@ export const uploadProductImages = asyncHandler(async (req: Request, res: Respon
 
   const files = req.files as { buffer: Buffer; mimetype: string; originalname: string }[] | undefined
   if (!files?.length) {
-    throw new AppError(400, 'At least one image file is required', 'NO_FILES')
+    const hasStoreId = typeof req.body?.store_id === 'string' && req.body.store_id.length > 0
+    const hint = hasStoreId
+      ? ' Send multipart field "images" with file data (React Native must use a file:// URI).'
+      : ''
+    throw new AppError(400, `At least one image file is required.${hint}`, 'NO_FILES')
   }
 
   const urls = await uploadService.uploadProductImages(

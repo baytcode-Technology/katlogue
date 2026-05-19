@@ -51,6 +51,7 @@ export async function insertStore(
       timezone: input.timezone ?? 'Asia/Kolkata',
       ai_language: input.ai_language ?? null,
       ai_system_prompt: input.ai_system_prompt ?? null,
+      industry: input.industry ?? null,
     })
     .select()
     .single()

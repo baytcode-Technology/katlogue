@@ -2,13 +2,7 @@ import { AppError } from '../../../shared/errors/app.error.js'
 import { findActiveCategoriesByStoreId } from '../../categories/repositories/category.repository.js'
 import { findActiveProductsByStoreId } from '../../products/repositories/product.repository.js'
 import type { Product } from '../../products/types/product.types.js'
-import type {
-  CatalogQuery,
-  CatalogResponse,
-  CatalogSort,
-  CategoryWithProducts,
-} from '../types/catalog.types.js'
-import type { Category } from '../../categories/types/category.types.js'
+import type { CatalogQuery, CatalogResponse, CatalogSort } from '../types/catalog.types.js'
 
 function filterByPrice(
   products: Product[],
@@ -43,29 +37,6 @@ function sortProducts(products: Product[], sort: CatalogSort): Product[] {
   }
 }
 
-function nestProductsInCategories(
-  categories: Category[],
-  products: Product[]
-): { categories: CategoryWithProducts[]; uncategorizedProducts: Product[] } {
-  const byCategory = new Map<string, Product[]>()
-
-  for (const product of products) {
-    if (!product.category_id) continue
-    const list = byCategory.get(product.category_id) ?? []
-    list.push(product)
-    byCategory.set(product.category_id, list)
-  }
-
-  const categoriesWithProducts: CategoryWithProducts[] = categories.map((category) => ({
-    ...category,
-    products: byCategory.get(category.id) ?? [],
-  }))
-
-  const uncategorizedProducts = products.filter((p) => !p.category_id)
-
-  return { categories: categoriesWithProducts, uncategorizedProducts }
-}
-
 export async function getCatalog(
   storeId: string,
   query: CatalogQuery
@@ -78,35 +49,27 @@ export async function getCatalog(
   let products = filterByPrice(allProducts, query.min_price, query.max_price)
   products = sortProducts(products, query.sort)
 
+  if (query.product_id) {
+    const product = products.find((p) => p.id === query.product_id)
+    if (!product) {
+      throw new AppError(404, 'Product not found', 'PRODUCT_NOT_FOUND')
+    }
+    return {
+      categories,
+      products: [product],
+    }
+  }
+
   if (query.category_id) {
     const categoryExists = categories.some((c) => c.id === query.category_id)
     if (!categoryExists) {
       throw new AppError(404, 'Category not found', 'CATEGORY_NOT_FOUND')
     }
-
-    const filtered = products.filter((p) => p.category_id === query.category_id)
-    const category = categories.find((c) => c.id === query.category_id)!
-
-    return {
-      layout: 'categories',
-      categories: [{ ...category, products: filtered }],
-      uncategorizedProducts: [],
-    }
+    products = products.filter((p) => p.category_id === query.category_id)
   }
-
-  if (categories.length === 0) {
-    return {
-      layout: 'products_only',
-      categories: [],
-      products,
-    }
-  }
-
-  const nested = nestProductsInCategories(categories, products)
 
   return {
-    layout: 'categories',
-    categories: nested.categories,
-    uncategorizedProducts: sortProducts(nested.uncategorizedProducts, query.sort),
+    categories,
+    products,
   }
 }

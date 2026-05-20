@@ -35,6 +35,20 @@ export async function insertVariants(
   return (data ?? []) as ProductVariant[]
 }
 
+export async function findVariantsByProductId(productId: string): Promise<ProductVariant[]> {
+  const { data, error } = await supabaseAdmin
+    .from('product_variants')
+    .select('*')
+    .eq('product_id', productId)
+    .order('sort_order', { ascending: true })
+
+  if (error) {
+    throw new AppError(400, error.message, 'VARIANT_LOOKUP_FAILED')
+  }
+
+  return (data ?? []) as ProductVariant[]
+}
+
 export async function findVariantsByProductIds(
   productIds: string[]
 ): Promise<Map<string, ProductVariant[]>> {

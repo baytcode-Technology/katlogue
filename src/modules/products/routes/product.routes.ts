@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { createProduct } from '../controllers/create-product.controller.js'
+import { getProduct } from '../controllers/get-product.controller.js'
 import { listProducts } from '../controllers/list-products.controller.js'
 import { updateProduct } from '../controllers/update-product.controller.js'
 import { requireAuth } from '../../../shared/middleware/auth.middleware.js'
@@ -18,6 +19,12 @@ import {
 const router = Router()
 
 router.get('/', validateQuery(listProductsQuerySchema), requireAuth, listProducts)
+router.get(
+  '/:productId',
+  validateParams(productIdParamSchema),
+  requireAuth,
+  getProduct
+)
 router.post('/', validateBody(createProductSchema), requireAuth, createProduct)
 router.patch(
   '/:productId',

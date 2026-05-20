@@ -28,6 +28,8 @@ export type CreateOrderInput = {
   shipping_address: ShippingAddress
   notes?: string
   conversation_id?: string
+  /** DB order_source enum — e.g. storefront, whatsapp */
+  source?: string
 }
 
 export type Order = {

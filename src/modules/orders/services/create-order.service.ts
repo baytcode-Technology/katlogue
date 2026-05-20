@@ -178,7 +178,7 @@ export async function createOrder(
     conversation_id: input.conversation_id ?? null,
     order_number: generateOrderNumber(),
     status: orderStatus,
-    source: 'storefront',
+    source: input.source ?? 'storefront',
     subtotal,
     discount_amount: 0,
     shipping_fee: 0,

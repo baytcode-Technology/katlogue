@@ -81,3 +81,36 @@ export async function insertPayment(row: {
 export async function deleteOrder(orderId: string): Promise<void> {
   await supabaseAdmin.from('orders').delete().eq('id', orderId)
 }
+
+export type OrderWithCustomer = Order & {
+  customers: { name: string | null; whatsapp_number: string } | null
+}
+
+export async function findOrdersByStoreId(storeId: string): Promise<OrderWithCustomer[]> {
+  const { data, error } = await supabaseAdmin
+    .from('orders')
+    .select('*, customers(name, whatsapp_number)')
+    .eq('store_id', storeId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new AppError(400, error.message, 'ORDER_LIST_FAILED')
+  }
+
+  return (data ?? []) as OrderWithCustomer[]
+}
+
+export async function findOrderItemsByOrderIds(orderIds: string[]): Promise<OrderItem[]> {
+  if (orderIds.length === 0) return []
+
+  const { data, error } = await supabaseAdmin
+    .from('order_items')
+    .select('*')
+    .in('order_id', orderIds)
+
+  if (error) {
+    throw new AppError(400, error.message, 'ORDER_ITEMS_LOOKUP_FAILED')
+  }
+
+  return (data ?? []) as OrderItem[]
+}

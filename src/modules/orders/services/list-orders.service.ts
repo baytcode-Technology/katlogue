@@ -1,0 +1,31 @@
+import * as orderRepository from '../repositories/order.repository.js'
+import * as storeRepository from '../../stores/repositories/store.repository.js'
+import type { OrderItem } from '../types/order.types.js'
+import type { OrderWithCustomer } from '../repositories/order.repository.js'
+
+export type OrderListItem = OrderWithCustomer & {
+  items: OrderItem[]
+}
+
+export async function listOrdersByStore(
+  ownerId: string,
+  storeId: string
+): Promise<OrderListItem[]> {
+  await storeRepository.assertStoreOwner(storeId, ownerId)
+
+  const orders = await orderRepository.findOrdersByStoreId(storeId)
+  const orderIds = orders.map((o) => o.id)
+  const allItems = await orderRepository.findOrderItemsByOrderIds(orderIds)
+
+  const itemsByOrder = new Map<string, OrderItem[]>()
+  for (const item of allItems) {
+    const list = itemsByOrder.get(item.order_id) ?? []
+    list.push(item)
+    itemsByOrder.set(item.order_id, list)
+  }
+
+  return orders.map((order) => ({
+    ...order,
+    items: itemsByOrder.get(order.id) ?? [],
+  }))
+}

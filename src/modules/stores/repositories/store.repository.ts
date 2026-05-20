@@ -82,6 +82,20 @@ export async function findStoreByOwnerId(ownerId: string): Promise<Store | null>
   return data as Store | null
 }
 
+export async function findStoreById(storeId: string): Promise<Store | null> {
+  const { data, error } = await supabaseAdmin
+    .from('stores')
+    .select('*')
+    .eq('id', storeId)
+    .maybeSingle()
+
+  if (error) {
+    throw new AppError(400, error.message, 'STORE_LOOKUP_FAILED')
+  }
+
+  return data as Store | null
+}
+
 export async function findActiveStoreBySlug(slug: string): Promise<Store | null> {
   const { data, error } = await supabaseAdmin
     .from('stores')

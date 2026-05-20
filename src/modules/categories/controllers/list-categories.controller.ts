@@ -9,7 +9,7 @@ export const listCategories = asyncHandler(async (req: Request, res: Response) =
     throw new AppError(401, 'Unauthorized', 'UNAUTHORIZED')
   }
 
-  const { store_id } = req.query as unknown as ListCategoriesQuery
+  const { store_id } = req.validatedQuery as ListCategoriesQuery
   const categories = await listCategoriesService.listCategoriesByStore(
     req.authUser.id,
     store_id

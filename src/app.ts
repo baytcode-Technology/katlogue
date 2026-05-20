@@ -24,6 +24,14 @@ app.get('/', (_req, res) => {
   res.json({
     success: true,
     message: 'Katlog API Running',
+    /** Present on Railway — compare with GitHub commit to confirm deploy */
+    deploy:
+      process.env.RAILWAY_GIT_COMMIT_SHA || process.env.RAILWAY_GIT_BRANCH
+        ? {
+            commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? null,
+            branch: process.env.RAILWAY_GIT_BRANCH ?? null,
+          }
+        : undefined,
   })
 })
 

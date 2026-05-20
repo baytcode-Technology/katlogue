@@ -9,7 +9,7 @@ export const getCatalog = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
   }
 
-  const query = req.query as unknown as CatalogQueryInput
+  const query = req.validatedQuery as CatalogQueryInput
   const catalog = await getCatalogService.getCatalog(req.store.id, query)
 
   res.status(200).json({

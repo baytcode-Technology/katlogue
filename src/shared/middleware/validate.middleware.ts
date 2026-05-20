@@ -21,15 +21,8 @@ export function validateQuery<T>(schema: ZodType<T>) {
       const message = result.error.issues.map((i) => i.message).join(', ')
       return next(new AppError(400, message, 'VALIDATION_ERROR'))
     }
-    // Express 5: req.query is read-only — assign fields instead of replacing the object
-    const query = req.query as Record<string, unknown>
-    const parsed = result.data as Record<string, unknown>
-    for (const key of Object.keys(query)) {
-      if (!(key in parsed)) {
-        delete query[key]
-      }
-    }
-    Object.assign(query, parsed)
+    // Express 5: req.query is read-only / frozen — never assign or mutate it
+    req.validatedQuery = result.data
     next()
   }
 }

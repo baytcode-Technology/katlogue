@@ -72,3 +72,26 @@ export const updateProductSchema = z
 
 export type UpdateProductBody = z.infer<typeof updateProductSchema>
 export type ProductIdParam = z.infer<typeof productIdParamSchema>
+
+export const productVariantParamsSchema = z.object({
+  productId: z.uuid('Invalid product id'),
+  variantId: z.uuid('Invalid variant id'),
+})
+
+export const updateProductVariantSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Variant name cannot be empty').max(200).optional(),
+    options: z.record(z.string(), z.unknown()).optional(),
+    price_delta: z.coerce.number().optional(),
+    stock_qty: z.coerce.number().int().min(0, 'Stock must be 0 or greater').optional(),
+    sku: z.union([z.string().trim().max(100), z.null()]).optional(),
+    image_url: z.union([z.string().url('Variant image must be a valid URL'), z.null()]).optional(),
+    is_active: z.boolean().optional(),
+    sort_order: z.coerce.number().int().optional(),
+  })
+  .refine((data) => Object.values(data).some((value) => value !== undefined), {
+    message: 'At least one field is required to update',
+  })
+
+export type ProductVariantParams = z.infer<typeof productVariantParamsSchema>
+export type UpdateProductVariantBody = z.infer<typeof updateProductVariantSchema>

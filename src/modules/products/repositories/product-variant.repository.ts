@@ -3,6 +3,7 @@ import { AppError } from '../../../shared/errors/app.error.js'
 import type {
   CreateProductVariantInput,
   ProductVariant,
+  UpdateProductVariantInput,
 } from '../types/product-variant.types.js'
 
 export async function insertVariants(
@@ -87,4 +88,63 @@ export async function findVariantById(variantId: string): Promise<ProductVariant
   }
 
   return data as ProductVariant | null
+}
+
+export async function assertVariantBelongsToProduct(
+  variantId: string,
+  productId: string
+): Promise<ProductVariant> {
+  const variant = await findVariantById(variantId)
+  if (!variant || variant.product_id !== productId) {
+    throw new AppError(404, 'Variant not found for this product', 'VARIANT_NOT_FOUND')
+  }
+  return variant
+}
+
+export async function insertVariant(
+  productId: string,
+  input: CreateProductVariantInput
+): Promise<ProductVariant> {
+  const rows = await insertVariants(productId, [input])
+  const created = rows[0]
+  if (!created) {
+    throw new AppError(400, 'Failed to create variant', 'VARIANT_CREATE_FAILED')
+  }
+  return created
+}
+
+export async function updateVariant(
+  variantId: string,
+  patch: UpdateProductVariantInput
+): Promise<ProductVariant> {
+  const row: Record<string, unknown> = {}
+  if (patch.name !== undefined) row.name = patch.name
+  if (patch.options !== undefined) row.options = patch.options
+  if (patch.price_delta !== undefined) row.price_delta = patch.price_delta
+  if (patch.stock_qty !== undefined) row.stock_qty = patch.stock_qty
+  if (patch.sku !== undefined) row.sku = patch.sku
+  if (patch.image_url !== undefined) row.image_url = patch.image_url
+  if (patch.is_active !== undefined) row.is_active = patch.is_active
+  if (patch.sort_order !== undefined) row.sort_order = patch.sort_order
+
+  const { data, error } = await supabaseAdmin
+    .from('product_variants')
+    .update(row)
+    .eq('id', variantId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new AppError(400, error.message, 'VARIANT_UPDATE_FAILED')
+  }
+
+  return data as ProductVariant
+}
+
+export async function deleteVariant(variantId: string): Promise<void> {
+  const { error } = await supabaseAdmin.from('product_variants').delete().eq('id', variantId)
+
+  if (error) {
+    throw new AppError(400, error.message, 'VARIANT_DELETE_FAILED')
+  }
 }

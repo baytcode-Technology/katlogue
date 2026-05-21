@@ -176,3 +176,51 @@ export async function updateProduct(
 
   return data as Product
 }
+
+export async function syncCategoryMembership(
+  storeId: string,
+  categoryId: string,
+  productIds: string[]
+): Promise<{ assigned: number; removed: number }> {
+  const now = new Date().toISOString()
+
+  if (productIds.length > 0) {
+    const { error: assignError } = await supabaseAdmin
+      .from('products')
+      .update({ category_id: categoryId, updated_at: now })
+      .eq('store_id', storeId)
+      .in('id', productIds)
+
+    if (assignError) {
+      throw new AppError(400, assignError.message, 'CATEGORY_ASSIGN_FAILED')
+    }
+  }
+
+  const { data: inCategory, error: listError } = await supabaseAdmin
+    .from('products')
+    .select('id')
+    .eq('store_id', storeId)
+    .eq('category_id', categoryId)
+
+  if (listError) {
+    throw new AppError(400, listError.message, 'CATEGORY_SYNC_FAILED')
+  }
+
+  const toRemove = (inCategory ?? [])
+    .map((r) => r.id as string)
+    .filter((id) => !productIds.includes(id))
+
+  if (toRemove.length > 0) {
+    const { error: removeError } = await supabaseAdmin
+      .from('products')
+      .update({ category_id: null, updated_at: now })
+      .eq('store_id', storeId)
+      .in('id', toRemove)
+
+    if (removeError) {
+      throw new AppError(400, removeError.message, 'CATEGORY_REMOVE_FAILED')
+    }
+  }
+
+  return { assigned: productIds.length, removed: toRemove.length }
+}

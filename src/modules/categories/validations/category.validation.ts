@@ -15,7 +15,7 @@ export const createCategorySchema = z.object({
       message: 'Slug must be lowercase letters, numbers, and hyphens only',
     }),
   parent_id: z.uuid('Invalid parent category id').optional(),
-  image_url: z.string().url('Image must be a valid URL').optional(),
+  image_url: z.string().url('Category image is required'),
   sort_order: z.coerce.number().int().default(0),
   is_active: z.boolean().default(true),
 })

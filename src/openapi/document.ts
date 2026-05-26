@@ -115,7 +115,7 @@ export function buildOpenApiDocument() {
         },
         CreateCategoryBody: {
           type: 'object',
-          required: ['store_id', 'name', 'slug'],
+          required: ['store_id', 'name', 'slug', 'image_url'],
           properties: {
             store_id: { type: 'string', format: 'uuid' },
             name: { type: 'string' },
@@ -134,7 +134,7 @@ export function buildOpenApiDocument() {
             parent_id: { type: 'string', format: 'uuid', nullable: true },
             name: { type: 'string', example: 'Electronics' },
             slug: { type: 'string', example: 'electronics' },
-            image_url: { type: 'string', format: 'uri', nullable: true },
+            image_url: { type: 'string', format: 'uri' },
             sort_order: { type: 'integer', example: 0 },
             is_active: { type: 'boolean', example: true },
             created_at: { type: 'string', format: 'date-time' },

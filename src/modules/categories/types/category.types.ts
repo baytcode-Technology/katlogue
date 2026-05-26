@@ -4,10 +4,14 @@ export type Category = {
   parent_id: string | null
   name: string
   slug: string
-  image_url: string | null
+  image_url: string
   sort_order: number
   is_active: boolean
   created_at: string
+}
+
+export type CategoryWithProductCount = Category & {
+  product_count: number
 }
 
 export type CreateCategoryInput = {
@@ -15,7 +19,7 @@ export type CreateCategoryInput = {
   name: string
   slug: string
   parent_id?: string
-  image_url?: string
+  image_url: string
   sort_order: number
   is_active: boolean
 }

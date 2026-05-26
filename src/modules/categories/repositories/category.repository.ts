@@ -42,7 +42,7 @@ export async function insertCategory(input: CreateCategoryInput): Promise<Catego
       name: input.name,
       slug: input.slug,
       parent_id: input.parent_id ?? null,
-      image_url: input.image_url ?? null,
+      image_url: input.image_url,
       sort_order: input.sort_order,
       is_active: input.is_active,
     })

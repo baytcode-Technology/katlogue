@@ -104,6 +104,21 @@ export async function findStoreByWhatsAppWebhookTarget(input: {
   const displayPhoneNumber = input.displayPhoneNumber?.trim()
 
   if (waPhoneNumberId) {
+    const { data: mapped, error: mapError } = await supabaseAdmin
+      .from('whatsapp_store_numbers')
+      .select('store_id')
+      .eq('wa_phone_number_id', waPhoneNumberId)
+      .maybeSingle()
+
+    if (mapError) {
+      throw new AppError(400, mapError.message, 'STORE_LOOKUP_FAILED')
+    }
+
+    if (mapped?.store_id) {
+      const store = await findStoreById(mapped.store_id)
+      if (store) return store
+    }
+
     const { data, error } = await supabaseAdmin
       .from('stores')
       .select('*')

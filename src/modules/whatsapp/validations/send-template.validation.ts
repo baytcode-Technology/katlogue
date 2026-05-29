@@ -1,6 +1,8 @@
 import { z } from 'zod'
 
 export const sendTemplateSchema = z.object({
+  storeId: z.string().uuid().optional(),
+  store_id: z.string().uuid().optional(),
   to: z
     .string()
     .trim()

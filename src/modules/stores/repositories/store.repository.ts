@@ -96,6 +96,33 @@ export async function findStoreById(storeId: string): Promise<Store | null> {
   return data as Store | null
 }
 
+export async function updateWhatsAppConnection(input: {
+  storeId: string
+  waPhoneNumberId: string | null
+  waWabaId: string | null
+  waAccessToken: string | null
+  whatsappNumber?: string | null
+}): Promise<Store> {
+  const { data, error } = await supabaseAdmin
+    .from('stores')
+    .update({
+      wa_phone_number_id: input.waPhoneNumberId,
+      wa_waba_id: input.waWabaId,
+      wa_access_token: input.waAccessToken,
+      ...(input.whatsappNumber !== undefined ? { whatsapp_number: input.whatsappNumber } : {}),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.storeId)
+    .select('*')
+    .single()
+
+  if (error) {
+    throw new AppError(400, error.message, 'STORE_UPDATE_FAILED')
+  }
+
+  return data as Store
+}
+
 export async function findStoreByWhatsAppWebhookTarget(input: {
   waPhoneNumberId?: string | null
   displayPhoneNumber?: string | null

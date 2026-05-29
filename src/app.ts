@@ -10,6 +10,7 @@ import { categoryRoutes } from './modules/categories/index.js'
 import { publicRoutes } from './modules/storefront/index.js'
 import { uploadRoutes } from './modules/uploads/index.js'
 import { orderRoutes } from './modules/orders/index.js'
+import { whatsappRoutes, whatsappWebhookRoutes } from './modules/whatsapp/index.js'
 import { errorMiddleware } from './shared/middleware/error.middleware.js'
 
 const app = express()
@@ -19,6 +20,11 @@ setupApiDocs(app)
 app.use(cors())
 app.use(helmet())
 app.use(morgan('dev'))
+
+// WhatsApp webhook needs raw body parsing for signature verification.
+// It installs its own raw parser in the router.
+app.use('/api/webhooks/whatsapp', whatsappWebhookRoutes)
+
 app.use(express.json())
 
 app.get('/', (_req, res) => {
@@ -42,6 +48,7 @@ app.use('/api/products', productRoutes)
 app.use('/api/categories', categoryRoutes)
 app.use('/api/uploads', uploadRoutes)
 app.use('/api/orders', orderRoutes)
+app.use('/api/whatsapp', whatsappRoutes)
 app.use('/api/public', publicRoutes)
 
 app.use(errorMiddleware)

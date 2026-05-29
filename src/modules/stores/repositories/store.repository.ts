@@ -96,6 +96,44 @@ export async function findStoreById(storeId: string): Promise<Store | null> {
   return data as Store | null
 }
 
+export async function findStoreByWhatsAppWebhookTarget(input: {
+  waPhoneNumberId?: string | null
+  displayPhoneNumber?: string | null
+}): Promise<Store | null> {
+  const waPhoneNumberId = input.waPhoneNumberId?.trim()
+  const displayPhoneNumber = input.displayPhoneNumber?.trim()
+
+  if (waPhoneNumberId) {
+    const { data, error } = await supabaseAdmin
+      .from('stores')
+      .select('*')
+      .eq('wa_phone_number_id', waPhoneNumberId)
+      .maybeSingle()
+
+    if (error) {
+      throw new AppError(400, error.message, 'STORE_LOOKUP_FAILED')
+    }
+
+    if (data) return data as Store
+  }
+
+  if (displayPhoneNumber) {
+    const { data, error } = await supabaseAdmin
+      .from('stores')
+      .select('*')
+      .eq('whatsapp_number', displayPhoneNumber)
+      .maybeSingle()
+
+    if (error) {
+      throw new AppError(400, error.message, 'STORE_LOOKUP_FAILED')
+    }
+
+    if (data) return data as Store
+  }
+
+  return null
+}
+
 export async function findActiveStoreBySlug(slug: string): Promise<Store | null> {
   const { data, error } = await supabaseAdmin
     .from('stores')

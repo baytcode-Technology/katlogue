@@ -41,6 +41,7 @@ export function buildOpenApiDocument() {
       { name: 'Products', description: 'Product catalog (merchant)' },
       { name: 'Categories', description: 'Categories (merchant)' },
       { name: 'Uploads', description: 'File uploads (merchant)' },
+      { name: 'WhatsApp', description: 'WhatsApp Cloud API integration (merchant)' },
       { name: 'Public', description: 'Storefront (guest) — requires store context' },
     ],
     components: {
@@ -233,6 +234,19 @@ export function buildOpenApiDocument() {
             notes: { type: 'string' },
           },
         },
+        WhatsAppSendTemplateBody: {
+          type: 'object',
+          required: ['to', 'templateName'],
+          properties: {
+            to: {
+              type: 'string',
+              description: 'Recipient number in digits-only form (no +).',
+              example: '919876543210',
+            },
+            templateName: { type: 'string', example: 'hello_world' },
+            languageCode: { type: 'string', example: 'en_US' },
+          },
+        },
       },
     },
     paths: {
@@ -287,6 +301,42 @@ export function buildOpenApiDocument() {
           responses: {
             '200': { description: 'Returns access and refresh tokens' },
             '400': { description: 'Invalid OTP' },
+          },
+        },
+      },
+      '/api/whatsapp/send-template': {
+        post: {
+          tags: ['WhatsApp'],
+          summary: 'Send a WhatsApp template message',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/WhatsAppSendTemplateBody' },
+              },
+            },
+          },
+          responses: {
+            '200': { description: 'Message sent' },
+            '400': {
+              description: 'Validation or Meta API error',
+              content: {
+                'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } },
+              },
+            },
+            '401': {
+              description: 'Unauthorized',
+              content: {
+                'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } },
+              },
+            },
+            '503': {
+              description: 'WhatsApp not configured',
+              content: {
+                'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } },
+              },
+            },
           },
         },
       },

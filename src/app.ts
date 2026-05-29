@@ -24,6 +24,8 @@ app.use(morgan('dev'))
 // WhatsApp webhook needs raw body parsing for signature verification.
 // It installs its own raw parser in the router.
 app.use('/api/webhooks/whatsapp', whatsappWebhookRoutes)
+// Meta-friendly alias (configure either URL in Meta Developer Console)
+app.use('/webhook', whatsappWebhookRoutes)
 
 app.use(express.json())
 

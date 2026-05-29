@@ -14,6 +14,8 @@ export const sendTemplate = asyncHandler(async (req: Request, res: Response) => 
     to: body.to,
     templateName: body.templateName,
     languageCode: body.languageCode,
+    storeId: body.storeId ?? body.store_id,
+    ownerId: req.authUser.id,
   })
 
   res.status(200).json({

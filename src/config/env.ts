@@ -42,6 +42,12 @@ export const env = {
       optionalEnv('WHATSAPP_WEBHOOK_VERIFY_TOKEN') ?? optionalEnv('WHATSAPP_VERIFY_TOKEN'),
     APP_SECRET: optionalEnv('WHATSAPP_APP_SECRET'),
   },
+  META: {
+    APP_ID: optionalEnv('META_APP_ID'),
+    APP_SECRET: optionalEnv('META_APP_SECRET'),
+    EMBEDDED_SIGNUP_CONFIG_ID: optionalEnv('META_EMBEDDED_SIGNUP_CONFIG_ID'),
+    OAUTH_REDIRECT_URI: optionalEnv('META_OAUTH_REDIRECT_URI'),
+  },
 } as const
 
 export function isWhatsAppConfigured(): boolean {

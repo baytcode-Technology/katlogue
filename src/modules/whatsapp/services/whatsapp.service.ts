@@ -122,11 +122,27 @@ function normalizeStatus(value: string | undefined): ParsedWebhookStatus['status
   return null
 }
 
-/** Resolve per-store credentials with global env fallback (multi-tenant ready). */
+/** Resolve per-store credentials; global env fallback only in non-production. */
 export function resolveStoreWhatsAppCredentials(store: Store): WhatsAppCredentials | null {
-  const accessToken = store.wa_access_token?.trim() || env.WHATSAPP.ACCESS_TOKEN
-  const phoneNumberId = store.wa_phone_number_id?.trim() || env.WHATSAPP.PHONE_NUMBER_ID
+  const storeToken = store.wa_access_token?.trim()
+  const storePhoneId = store.wa_phone_number_id?.trim()
+
+  if (storeToken && storePhoneId) {
+    return {
+      accessToken: storeToken,
+      phoneNumberId: storePhoneId,
+      apiVersion: env.WHATSAPP.API_VERSION,
+    }
+  }
+
+  if (env.NODE_ENV === 'production') {
+    return null
+  }
+
+  const accessToken = env.WHATSAPP.ACCESS_TOKEN
+  const phoneNumberId = env.WHATSAPP.PHONE_NUMBER_ID
   if (!accessToken || !phoneNumberId) return null
+
   return {
     accessToken,
     phoneNumberId,

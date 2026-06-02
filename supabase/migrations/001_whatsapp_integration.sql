@@ -1,27 +1,28 @@
 -- WhatsApp Cloud API integration schema (multi-tenant SaaS)
--- Run in Supabase SQL editor or via CLI.
+-- Prerequisites: run 000_core_schema.sql first on a NEW Supabase project.
+-- If you already have stores/customers from Katlogue, use 002_patch_existing_schema.sql instead.
 
 -- ---------------------------------------------------------------------------
--- stores (WhatsApp credential columns — may already exist)
+-- stores (WhatsApp credential columns — included in 000; safe to re-run)
 -- ---------------------------------------------------------------------------
-ALTER TABLE stores
+ALTER TABLE public.stores
   ADD COLUMN IF NOT EXISTS wa_phone_number_id text,
   ADD COLUMN IF NOT EXISTS wa_waba_id text,
   ADD COLUMN IF NOT EXISTS wa_access_token text;
 
 CREATE INDEX IF NOT EXISTS idx_stores_wa_phone_number_id
-  ON stores (wa_phone_number_id)
+  ON public.stores (wa_phone_number_id)
   WHERE wa_phone_number_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_stores_whatsapp_number
-  ON stores (whatsapp_number);
+  ON public.stores (whatsapp_number);
 
 -- ---------------------------------------------------------------------------
 -- customers
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS customers (
+CREATE TABLE IF NOT EXISTS public.customers (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  store_id uuid NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  store_id uuid NOT NULL REFERENCES public.stores(id) ON DELETE CASCADE,
   whatsapp_number text NOT NULL,
   name text,
   email text,
@@ -35,16 +36,16 @@ CREATE TABLE IF NOT EXISTS customers (
   CONSTRAINT customers_store_whatsapp_unique UNIQUE (store_id, whatsapp_number)
 );
 
-CREATE INDEX IF NOT EXISTS idx_customers_store_id ON customers (store_id);
-CREATE INDEX IF NOT EXISTS idx_customers_whatsapp_number ON customers (whatsapp_number);
+CREATE INDEX IF NOT EXISTS idx_customers_store_id ON public.customers (store_id);
+CREATE INDEX IF NOT EXISTS idx_customers_whatsapp_number ON public.customers (whatsapp_number);
 
 -- ---------------------------------------------------------------------------
 -- whatsapp_conversations (conversations)
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS whatsapp_conversations (
+CREATE TABLE IF NOT EXISTS public.whatsapp_conversations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  store_id uuid NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
-  customer_id uuid REFERENCES customers(id) ON DELETE SET NULL,
+  store_id uuid NOT NULL REFERENCES public.stores(id) ON DELETE CASCADE,
+  customer_id uuid REFERENCES public.customers(id) ON DELETE SET NULL,
   wa_phone_number_id text NOT NULL,
   customer_wa_number text NOT NULL,
   last_message_at timestamptz,
@@ -57,18 +58,18 @@ CREATE TABLE IF NOT EXISTS whatsapp_conversations (
 );
 
 CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_store_id
-  ON whatsapp_conversations (store_id);
+  ON public.whatsapp_conversations (store_id);
 
 CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_last_message_at
-  ON whatsapp_conversations (store_id, last_message_at DESC NULLS LAST);
+  ON public.whatsapp_conversations (store_id, last_message_at DESC NULLS LAST);
 
 -- ---------------------------------------------------------------------------
 -- whatsapp_messages (messages)
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS whatsapp_messages (
+CREATE TABLE IF NOT EXISTS public.whatsapp_messages (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  store_id uuid NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
-  conversation_id uuid NOT NULL REFERENCES whatsapp_conversations(id) ON DELETE CASCADE,
+  store_id uuid NOT NULL REFERENCES public.stores(id) ON DELETE CASCADE,
+  conversation_id uuid NOT NULL REFERENCES public.whatsapp_conversations(id) ON DELETE CASCADE,
   meta_message_id text NOT NULL,
   direction text NOT NULL CHECK (direction IN ('inbound', 'outbound')),
   from_number text NOT NULL,
@@ -84,26 +85,26 @@ CREATE TABLE IF NOT EXISTS whatsapp_messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_conversation
-  ON whatsapp_messages (conversation_id, timestamp DESC NULLS LAST);
+  ON public.whatsapp_messages (conversation_id, timestamp DESC NULLS LAST);
 
 CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_store
-  ON whatsapp_messages (store_id, timestamp DESC NULLS LAST);
+  ON public.whatsapp_messages (store_id, timestamp DESC NULLS LAST);
 
 CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_meta_id
-  ON whatsapp_messages (meta_message_id);
+  ON public.whatsapp_messages (meta_message_id);
 
 -- Add columns when tables already exist from a prior deploy
-ALTER TABLE whatsapp_conversations
-  ADD COLUMN IF NOT EXISTS customer_id uuid REFERENCES customers(id) ON DELETE SET NULL,
+ALTER TABLE public.whatsapp_conversations
+  ADD COLUMN IF NOT EXISTS customer_id uuid REFERENCES public.customers(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS unread_count integer NOT NULL DEFAULT 0;
 
-ALTER TABLE whatsapp_messages
+ALTER TABLE public.whatsapp_messages
   ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'received';
 
 -- ---------------------------------------------------------------------------
 -- webhook idempotency (prevent duplicate Meta event processing)
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS whatsapp_webhook_events (
+CREATE TABLE IF NOT EXISTS public.whatsapp_webhook_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   event_key text NOT NULL UNIQUE,
   payload_hash text,
@@ -111,4 +112,4 @@ CREATE TABLE IF NOT EXISTS whatsapp_webhook_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_whatsapp_webhook_events_processed_at
-  ON whatsapp_webhook_events (processed_at DESC);
+  ON public.whatsapp_webhook_events (processed_at DESC);

@@ -24,6 +24,52 @@ import {
 
 
 
+const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000
+
+
+
+async function assertWithinSessionWindow(input: {
+
+  storeId: string
+
+  customerWaNumber: string
+
+}) {
+
+  const lastInbound = await chatRepository.getLastInboundMessageAt({
+
+    storeId: input.storeId,
+
+    customerWaNumber: input.customerWaNumber,
+
+  })
+
+
+
+  if (!lastInbound) return
+
+
+
+  const elapsed = Date.now() - new Date(lastInbound).getTime()
+
+  if (elapsed > SESSION_WINDOW_MS) {
+
+    throw new AppError(
+
+      403,
+
+      'Outside the 24-hour WhatsApp session window. Send a template message instead.',
+
+      'WHATSAPP_SESSION_EXPIRED'
+
+    )
+
+  }
+
+}
+
+
+
 export type SendWhatsAppTextInput = {
 
   storeId: string
@@ -97,6 +143,10 @@ export async function sendWhatsAppTextMessage(input: SendWhatsAppTextInput) {
 
 
   const customer = await customerRepository.findOrCreateByWhatsApp(input.storeId, customerWaNumber)
+
+
+
+  await assertWithinSessionWindow({ storeId: input.storeId, customerWaNumber })
 
 
 

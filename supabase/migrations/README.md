@@ -1,21 +1,46 @@
 # Supabase migrations
 
-## You already have tables
+Run these in the **Supabase SQL Editor** (or `supabase db push`) in numeric order.
 
-If your project matches the Katlogue schema (`stores`, `customers`, `conversations`, `messages`, `whatsapp_conversations`, `whatsapp_messages`, `whatsapp_store_numbers`):
+## Fresh Supabase project (no `stores` table yet)
 
-1. **Run only** `002_patch_existing_schema.sql` in the Supabase SQL Editor.
-2. **Do not run** `001_whatsapp_integration.sql` (it tries to `CREATE TABLE` that already exist).
+You hit `relation "stores" does not exist` because **001 assumes core tables already exist**.
 
-## What the backend uses today
+Run in order:
+
+| Order | File | Purpose |
+|-------|------|---------|
+| 1 | `000_core_schema.sql` | `stores`, catalog, orders, `whatsapp_store_numbers` |
+| 2 | `001_whatsapp_integration.sql` | WhatsApp inbox tables + webhook dedupe |
+| 3 | `003_whatsapp_sync_jobs.sql` | Coexistence sync job tracking |
+
+**Do not run** `002_patch_existing_schema.sql` on a fresh project.
+
+## Existing Katlogue database (already has `stores`, inbox tables)
+
+| Order | File | Purpose |
+|-------|------|---------|
+| 1 | `002_patch_existing_schema.sql` | Patches conversations/messages + webhook dedupe |
+| 2 | `003_whatsapp_sync_jobs.sql` | Sync jobs (requires `stores`) |
+
+**Do not run** `000` or `001` if those tables already exist (you may get duplicate-object errors).
+
+If `stores` exists but is missing WhatsApp columns, run only this block in the SQL editor:
+
+```sql
+ALTER TABLE public.stores
+  ADD COLUMN IF NOT EXISTS wa_phone_number_id text,
+  ADD COLUMN IF NOT EXISTS wa_waba_id text,
+  ADD COLUMN IF NOT EXISTS wa_access_token text;
+```
+
+## What the backend uses
 
 | Feature | Table |
 |--------|--------|
+| Merchant stores | `stores` |
 | Chat list / thread API | `whatsapp_conversations`, `whatsapp_messages` |
 | Customers on inbound | `customers` |
-| Webhook dedupe | `whatsapp_webhook_events` (created by 002) |
-| Store routing | `stores.wa_phone_number_id` or `stores.whatsapp_number`, then `whatsapp_store_numbers` |
-
-## Canonical tables (future)
-
-`conversations` + `messages` are your long-term model (orders link via `conversation_id`). The WhatsApp module does not write there yet; you can add dual-write later without breaking the app.
+| Webhook dedupe | `whatsapp_webhook_events` |
+| Coexistence sync | `whatsapp_sync_jobs` |
+| Store routing | `stores.wa_phone_number_id`, `whatsapp_store_numbers` |

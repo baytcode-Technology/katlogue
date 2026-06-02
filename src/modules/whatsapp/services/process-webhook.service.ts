@@ -1,225 +1,215 @@
 import * as customerRepository from '../../customers/repositories/customer.repository.js'
-
 import * as storeRepository from '../../stores/repositories/store.repository.js'
-
 import { emitToStore } from '../../../websocket/index.js'
-
 import { SOCKET_EVENTS } from '../../../websocket/events.js'
-
 import * as chatRepository from '../repositories/whatsapp-chat.repository.js'
-
+import * as syncRepository from '../repositories/whatsapp-sync.repository.js'
 import {
+  buildFieldEventKey,
+  parseWebhookFieldEvents,
+  type WebhookFieldEvent,
+} from './coexistence-webhook.service.js'
+import { markHistorySyncDeclined } from './coexistence-sync.service.js'
+import { markAsRead, resolveStoreWhatsAppCredentials } from './whatsapp.service.js'
+import type { ParsedWebhookMessage } from './whatsapp.service.js'
 
-  buildWebhookEventKey,
+async function persistMessage(input: {
+  storeId: string
+  store: Awaited<ReturnType<typeof storeRepository.findStoreByWhatsAppWebhookTarget>>
+  event: WebhookFieldEvent
+  msg: ParsedWebhookMessage
+  direction: 'inbound' | 'outbound'
+  incrementUnread?: boolean
+}) {
+  const store = input.store
+  if (!store) return null
 
-  markAsRead,
+  const businessNumber = input.event.displayPhoneNumber ?? store.whatsapp_number
+  const customerPhone =
+    input.direction === 'inbound' ? input.msg.from : input.msg.to ?? input.msg.from
 
-  parseWebhookPayload,
+  if (!customerPhone) return null
 
-  resolveStoreWhatsAppCredentials,
+  const customer = await customerRepository.findOrCreateByWhatsApp(store.id, customerPhone)
 
-} from './whatsapp.service.js'
+  const conversation = await chatRepository.upsertConversation({
+    storeId: store.id,
+    waPhoneNumberId: input.event.waPhoneNumberId ?? store.wa_phone_number_id ?? 'unknown',
+    customerWaNumber: customerPhone,
+    customerId: customer.id,
+    lastMessageAt: input.msg.timestamp,
+    lastMessagePreview: input.msg.textBody ?? `[${input.msg.type}]`,
+    incrementUnread: input.incrementUnread,
+  })
 
+  return chatRepository.insertMessage({
+    storeId: store.id,
+    conversationId: conversation.id,
+    metaMessageId: input.msg.metaMessageId,
+    direction: input.direction,
+    fromNumber: input.direction === 'inbound' ? input.msg.from : businessNumber,
+    toNumber: input.direction === 'inbound' ? businessNumber : customerPhone,
+    type: input.msg.type,
+    textBody: input.msg.textBody,
+    status: input.direction === 'inbound' ? 'received' : 'sent',
+    rawPayload: input.msg.raw,
+    timestamp: input.msg.timestamp,
+  })
+}
 
+function emitNewMessage(
+  storeId: string,
+  conversationId: string,
+  message: NonNullable<Awaited<ReturnType<typeof chatRepository.insertMessage>>>
+) {
+  emitToStore(storeId, SOCKET_EVENTS.MESSAGE_NEW, {
+    storeId,
+    conversationId,
+    message: {
+      id: message.id,
+      meta_message_id: message.meta_message_id,
+      direction: message.direction,
+      type: message.type,
+      text_body: message.text_body,
+      status: message.status,
+      timestamp: message.timestamp,
+      from_number: message.from_number,
+      to_number: message.to_number,
+    },
+  })
+}
 
 export async function processWhatsAppWebhook(body: unknown): Promise<void> {
+  const events = parseWebhookFieldEvents(body)
 
-  const changes = parseWebhookPayload(body)
-
-
-
-  for (const change of changes) {
-
-    const eventKey = buildWebhookEventKey(change)
-
+  for (const event of events) {
+    const eventKey = buildFieldEventKey(event)
     if (eventKey) {
-
       const isNew = await chatRepository.claimWebhookEvent(eventKey)
-
       if (!isNew) continue
-
     }
 
-
-
     const store = await storeRepository.findStoreByWhatsAppWebhookTarget({
-
-      waPhoneNumberId: change.waPhoneNumberId,
-
-      displayPhoneNumber: change.displayPhoneNumber,
-
+      waPhoneNumberId: event.waPhoneNumberId,
+      displayPhoneNumber: event.displayPhoneNumber,
     })
-
-
 
     if (!store) continue
 
-
-
     const credentials = resolveStoreWhatsAppCredentials(store)
+    const businessNumber = event.displayPhoneNumber ?? store.whatsapp_number
 
-    const businessNumber = change.displayPhoneNumber ?? store.whatsapp_number
-
-
-
-    for (const msg of change.messages) {
-
-      const customer = await customerRepository.findOrCreateByWhatsApp(store.id, msg.from)
-
-
-
-      const conversation = await chatRepository.upsertConversation({
-
-        storeId: store.id,
-
-        waPhoneNumberId: change.waPhoneNumberId ?? store.wa_phone_number_id ?? 'unknown',
-
-        customerWaNumber: msg.from,
-
-        customerId: customer.id,
-
-        lastMessageAt: msg.timestamp,
-
-        lastMessagePreview: msg.textBody ?? `[${msg.type}]`,
-
-        incrementUnread: true,
-
+    // Contact sync
+    for (const contact of event.contacts) {
+      await customerRepository.findOrCreateByWhatsApp(store.id, contact.phone, {
+        name: contact.name ?? undefined,
       })
-
-
-
-      const saved = await chatRepository.insertMessage({
-
-        storeId: store.id,
-
-        conversationId: conversation.id,
-
-        metaMessageId: msg.metaMessageId,
-
-        direction: 'inbound',
-
-        fromNumber: msg.from,
-
-        toNumber: businessNumber,
-
-        type: msg.type,
-
-        textBody: msg.textBody,
-
-        status: 'received',
-
-        rawPayload: msg.raw,
-
-        timestamp: msg.timestamp,
-
-      })
-
-
-
-      if (saved) {
-
-        emitToStore(store.id, SOCKET_EVENTS.MESSAGE_NEW, {
-
-          storeId: store.id,
-
-          conversationId: conversation.id,
-
-          message: {
-
-            id: saved.id,
-
-            meta_message_id: saved.meta_message_id,
-
-            direction: saved.direction,
-
-            type: saved.type,
-
-            text_body: saved.text_body,
-
-            status: saved.status,
-
-            timestamp: saved.timestamp,
-
-            from_number: saved.from_number,
-
-            to_number: saved.to_number,
-
-          },
-
-        })
-
-
-
-        emitToStore(store.id, SOCKET_EVENTS.CONVERSATION_UPDATED, {
-
-          storeId: store.id,
-
-          conversation: {
-
-            id: conversation.id,
-
-            customer_wa_number: conversation.customer_wa_number,
-
-            last_message_at: conversation.last_message_at,
-
-            last_message_preview: conversation.last_message_preview,
-
-            unread_count: conversation.unread_count,
-
-          },
-
-        })
-
-      }
-
-
-
-      if (credentials && msg.type === 'text') {
-
-        void markAsRead({ metaMessageId: msg.metaMessageId, credentials }).catch((err) => {
-
-          console.error('[whatsapp] markAsRead failed', err)
-
-        })
-
-      }
-
     }
 
+    if (event.contacts.length > 0) {
+      const activeJob = await syncRepository.findActiveSyncJob(store.id, 'smb_app_state_sync')
+      if (activeJob) {
+        await syncRepository.updateSyncJob({ id: activeJob.id, status: 'completed' })
+      }
+    }
 
+    // History sync
+    if (event.historyDeclined) {
+      await markHistorySyncDeclined(store.id)
+    }
 
-    for (const status of change.statuses) {
+    for (const msg of event.historyMessages) {
+      const saved = await persistMessage({
+        storeId: store.id,
+        store,
+        event,
+        msg,
+        direction: 'inbound',
+      })
+      if (saved) emitNewMessage(store.id, saved.conversation_id, saved)
+    }
 
-      const updated = await chatRepository.updateMessageStatus({
+    if (event.historyMessages.length > 0 || event.historyDeclined) {
+      const activeJob = await syncRepository.findActiveSyncJob(store.id, 'history')
+      if (activeJob) {
+        await syncRepository.updateSyncJob({
+          id: activeJob.id,
+          status: event.historyDeclined ? 'declined' : 'completed',
+        })
+      }
+    }
 
-        metaMessageId: status.metaMessageId,
-
-        status: status.status,
-
+    // Inbound messages
+    for (const msg of event.messages) {
+      const saved = await persistMessage({
+        storeId: store.id,
+        store,
+        event,
+        msg,
+        direction: 'inbound',
+        incrementUnread: true,
       })
 
+      if (saved) {
+        emitNewMessage(store.id, saved.conversation_id, saved)
 
+        const conversation = await chatRepository.findConversationById({
+          storeId: store.id,
+          conversationId: saved.conversation_id,
+        })
+
+        if (conversation) {
+          emitToStore(store.id, SOCKET_EVENTS.CONVERSATION_UPDATED, {
+            storeId: store.id,
+            conversation: {
+              id: conversation.id,
+              customer_wa_number: conversation.customer_wa_number,
+              last_message_at: conversation.last_message_at,
+              last_message_preview: conversation.last_message_preview,
+              unread_count: conversation.unread_count,
+            },
+          })
+        }
+      }
+
+      if (credentials && msg.type === 'text') {
+        void markAsRead({ metaMessageId: msg.metaMessageId, credentials }).catch((err) => {
+          console.error('[whatsapp] markAsRead failed', err)
+        })
+      }
+    }
+
+    // Phone app echoes (outbound from Business app)
+    for (const msg of event.messageEchoes) {
+      const customerPhone = msg.to ?? msg.from
+      if (!customerPhone) continue
+
+      const saved = await persistMessage({
+        storeId: store.id,
+        store,
+        event,
+        msg: { ...msg, from: businessNumber, to: customerPhone },
+        direction: 'outbound',
+      })
+
+      if (saved) emitNewMessage(store.id, saved.conversation_id, saved)
+    }
+
+    // Delivery statuses
+    for (const status of event.statuses) {
+      const updated = await chatRepository.updateMessageStatus({
+        metaMessageId: status.metaMessageId,
+        status: status.status,
+      })
 
       if (!updated) continue
 
-
-
       emitToStore(store.id, SOCKET_EVENTS.MESSAGE_STATUS, {
-
         storeId: store.id,
-
         conversationId: updated.conversation_id,
-
         metaMessageId: updated.meta_message_id,
-
         status: updated.status,
-
       })
-
     }
-
   }
-
 }
-
-

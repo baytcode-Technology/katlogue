@@ -1,5 +1,23 @@
 -- Run this in Supabase SQL Editor (your DB already has core tables).
--- Do NOT run 001_whatsapp_integration.sql — it would conflict with existing tables.
+-- Do NOT run 000_core_schema.sql or 001_whatsapp_integration.sql on an existing DB.
+
+-- ---------------------------------------------------------------------------
+-- 0) stores — WhatsApp credential columns (if missing)
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.stores
+  ADD COLUMN IF NOT EXISTS wa_phone_number_id text,
+  ADD COLUMN IF NOT EXISTS wa_waba_id text,
+  ADD COLUMN IF NOT EXISTS wa_access_token text;
+
+CREATE TABLE IF NOT EXISTS public.whatsapp_store_numbers (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  store_id uuid NOT NULL REFERENCES public.stores(id) ON DELETE CASCADE,
+  wa_phone_number_id text NOT NULL,
+  wa_business_account_id text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT whatsapp_store_numbers_phone_unique UNIQUE (wa_phone_number_id)
+);
 
 -- ---------------------------------------------------------------------------
 -- 1) whatsapp_conversations — columns + unique key required for upsert

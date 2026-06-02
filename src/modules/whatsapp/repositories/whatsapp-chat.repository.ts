@@ -407,3 +407,51 @@ export async function findConversationByCustomer(input: {
 }
 
 
+
+export async function getLastInboundMessageAt(input: {
+
+  storeId: string
+
+  customerWaNumber: string
+
+}): Promise<string | null> {
+
+  const conversation = await findConversationByCustomer(input)
+
+  if (!conversation) return null
+
+
+
+  const { data, error } = await supabaseAdmin
+
+    .from('whatsapp_messages')
+
+    .select('timestamp')
+
+    .eq('store_id', input.storeId)
+
+    .eq('conversation_id', conversation.id)
+
+    .eq('direction', 'inbound')
+
+    .order('timestamp', { ascending: false, nullsFirst: false })
+
+    .limit(1)
+
+    .maybeSingle()
+
+
+
+  if (error) {
+
+    throw new AppError(400, error.message, 'WHATSAPP_MESSAGE_LOOKUP_FAILED')
+
+  }
+
+
+
+  return (data?.timestamp as string | null) ?? null
+
+}
+
+

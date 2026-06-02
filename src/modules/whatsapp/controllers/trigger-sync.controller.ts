@@ -1,0 +1,31 @@
+import type { Request, Response } from 'express'
+import { asyncHandler } from '../../../shared/helpers/async-handler.js'
+import { AppError } from '../../../shared/errors/app.error.js'
+import * as storeRepository from '../../stores/repositories/store.repository.js'
+import { runFullCoexistenceSync } from '../services/coexistence-sync.service.js'
+import { resolveStoreWhatsAppCredentials } from '../services/whatsapp.service.js'
+
+export const triggerSync = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.authUser) throw new AppError(401, 'Unauthorized', 'UNAUTHORIZED')
+
+  const storeId = String(req.body?.storeId ?? req.body?.store_id ?? '').trim()
+  if (!storeId) throw new AppError(400, 'storeId is required', 'VALIDATION_ERROR')
+
+  await storeRepository.assertStoreOwner(storeId, req.authUser.id)
+
+  const store = await storeRepository.findStoreById(storeId)
+  if (!store) throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
+
+  const credentials = resolveStoreWhatsAppCredentials(store)
+  if (!credentials) {
+    throw new AppError(503, 'WhatsApp is not connected for this store', 'WHATSAPP_NOT_CONNECTED')
+  }
+
+  const result = await runFullCoexistenceSync({ storeId, credentials })
+
+  res.status(200).json({
+    success: true,
+    message: 'Sync triggered successfully',
+    data: result,
+  })
+})

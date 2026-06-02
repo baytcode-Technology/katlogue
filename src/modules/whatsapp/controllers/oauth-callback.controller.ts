@@ -3,6 +3,7 @@ import { asyncHandler } from '../../../shared/helpers/async-handler.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { exchangeCodeForAccessToken } from '../services/embedded-signup.service.js'
+import { onboardCoexistenceStore } from '../services/onboard-coexistence.service.js'
 
 function parseState(state: string | undefined): { storeId: string } | null {
   if (!state) return null
@@ -16,17 +17,15 @@ function parseState(state: string | undefined): { storeId: string } | null {
   }
 }
 
-/**
- * OAuth callback scaffolding.
- *
- * Notes:
- * - In full Embedded Signup (coexistence), Meta also sends session events and asset IDs.
- * - This controller only exchanges the OAuth code and persists an access token per store.
- * - After TP approval, we will extend this to capture phone_number_id, waba_id and trigger smb_app_data sync.
- */
 export const metaOAuthCallback = asyncHandler(async (req: Request, res: Response) => {
   const code = String(req.query.code ?? '').trim()
   const stateRaw = typeof req.query.state === 'string' ? req.query.state : undefined
+  const error = typeof req.query.error === 'string' ? req.query.error : undefined
+
+  if (error) {
+    res.status(400).send(`WhatsApp connection failed: ${error}`)
+    return
+  }
 
   if (!code) throw new AppError(400, 'Missing code', 'META_OAUTH_BAD_REQUEST')
 
@@ -34,16 +33,19 @@ export const metaOAuthCallback = asyncHandler(async (req: Request, res: Response
   if (!state) throw new AppError(400, 'Invalid state', 'META_OAUTH_BAD_STATE')
 
   const token = await exchangeCodeForAccessToken(code)
+  const result = await onboardCoexistenceStore({ storeId: state.storeId, token })
 
-  // Store the token now. phone_number_id and waba_id will be populated in later phases.
-  await storeRepository.updateWhatsAppConnection({
-    storeId: state.storeId,
-    waPhoneNumberId: null,
-    waWabaId: null,
-    waAccessToken: token.accessToken,
-  })
+  const deepLink = process.env.MOBILE_DEEP_LINK_URL?.trim()
+  if (deepLink) {
+    const qs = new URLSearchParams({
+      connected: result.phoneNumberId ? '1' : '0',
+      sync: result.syncTriggered ? '1' : '0',
+    }).toString()
+    res.redirect(`${deepLink}?${qs}`)
+    return
+  }
 
-  // Redirect back to app (deep link later). For now, show a simple success response.
-  res.status(200).send('WhatsApp connected. You can close this window and return to the app.')
+  res.status(200).send(
+    `WhatsApp connected successfully.${result.syncTriggered ? ' Contact and history sync started — this may take up to 24 hours.' : ''} You can close this window and return to the app.`
+  )
 })
-

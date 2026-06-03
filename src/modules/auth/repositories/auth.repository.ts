@@ -38,6 +38,38 @@ export async function verifySignInOtp(
   }
 
   const { user, session } = data
+
+  return buildAuthResult(user, session)
+}
+
+export async function signInWithGoogleIdToken(idToken: string): Promise<VerifyOtpResult> {
+  const { data, error } = await supabaseAuth.auth.signInWithIdToken({
+    provider: 'google',
+    token: idToken,
+  })
+
+  if (error || !data.session || !data.user) {
+    mapAuthError(error ?? { message: 'Google sign-in failed' }, 'Google sign-in failed')
+  }
+
+  return buildAuthResult(data.user, data.session)
+}
+
+function buildAuthResult(
+  user: {
+    id: string
+    email?: string
+    created_at: string
+    last_sign_in_at?: string
+  },
+  session: {
+    access_token: string
+    refresh_token: string
+    expires_in: number
+    expires_at?: number
+    token_type: string
+  }
+): VerifyOtpResult {
   const isNewUser = (() => {
     const createdAt = user.created_at
     const lastSignIn = user.last_sign_in_at

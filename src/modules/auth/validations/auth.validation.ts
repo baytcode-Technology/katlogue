@@ -13,5 +13,10 @@ export const verifyOtpSchema = z.object({
     .max(8, 'OTP must be at most 8 characters'),
 })
 
+export const googleSignInSchema = z.object({
+  idToken: z.string().trim().min(1, 'Google ID token is required'),
+})
+
 export type SignInInput = z.infer<typeof signInSchema>
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>
+export type GoogleSignInInput = z.infer<typeof googleSignInSchema>

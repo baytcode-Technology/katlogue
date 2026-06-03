@@ -17,6 +17,13 @@ export const googleSignInSchema = z.object({
   idToken: z.string().trim().min(1, 'Google ID token is required'),
 })
 
+export const googleCodeExchangeSchema = z.object({
+  code: z.string().trim().min(1, 'Authorization code is required'),
+  redirectUri: z.string().trim().url('Invalid redirect URI'),
+  codeVerifier: z.string().trim().min(1, 'PKCE code verifier is required'),
+})
+
 export type SignInInput = z.infer<typeof signInSchema>
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>
 export type GoogleSignInInput = z.infer<typeof googleSignInSchema>
+export type GoogleCodeExchangeInput = z.infer<typeof googleCodeExchangeSchema>

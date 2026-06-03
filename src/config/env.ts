@@ -48,7 +48,16 @@ export const env = {
     EMBEDDED_SIGNUP_CONFIG_ID: optionalEnv('META_EMBEDDED_SIGNUP_CONFIG_ID'),
     OAUTH_REDIRECT_URI: optionalEnv('META_OAUTH_REDIRECT_URI'),
   },
+  /** Google OAuth Web client (same as Supabase Auth → Google provider). */
+  GOOGLE: {
+    CLIENT_ID: optionalEnv('GOOGLE_CLIENT_ID') ?? '',
+    CLIENT_SECRET: optionalEnv('GOOGLE_CLIENT_SECRET') ?? '',
+  },
 } as const
+
+export function isGoogleOAuthConfigured(): boolean {
+  return Boolean(env.GOOGLE.CLIENT_ID && env.GOOGLE.CLIENT_SECRET)
+}
 
 export function isWhatsAppConfigured(): boolean {
   return Boolean(env.WHATSAPP.ACCESS_TOKEN && env.WHATSAPP.PHONE_NUMBER_ID)

@@ -14,6 +14,7 @@ Run in order:
 | 2 | `001_whatsapp_integration.sql` | WhatsApp inbox tables + webhook dedupe |
 | 3 | `003_whatsapp_sync_jobs.sql` | Coexistence sync job tracking |
 | 4 | `004_product_status.sql` | `products.status` (`active` \| `draft`) |
+| 5 | `005_product_status_unlisted.sql` | Adds `unlisted` to `products.status` |
 
 **Do not run** `002_patch_existing_schema.sql` on a fresh project.
 

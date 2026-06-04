@@ -1,4 +1,4 @@
-export type ProductStatus = 'active' | 'draft'
+export type ProductStatus = 'active' | 'draft' | 'unlisted'
 
 export type Product = {
   id: string

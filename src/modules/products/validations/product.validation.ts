@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const productStatusSchema = z.enum(['active', 'draft'])
+export const productStatusSchema = z.enum(['active', 'draft', 'unlisted'])
 
 export const createProductVariantSchema = z.object({
   name: z.string().trim().min(1, 'Variant name is required').max(200),

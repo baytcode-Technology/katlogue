@@ -1,3 +1,5 @@
+export type ProductStatus = 'active' | 'draft'
+
 export type Product = {
   id: string
   store_id: string
@@ -11,6 +13,7 @@ export type Product = {
   stock_qty: number
   images: string[]
   thumbnail_url: string | null
+  status: ProductStatus
   is_active: boolean
   sort_order: number
   metadata: Record<string, unknown>
@@ -32,7 +35,8 @@ export type CreateProductInput = {
   stock_qty: number
   images: string[]
   thumbnail_url: string
-  is_active: boolean
+  status?: ProductStatus
+  is_active?: boolean
   sort_order: number
   metadata: Record<string, unknown>
   variants?: CreateProductVariantInput[]
@@ -55,6 +59,7 @@ export type UpdateProductInput = {
   stock_qty?: number
   images?: string[]
   thumbnail_url?: string | null
+  status?: ProductStatus
   is_active?: boolean
   sort_order?: number
   metadata?: Record<string, unknown>

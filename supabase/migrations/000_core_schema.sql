@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS public.products (
   images text[] NOT NULL DEFAULT '{}',
   thumbnail_url text,
   is_active boolean NOT NULL DEFAULT true,
+  status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'draft')),
   sort_order integer NOT NULL DEFAULT 0,
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -95,6 +96,7 @@ CREATE TABLE IF NOT EXISTS public.products (
 );
 
 CREATE INDEX IF NOT EXISTS idx_products_store_id ON public.products (store_id);
+CREATE INDEX IF NOT EXISTS idx_products_store_status ON public.products (store_id, status);
 CREATE INDEX IF NOT EXISTS idx_products_category_id ON public.products (category_id);
 
 -- ---------------------------------------------------------------------------

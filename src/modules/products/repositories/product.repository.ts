@@ -1,6 +1,22 @@
 import { supabaseAdmin } from '../../../config/supabase.js'
 import { AppError } from '../../../shared/errors/app.error.js'
-import type { CreateProductInput, Product, UpdateProductInput } from '../types/product.types.js'
+import type {
+  CreateProductInput,
+  Product,
+  ProductStatus,
+  UpdateProductInput,
+} from '../types/product.types.js'
+
+function resolveStatus(input: {
+  status?: ProductStatus
+  is_active?: boolean
+}): ProductStatus {
+  if (input.status === 'active' || input.status === 'draft') {
+    return input.status
+  }
+  if (input.is_active === false) return 'draft'
+  return 'active'
+}
 
 export async function assertStoreOwner(
   storeId: string,
@@ -47,6 +63,7 @@ export async function assertCategoryBelongsToStore(
 }
 
 export async function insertProduct(input: CreateProductInput): Promise<Product> {
+  const status = resolveStatus(input)
   const row = {
     store_id: input.store_id,
     name: input.name,
@@ -59,7 +76,8 @@ export async function insertProduct(input: CreateProductInput): Promise<Product>
     stock_qty: input.stock_qty,
     images: input.images,
     thumbnail_url: input.thumbnail_url ?? null,
-    is_active: input.is_active,
+    status,
+    is_active: status === 'active',
     sort_order: input.sort_order,
     metadata: input.metadata,
   }
@@ -97,7 +115,7 @@ export async function findActiveProductsByStoreId(storeId: string): Promise<Prod
     .from('products')
     .select('*')
     .eq('store_id', storeId)
-    .eq('is_active', true)
+    .eq('status', 'active')
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true })
 
@@ -159,7 +177,14 @@ export async function updateProduct(
   if (patch.stock_qty !== undefined) row.stock_qty = patch.stock_qty
   if (patch.images !== undefined) row.images = patch.images
   if (patch.thumbnail_url !== undefined) row.thumbnail_url = patch.thumbnail_url
-  if (patch.is_active !== undefined) row.is_active = patch.is_active
+  if (patch.status !== undefined || patch.is_active !== undefined) {
+    const status = resolveStatus({
+      status: patch.status,
+      is_active: patch.is_active,
+    })
+    row.status = status
+    row.is_active = status === 'active'
+  }
   if (patch.sort_order !== undefined) row.sort_order = patch.sort_order
   if (patch.metadata !== undefined) row.metadata = patch.metadata
 

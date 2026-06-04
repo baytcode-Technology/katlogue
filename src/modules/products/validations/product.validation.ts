@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+export const productStatusSchema = z.enum(['active', 'draft'])
+
 export const createProductVariantSchema = z.object({
   name: z.string().trim().min(1, 'Variant name is required').max(200),
   options: z.record(z.string(), z.unknown()).default({}),
@@ -28,7 +30,8 @@ export const createProductSchema = z.object({
     .array(z.string().url('Each image must be a valid URL'))
     .min(1, 'At least one product image is required'),
   thumbnail_url: z.string().url('Thumbnail URL is required'),
-  is_active: z.boolean().default(true),
+  status: productStatusSchema.default('active'),
+  is_active: z.boolean().optional(),
   sort_order: z.coerce.number().int().default(0),
   metadata: z.record(z.string(), z.unknown()).default({}),
   variants: z.array(createProductVariantSchema).default([]),
@@ -62,6 +65,7 @@ export const updateProductSchema = z
     stock_qty: z.coerce.number().int().min(0, 'Stock quantity must be 0 or greater').optional(),
     images: z.array(z.string().url('Each image must be a valid URL')).optional(),
     thumbnail_url: optionalUrl.optional(),
+    status: productStatusSchema.optional(),
     is_active: z.boolean().optional(),
     sort_order: z.coerce.number().int().optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),

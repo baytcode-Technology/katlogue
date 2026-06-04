@@ -11,7 +11,11 @@ function resolveStatus(input: {
   status?: ProductStatus
   is_active?: boolean
 }): ProductStatus {
-  if (input.status === 'active' || input.status === 'draft') {
+  if (
+    input.status === 'active' ||
+    input.status === 'draft' ||
+    input.status === 'unlisted'
+  ) {
     return input.status
   }
   if (input.is_active === false) return 'draft'

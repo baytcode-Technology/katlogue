@@ -6,6 +6,11 @@ export const createProductVariantSchema = z.object({
   name: z.string().trim().min(1, 'Variant name is required').max(200),
   options: z.record(z.string(), z.unknown()).default({}),
   price_delta: z.coerce.number().default(0),
+  compare_at_price: z.coerce
+    .number()
+    .min(0, 'Compare at price must be 0 or greater')
+    .nullable()
+    .optional(),
   stock_qty: z.coerce.number().int().min(0, 'Stock must be 0 or greater').default(0),
   sku: z.string().trim().max(100).optional(),
   image_url: z.string().url('Variant image must be a valid URL').optional(),
@@ -20,9 +25,11 @@ export const createProductSchema = z.object({
   category_id: z.uuid('Invalid category id').optional(),
   description: z.string().trim().max(5000).optional(),
   sku: z.string().trim().max(100).optional(),
-  compare_at_price: z.coerce
-    .number()
-    .min(0, 'Compare at price must be 0 or greater')
+  compare_at_price: z
+    .union([
+      z.coerce.number().min(0, 'Compare at price must be 0 or greater'),
+      z.null(),
+    ])
     .optional(),
   track_inventory: z.boolean().default(false),
   stock_qty: z.coerce.number().int().min(0, 'Stock quantity must be 0 or greater').default(0),
@@ -87,6 +94,10 @@ export const updateProductVariantSchema = z
     name: z.string().trim().min(1, 'Variant name cannot be empty').max(200).optional(),
     options: z.record(z.string(), z.unknown()).optional(),
     price_delta: z.coerce.number().optional(),
+    compare_at_price: z.union([
+      z.coerce.number().min(0, 'Compare at price must be 0 or greater'),
+      z.null(),
+    ]).optional(),
     stock_qty: z.coerce.number().int().min(0, 'Stock must be 0 or greater').optional(),
     sku: z.union([z.string().trim().max(100), z.null()]).optional(),
     image_url: z.union([z.string().url('Variant image must be a valid URL'), z.null()]).optional(),

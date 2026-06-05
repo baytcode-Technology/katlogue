@@ -17,6 +17,7 @@ export async function insertVariants(
     name: v.name,
     options: v.options ?? {},
     price_delta: v.price_delta,
+    compare_at_price: v.compare_at_price ?? null,
     stock_qty: v.stock_qty,
     sku: v.sku ?? null,
     image_url: v.image_url ?? null,
@@ -121,6 +122,7 @@ export async function updateVariant(
   if (patch.name !== undefined) row.name = patch.name
   if (patch.options !== undefined) row.options = patch.options
   if (patch.price_delta !== undefined) row.price_delta = patch.price_delta
+  if (patch.compare_at_price !== undefined) row.compare_at_price = patch.compare_at_price
   if (patch.stock_qty !== undefined) row.stock_qty = patch.stock_qty
   if (patch.sku !== undefined) row.sku = patch.sku
   if (patch.image_url !== undefined) row.image_url = patch.image_url

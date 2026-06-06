@@ -239,18 +239,17 @@ export async function createOrder(
   const total = subtotal
 
   const isCod = input.payment_method === 'cod'
-  const orderStatus = isCod ? 'confirmed' : 'pending_payment'
   const paymentProvider = isCod ? 'manual' : 'razorpay'
   const paymentStatus = 'pending'
-
-  const now = new Date().toISOString()
 
   const order = await orderRepository.insertOrder({
     store_id: storeId,
     customer_id: customerId,
     conversation_id: input.conversation_id ?? null,
     order_number: generateOrderNumber(),
-    status: orderStatus,
+    order_status: 'pending',
+    payment_status: 'pending',
+    fulfillment_status: 'unfulfilled',
     source: input.source ?? 'storefront',
     subtotal,
     discount_amount: 0,
@@ -259,7 +258,6 @@ export async function createOrder(
     total,
     shipping_address: shippingAddress,
     notes: input.notes ?? null,
-    confirmed_at: isCod ? now : null,
   })
 
   try {

@@ -104,7 +104,7 @@ export const updateProductVariantSchema = z
       z.coerce.number().min(0, 'Compare at price must be 0 or greater'),
       z.null(),
     ]).optional(),
-    stock_qty: z.coerce.number().int().min(0, 'Stock must be 0 or greater').optional(),
+    stock_qty: z.coerce.number().int('Stock must be a whole number').optional(),
     mark_as_sold: z.boolean().optional(),
     mark_as_non_inventory: z.boolean().optional(),
     sku: z.union([z.string().trim().max(100), z.null()]).optional(),

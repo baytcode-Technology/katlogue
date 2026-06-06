@@ -9,6 +9,14 @@ import {
 import * as variantRepository from '../../products/repositories/product-variant.repository.js'
 import type { Product } from '../../products/types/product.types.js'
 import type { ProductVariant } from '../../products/types/product-variant.types.js'
+import {
+  effectiveProductStockQty,
+  effectiveVariantStockQty,
+  shouldDecrementProductStock,
+  shouldDecrementVariantStock,
+  shouldValidateProductStock,
+  shouldValidateVariantStock,
+} from '../../products/utils/product-inventory.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import { generateOrderNumber } from '../../../shared/utils/generate-order-number.js'
 import { normalizeWhatsAppNumber } from '../../../shared/utils/phone.js'
@@ -67,8 +75,8 @@ function buildLineItems(
       }
       if (
         !offline &&
-        product.track_inventory &&
-        variant.stock_qty < item.quantity
+        shouldValidateVariantStock(product, variant) &&
+        effectiveVariantStockQty(product, variant) < item.quantity
       ) {
         throw new AppError(
           400,
@@ -80,8 +88,8 @@ function buildLineItems(
       throw new AppError(400, `Product ${product.name} has no variants`, 'INVALID_VARIANT')
     } else if (
       !offline &&
-      product.track_inventory &&
-      product.stock_qty < item.quantity
+      shouldValidateProductStock(product) &&
+      effectiveProductStockQty(product) < item.quantity
     ) {
       throw new AppError(
         400,
@@ -153,12 +161,12 @@ function normalizeShippingAddress(
 
 async function decrementInventory(lines: LineItem[]): Promise<void> {
   for (const line of lines) {
-    if (!line.product.track_inventory) continue
-
     const delta = -line.input.quantity
     if (line.variant) {
+      if (!shouldDecrementVariantStock(line.product, line.variant)) continue
       await variantRepository.adjustVariantStock(line.variant.id, delta)
     } else {
+      if (!shouldDecrementProductStock(line.product)) continue
       await adjustProductStock(line.product.id, delta)
     }
   }

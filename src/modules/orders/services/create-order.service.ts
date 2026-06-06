@@ -18,7 +18,6 @@ import {
   shouldValidateVariantStock,
 } from '../../products/utils/product-inventory.js'
 import { AppError } from '../../../shared/errors/app.error.js'
-import { generateOrderNumber } from '../../../shared/utils/generate-order-number.js'
 import { normalizeWhatsAppNumber } from '../../../shared/utils/phone.js'
 import type { OptionalShippingAddress } from '../../../shared/validations/shipping-address.validation.js'
 import * as orderRepository from '../repositories/order.repository.js'
@@ -242,11 +241,13 @@ export async function createOrder(
   const paymentProvider = isCod ? 'manual' : 'razorpay'
   const paymentStatus = 'pending'
 
+  const orderNumber = await orderRepository.allocateOrderNumber(storeId)
+
   const order = await orderRepository.insertOrder({
     store_id: storeId,
     customer_id: customerId,
     conversation_id: input.conversation_id ?? null,
-    order_number: generateOrderNumber(),
+    order_number: orderNumber,
     order_status: 'pending',
     payment_status: 'pending',
     fulfillment_status: 'unfulfilled',

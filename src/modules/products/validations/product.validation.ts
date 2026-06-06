@@ -12,6 +12,8 @@ export const createProductVariantSchema = z.object({
     .nullable()
     .optional(),
   stock_qty: z.coerce.number().int().min(0, 'Stock must be 0 or greater').default(0),
+  mark_as_sold: z.boolean().default(false),
+  mark_as_non_inventory: z.boolean().default(false),
   sku: z.string().trim().max(100).optional(),
   image_url: z.string().url('Variant image must be a valid URL').optional(),
   is_active: z.boolean().default(true),
@@ -33,6 +35,8 @@ export const createProductSchema = z.object({
     .optional(),
   track_inventory: z.boolean().default(false),
   stock_qty: z.coerce.number().int().min(0, 'Stock quantity must be 0 or greater').default(0),
+  mark_as_sold: z.boolean().default(false),
+  mark_as_non_inventory: z.boolean().default(false),
   images: z
     .array(z.string().url('Each image must be a valid URL'))
     .min(1, 'At least one product image is required'),
@@ -70,6 +74,8 @@ export const updateProductSchema = z
     ]).optional(),
     track_inventory: z.boolean().optional(),
     stock_qty: z.coerce.number().int().min(0, 'Stock quantity must be 0 or greater').optional(),
+    mark_as_sold: z.boolean().optional(),
+    mark_as_non_inventory: z.boolean().optional(),
     images: z.array(z.string().url('Each image must be a valid URL')).optional(),
     thumbnail_url: optionalUrl.optional(),
     status: productStatusSchema.optional(),
@@ -99,6 +105,8 @@ export const updateProductVariantSchema = z
       z.null(),
     ]).optional(),
     stock_qty: z.coerce.number().int().min(0, 'Stock must be 0 or greater').optional(),
+    mark_as_sold: z.boolean().optional(),
+    mark_as_non_inventory: z.boolean().optional(),
     sku: z.union([z.string().trim().max(100), z.null()]).optional(),
     image_url: z.union([z.string().url('Variant image must be a valid URL'), z.null()]).optional(),
     is_active: z.boolean().optional(),

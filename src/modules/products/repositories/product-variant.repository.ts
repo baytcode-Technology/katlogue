@@ -19,6 +19,8 @@ export async function insertVariants(
     price_delta: v.price_delta,
     compare_at_price: v.compare_at_price ?? null,
     stock_qty: v.stock_qty,
+    mark_as_sold: v.mark_as_sold ?? false,
+    mark_as_non_inventory: v.mark_as_non_inventory ?? false,
     sku: v.sku ?? null,
     image_url: v.image_url ?? null,
     is_active: v.is_active,
@@ -124,6 +126,10 @@ export async function updateVariant(
   if (patch.price_delta !== undefined) row.price_delta = patch.price_delta
   if (patch.compare_at_price !== undefined) row.compare_at_price = patch.compare_at_price
   if (patch.stock_qty !== undefined) row.stock_qty = patch.stock_qty
+  if (patch.mark_as_sold !== undefined) row.mark_as_sold = patch.mark_as_sold
+  if (patch.mark_as_non_inventory !== undefined) {
+    row.mark_as_non_inventory = patch.mark_as_non_inventory
+  }
   if (patch.sku !== undefined) row.sku = patch.sku
   if (patch.image_url !== undefined) row.image_url = patch.image_url
   if (patch.is_active !== undefined) row.is_active = patch.is_active

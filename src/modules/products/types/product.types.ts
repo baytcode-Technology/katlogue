@@ -11,6 +11,8 @@ export type Product = {
   compare_at_price: number | null
   track_inventory: boolean
   stock_qty: number
+  mark_as_sold: boolean
+  mark_as_non_inventory: boolean
   images: string[]
   thumbnail_url: string | null
   status: ProductStatus
@@ -33,6 +35,8 @@ export type CreateProductInput = {
   compare_at_price?: number | null
   track_inventory: boolean
   stock_qty: number
+  mark_as_sold?: boolean
+  mark_as_non_inventory?: boolean
   images: string[]
   thumbnail_url: string
   status?: ProductStatus
@@ -57,6 +61,8 @@ export type UpdateProductInput = {
   compare_at_price?: number | null
   track_inventory?: boolean
   stock_qty?: number
+  mark_as_sold?: boolean
+  mark_as_non_inventory?: boolean
   images?: string[]
   thumbnail_url?: string | null
   status?: ProductStatus

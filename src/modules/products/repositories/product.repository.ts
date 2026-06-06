@@ -78,6 +78,8 @@ export async function insertProduct(input: CreateProductInput): Promise<Product>
     compare_at_price: input.compare_at_price ?? null,
     track_inventory: input.track_inventory,
     stock_qty: input.stock_qty,
+    mark_as_sold: input.mark_as_sold ?? false,
+    mark_as_non_inventory: input.mark_as_non_inventory ?? false,
     images: input.images,
     thumbnail_url: input.thumbnail_url ?? null,
     status,
@@ -179,6 +181,10 @@ export async function updateProduct(
   if (patch.compare_at_price !== undefined) row.compare_at_price = patch.compare_at_price
   if (patch.track_inventory !== undefined) row.track_inventory = patch.track_inventory
   if (patch.stock_qty !== undefined) row.stock_qty = patch.stock_qty
+  if (patch.mark_as_sold !== undefined) row.mark_as_sold = patch.mark_as_sold
+  if (patch.mark_as_non_inventory !== undefined) {
+    row.mark_as_non_inventory = patch.mark_as_non_inventory
+  }
   if (patch.images !== undefined) row.images = patch.images
   if (patch.thumbnail_url !== undefined) row.thumbnail_url = patch.thumbnail_url
   if (patch.status !== undefined || patch.is_active !== undefined) {

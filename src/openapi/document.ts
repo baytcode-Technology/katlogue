@@ -223,6 +223,12 @@ export function buildOpenApiDocument() {
               enum: ['razorpay', 'cod'],
               default: 'cod',
             },
+            offline: {
+              type: 'boolean',
+              default: false,
+              description:
+                'Merchant POS mode: allow oversell and negative inventory. Online orders should omit or set false.',
+            },
             shipping_address: {
               type: 'object',
               description: 'All address fields optional',

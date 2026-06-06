@@ -143,6 +143,22 @@ export async function updateVariant(
   return data as ProductVariant
 }
 
+export async function adjustVariantStock(variantId: string, delta: number): Promise<void> {
+  const variant = await findVariantById(variantId)
+  if (!variant) {
+    throw new AppError(404, 'Variant not found', 'VARIANT_NOT_FOUND')
+  }
+
+  const { error } = await supabaseAdmin
+    .from('product_variants')
+    .update({ stock_qty: variant.stock_qty + delta })
+    .eq('id', variantId)
+
+  if (error) {
+    throw new AppError(400, error.message, 'VARIANT_STOCK_UPDATE_FAILED')
+  }
+}
+
 export async function deleteVariant(variantId: string): Promise<void> {
   const { error } = await supabaseAdmin.from('product_variants').delete().eq('id', variantId)
 

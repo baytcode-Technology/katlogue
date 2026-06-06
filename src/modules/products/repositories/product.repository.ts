@@ -206,6 +206,25 @@ export async function updateProduct(
   return data as Product
 }
 
+export async function adjustProductStock(productId: string, delta: number): Promise<void> {
+  const product = await findProductById(productId)
+  if (!product) {
+    throw new AppError(404, 'Product not found', 'PRODUCT_NOT_FOUND')
+  }
+
+  const { error } = await supabaseAdmin
+    .from('products')
+    .update({
+      stock_qty: product.stock_qty + delta,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', productId)
+
+  if (error) {
+    throw new AppError(400, error.message, 'PRODUCT_STOCK_UPDATE_FAILED')
+  }
+}
+
 export async function syncCategoryMembership(
   storeId: string,
   categoryId: string,

@@ -2,7 +2,10 @@ import type { Request, Response } from 'express'
 import { asyncHandler } from '../../../shared/helpers/async-handler.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import * as getOrderService from '../services/get-order.service.js'
-import type { GetOrderQuery } from '../validations/update-order.validation.js'
+import type {
+  GetOrderQuery,
+  OrderIdParam,
+} from '../validations/update-order.validation.js'
 
 export const getOrder = asyncHandler(async (req: Request, res: Response) => {
   if (!req.authUser) {
@@ -10,7 +13,7 @@ export const getOrder = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const { store_id: storeId } = req.query as GetOrderQuery
-  const orderId = req.params.orderId
+  const { orderId } = req.params as OrderIdParam
 
   const order = await getOrderService.getOrderById(req.authUser.id, storeId, orderId)
 
@@ -20,4 +23,4 @@ export const getOrder = asyncHandler(async (req: Request, res: Response) => {
     data: order,
   })
 })
-
+

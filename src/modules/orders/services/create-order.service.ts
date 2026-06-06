@@ -2,7 +2,10 @@ import {
   findCustomerById,
   findOrCreateByWhatsApp,
 } from '../../customers/repositories/customer.repository.js'
-import { findProductsByIds } from '../../products/repositories/product.repository.js'
+import {
+  adjustProductStock,
+  findProductsByIds,
+} from '../../products/repositories/product.repository.js'
 import * as variantRepository from '../../products/repositories/product-variant.repository.js'
 import type { Product } from '../../products/types/product.types.js'
 import type { ProductVariant } from '../../products/types/product-variant.types.js'
@@ -29,7 +32,8 @@ function buildLineItems(
   items: OrderItemInput[],
   products: Product[],
   variantsByProduct: Map<string, ProductVariant[]>,
-  variantById: Map<string, ProductVariant>
+  variantById: Map<string, ProductVariant>,
+  offline: boolean
 ): LineItem[] {
   const byId = new Map(products.map((p) => [p.id, p]))
   const lines: LineItem[] = []
@@ -61,7 +65,11 @@ function buildLineItems(
       if (!variant.is_active) {
         throw new AppError(400, `Variant is not available: ${variant.name}`, 'VARIANT_INACTIVE')
       }
-      if (product.track_inventory && variant.stock_qty < item.quantity) {
+      if (
+        !offline &&
+        product.track_inventory &&
+        variant.stock_qty < item.quantity
+      ) {
         throw new AppError(
           400,
           `Insufficient stock for ${product.name} (${variant.name})`,
@@ -70,7 +78,11 @@ function buildLineItems(
       }
     } else if (item.variant_id) {
       throw new AppError(400, `Product ${product.name} has no variants`, 'INVALID_VARIANT')
-    } else if (product.track_inventory && product.stock_qty < item.quantity) {
+    } else if (
+      !offline &&
+      product.track_inventory &&
+      product.stock_qty < item.quantity
+    ) {
       throw new AppError(
         400,
         `Insufficient stock for ${product.name}`,
@@ -139,6 +151,19 @@ function normalizeShippingAddress(
   return address
 }
 
+async function decrementInventory(lines: LineItem[]): Promise<void> {
+  for (const line of lines) {
+    if (!line.product.track_inventory) continue
+
+    const delta = -line.input.quantity
+    if (line.variant) {
+      await variantRepository.adjustVariantStock(line.variant.id, delta)
+    } else {
+      await adjustProductStock(line.product.id, delta)
+    }
+  }
+}
+
 export async function createOrder(
   storeId: string,
   storeCurrency: string,
@@ -194,7 +219,14 @@ export async function createOrder(
     variantById.set(id, variant)
   }
 
-  const lines = buildLineItems(input.items, products, variantsByProduct, variantById)
+  const offline = input.offline === true
+  const lines = buildLineItems(
+    input.items,
+    products,
+    variantsByProduct,
+    variantById,
+    offline
+  )
   const subtotal = lines.reduce((sum, line) => sum + line.line_total, 0)
   const total = subtotal
 
@@ -242,6 +274,8 @@ export async function createOrder(
       currency: storeCurrency,
       status: paymentStatus,
     })
+
+    await decrementInventory(lines)
 
     const result: CreateOrderResult = {
       order,

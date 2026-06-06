@@ -31,6 +31,8 @@ export type CreateOrderInput = {
   conversation_id?: string
   /** e.g. storefront, whatsapp, offline */
   source?: string
+  /** When true, insufficient stock does not block the order; inventory may go negative. */
+  offline?: boolean
 }
 
 export type Order = {

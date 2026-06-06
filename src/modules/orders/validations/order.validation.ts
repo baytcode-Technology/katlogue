@@ -17,6 +17,8 @@ export const createOrderSchema = z.object({
   shipping_address: optionalShippingAddressSchema.optional(),
   notes: z.string().trim().max(1000).optional(),
   conversation_id: z.uuid('Invalid conversation id').optional(),
+  /** Merchant POS: allow oversell and negative stock. Storefront: reject insufficient stock. */
+  offline: z.boolean().default(false),
 })
 
 export type CreateOrderBody = z.infer<typeof createOrderSchema>

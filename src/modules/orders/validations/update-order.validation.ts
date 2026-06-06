@@ -49,4 +49,4 @@ export const orderIdParamSchema = z.object({
 export type UpdateOrderBody = z.infer<typeof updateOrderSchema>
 export type GetOrderQuery = z.infer<typeof getOrderQuerySchema>
 export type OrderIdParam = z.infer<typeof orderIdParamSchema>
-
+

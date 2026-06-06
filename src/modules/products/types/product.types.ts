@@ -30,7 +30,7 @@ export type CreateProductInput = {
   category_id?: string
   description?: string
   sku?: string
-  compare_at_price?: number
+  compare_at_price?: number | null
   track_inventory: boolean
   stock_qty: number
   images: string[]

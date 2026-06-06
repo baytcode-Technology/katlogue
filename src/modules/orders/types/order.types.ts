@@ -9,7 +9,7 @@ export type OrderStatus =
   | 'cancelled'
   | 'refunded'
 
-import type { ShippingAddress } from '../../../shared/validations/shipping-address.validation.js'
+import type { OptionalShippingAddress } from '../../../shared/validations/shipping-address.validation.js'
 
 export type PaymentMethod = 'razorpay' | 'cod'
 
@@ -20,22 +20,23 @@ export type OrderItemInput = {
 }
 
 export type CreateOrderInput = {
-  whatsapp_number: string
+  customer_id?: string
+  whatsapp_number?: string
   name?: string
   email?: string
   items: OrderItemInput[]
   payment_method: PaymentMethod
-  shipping_address: ShippingAddress
+  shipping_address?: OptionalShippingAddress
   notes?: string
   conversation_id?: string
-  /** DB order_source enum — e.g. storefront, whatsapp */
+  /** e.g. storefront, whatsapp, offline */
   source?: string
 }
 
 export type Order = {
   id: string
   store_id: string
-  customer_id: string
+  customer_id: string | null
   conversation_id: string | null
   order_number: string
   status: OrderStatus
@@ -47,7 +48,7 @@ export type Order = {
   total: number
   coupon_id: string | null
   coupon_code: string | null
-  shipping_address: ShippingAddress
+  shipping_address: OptionalShippingAddress & Record<string, unknown>
   shipping_method: string | null
   tracking_number: string | null
   notes: string | null
@@ -64,7 +65,7 @@ export type Order = {
 export type OrderItem = {
   id: string
   order_id: string
-  product_id: string | null
+  product_id: string
   variant_id: string | null
   quantity: number
   unit_price: number
@@ -90,7 +91,7 @@ export type CreateOrderResult = {
   order: Order
   items: OrderItem[]
   payment: Payment
-  customer_id: string
+  customer_id: string | null
   payment_method: PaymentMethod
   razorpay?: {
     pending: true

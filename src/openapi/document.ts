@@ -189,11 +189,18 @@ export function buildOpenApiDocument() {
         },
         CreateOrderBody: {
           type: 'object',
-          required: ['whatsapp_number', 'items', 'payment_method', 'shipping_address'],
+          required: ['items'],
+          description:
+            'Only line items are required. Customer, address, and payment fields are optional — frontends enforce stricter rules when needed.',
           properties: {
-            whatsapp_number: { type: 'string' },
-            name: { type: 'string' },
-            email: { type: 'string', format: 'email' },
+            store_id: {
+              type: 'string',
+              format: 'uuid',
+              description: 'Required for merchant POST /api/orders only',
+            },
+            whatsapp_number: { type: 'string', nullable: true },
+            name: { type: 'string', nullable: true },
+            email: { type: 'string', format: 'email', nullable: true },
             items: {
               type: 'array',
               minItems: 1,
@@ -203,23 +210,22 @@ export function buildOpenApiDocument() {
                 properties: {
                   product_id: { type: 'string', format: 'uuid' },
                   quantity: { type: 'integer', minimum: 1 },
-                  variant_id: { type: 'string', format: 'uuid' },
+                  variant_id: {
+                    type: 'string',
+                    format: 'uuid',
+                    description: 'Required when the product has variants',
+                  },
                 },
               },
             },
-            payment_method: { type: 'string', enum: ['razorpay', 'cod'] },
+            payment_method: {
+              type: 'string',
+              enum: ['razorpay', 'cod'],
+              default: 'cod',
+            },
             shipping_address: {
               type: 'object',
-              required: [
-                'name',
-                'phone_number',
-                'whatsapp_number',
-                'postcode',
-                'city',
-                'district',
-                'state',
-                'region',
-              ],
+              description: 'All address fields optional',
               properties: {
                 name: { type: 'string' },
                 phone_number: { type: 'string' },
@@ -231,7 +237,8 @@ export function buildOpenApiDocument() {
                 region: { type: 'string' },
               },
             },
-            notes: { type: 'string' },
+            notes: { type: 'string', nullable: true },
+            conversation_id: { type: 'string', format: 'uuid', nullable: true },
           },
         },
         WhatsAppSendTemplateBody: {

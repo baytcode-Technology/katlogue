@@ -4,6 +4,7 @@ export type ProductVariant = {
   name: string
   options: Record<string, unknown>
   price_delta: number
+  compare_at_price: number | null
   stock_qty: number
   sku: string | null
   image_url: string | null
@@ -15,6 +16,7 @@ export type CreateProductVariantInput = {
   name: string
   options?: Record<string, unknown>
   price_delta: number
+  compare_at_price?: number | null
   stock_qty: number
   sku?: string
   image_url?: string
@@ -26,6 +28,7 @@ export type UpdateProductVariantInput = {
   name?: string
   options?: Record<string, unknown>
   price_delta?: number
+  compare_at_price?: number | null
   stock_qty?: number
   sku?: string | null
   image_url?: string | null

@@ -10,11 +10,10 @@ export const createOrder = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const body = req.body as CreateOrderBody
-  const result = await createOrderService.createOrder(
-    req.store.id,
-    req.store.currency,
-    body
-  )
+  const result = await createOrderService.createOrder(req.store.id, req.store.currency, {
+    ...body,
+    source: 'storefront',
+  })
 
   res.status(201).json({
     success: true,

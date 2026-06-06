@@ -12,3 +12,17 @@ export const shippingAddressSchema = z.object({
 })
 
 export type ShippingAddress = z.infer<typeof shippingAddressSchema>
+
+/** Partial address — all fields optional (offline / merchant orders). */
+export const optionalShippingAddressSchema = z.object({
+  name: z.string().trim().max(200).optional(),
+  phone_number: z.string().trim().max(20).optional(),
+  whatsapp_number: z.string().trim().max(20).optional(),
+  postcode: z.string().trim().max(20).optional(),
+  city: z.string().trim().max(100).optional(),
+  district: z.string().trim().max(100).optional(),
+  state: z.string().trim().max(100).optional(),
+  region: z.string().trim().max(100).optional(),
+})
+
+export type OptionalShippingAddress = z.infer<typeof optionalShippingAddressSchema>

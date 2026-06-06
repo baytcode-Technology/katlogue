@@ -18,9 +18,10 @@ export const createMerchantOrder = asyncHandler(async (req: Request, res: Respon
   await storeRepository.assertStoreOwner(body.store_id, req.authUser.id)
 
   const { store_id: _storeId, ...orderInput } = body
+  const hasCustomer = Boolean(orderInput.customer_id || orderInput.whatsapp_number?.trim())
   const result = await createOrderService.createOrder(store.id, store.currency, {
     ...orderInput,
-    source: 'whatsapp',
+    source: hasCustomer ? 'whatsapp' : 'offline',
   })
 
   res.status(201).json({

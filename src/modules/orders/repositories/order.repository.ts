@@ -4,7 +4,7 @@ import type { Order, OrderItem, Payment } from '../types/order.types.js'
 
 export type InsertOrderRow = {
   store_id: string
-  customer_id: string
+  customer_id: string | null
   conversation_id?: string | null
   order_number: string
   status: string

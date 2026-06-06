@@ -1,4 +1,7 @@
-import { findOrCreateByWhatsApp } from '../../customers/repositories/customer.repository.js'
+import {
+  findCustomerById,
+  findOrCreateByWhatsApp,
+} from '../../customers/repositories/customer.repository.js'
 import { findProductsByIds } from '../../products/repositories/product.repository.js'
 import * as variantRepository from '../../products/repositories/product-variant.repository.js'
 import type { Product } from '../../products/types/product.types.js'
@@ -6,6 +9,7 @@ import type { ProductVariant } from '../../products/types/product-variant.types.
 import { AppError } from '../../../shared/errors/app.error.js'
 import { generateOrderNumber } from '../../../shared/utils/generate-order-number.js'
 import { normalizeWhatsAppNumber } from '../../../shared/utils/phone.js'
+import type { OptionalShippingAddress } from '../../../shared/validations/shipping-address.validation.js'
 import * as orderRepository from '../repositories/order.repository.js'
 import type {
   CreateOrderInput,
@@ -108,6 +112,7 @@ function buildItemSnapshot(product: Product, variant: ProductVariant | null): Re
           name: variant.name,
           options: variant.options,
           price_delta: variant.price_delta,
+          compare_at_price: variant.compare_at_price,
           sku: variant.sku,
           image_url: variant.image_url,
         }
@@ -115,20 +120,54 @@ function buildItemSnapshot(product: Product, variant: ProductVariant | null): Re
   }
 }
 
+function normalizeShippingAddress(
+  raw: OptionalShippingAddress | undefined,
+  whatsappNumber?: string
+): Record<string, unknown> {
+  const address: Record<string, unknown> = { ...(raw ?? {}) }
+
+  if (whatsappNumber) {
+    address.whatsapp_number = normalizeWhatsAppNumber(whatsappNumber)
+  } else if (typeof address.whatsapp_number === 'string' && address.whatsapp_number.trim()) {
+    address.whatsapp_number = normalizeWhatsAppNumber(address.whatsapp_number)
+  }
+
+  if (typeof address.phone_number === 'string' && address.phone_number.trim()) {
+    address.phone_number = normalizeWhatsAppNumber(address.phone_number)
+  }
+
+  return address
+}
+
 export async function createOrder(
   storeId: string,
   storeCurrency: string,
   input: CreateOrderInput
 ): Promise<CreateOrderResult> {
-  const customer = await findOrCreateByWhatsApp(
-    storeId,
-    input.whatsapp_number,
-    {
-      name: input.shipping_address.name ?? input.name,
-      email: input.email,
-      address: input.shipping_address,
+  const whatsapp = input.whatsapp_number?.trim()
+  const shippingAddress = normalizeShippingAddress(input.shipping_address, whatsapp)
+
+  let customerId: string | null = null
+  if (input.customer_id) {
+    const customer = await findCustomerById(input.customer_id, storeId)
+    if (!customer) {
+      throw new AppError(404, 'Customer not found', 'CUSTOMER_NOT_FOUND')
     }
-  )
+    customerId = customer.id
+    if (!whatsapp && customer.whatsapp_number && !customer.whatsapp_number.startsWith('offline-')) {
+      shippingAddress.whatsapp_number = customer.whatsapp_number
+    }
+    if (!input.name && customer.name) {
+      shippingAddress.name = customer.name
+    }
+  } else if (whatsapp) {
+    const customer = await findOrCreateByWhatsApp(storeId, whatsapp, {
+      name: input.shipping_address?.name ?? input.name,
+      email: input.email,
+      address: shippingAddress,
+    })
+    customerId = customer.id
+  }
 
   const productIds = [...new Set(input.items.map((i) => i.product_id))]
   const products = await findProductsByIds(storeId, productIds)
@@ -155,12 +194,6 @@ export async function createOrder(
     variantById.set(id, variant)
   }
 
-  const shippingAddress = {
-    ...input.shipping_address,
-    whatsapp_number: normalizeWhatsAppNumber(input.shipping_address.whatsapp_number),
-    phone_number: normalizeWhatsAppNumber(input.shipping_address.phone_number),
-  }
-
   const lines = buildLineItems(input.items, products, variantsByProduct, variantById)
   const subtotal = lines.reduce((sum, line) => sum + line.line_total, 0)
   const total = subtotal
@@ -174,7 +207,7 @@ export async function createOrder(
 
   const order = await orderRepository.insertOrder({
     store_id: storeId,
-    customer_id: customer.id,
+    customer_id: customerId,
     conversation_id: input.conversation_id ?? null,
     order_number: generateOrderNumber(),
     status: orderStatus,
@@ -214,7 +247,7 @@ export async function createOrder(
       order,
       items: orderItems,
       payment,
-      customer_id: customer.id,
+      customer_id: customerId,
       payment_method: input.payment_method,
     }
 

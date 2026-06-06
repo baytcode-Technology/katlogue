@@ -70,3 +70,62 @@ export async function findOrCreateByWhatsApp(
 
   return created as Customer
 }
+
+export async function findCustomersByStoreId(storeId: string): Promise<Customer[]> {
+  const { data, error } = await supabaseAdmin
+    .from('customers')
+    .select('*')
+    .eq('store_id', storeId)
+    .order('last_seen_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new AppError(400, error.message, 'CUSTOMER_LIST_FAILED')
+  }
+
+  return (data ?? []) as Customer[]
+}
+
+export async function findCustomerById(
+  customerId: string,
+  storeId: string
+): Promise<Customer | null> {
+  const { data, error } = await supabaseAdmin
+    .from('customers')
+    .select('*')
+    .eq('id', customerId)
+    .eq('store_id', storeId)
+    .maybeSingle()
+
+  if (error) {
+    throw new AppError(400, error.message, 'CUSTOMER_LOOKUP_FAILED')
+  }
+
+  return data as Customer | null
+}
+
+export async function insertCustomer(input: {
+  store_id: string
+  whatsapp_number: string
+  name?: string | null
+  email?: string | null
+}): Promise<Customer> {
+  const { data, error } = await supabaseAdmin
+    .from('customers')
+    .insert({
+      store_id: input.store_id,
+      whatsapp_number: input.whatsapp_number,
+      name: input.name ?? null,
+      email: input.email ?? null,
+      address: {},
+      last_seen_at: new Date().toISOString(),
+    })
+    .select()
+    .single()
+
+  if (error) {
+    throw new AppError(400, error.message, 'CUSTOMER_CREATE_FAILED')
+  }
+
+  return data as Customer
+}

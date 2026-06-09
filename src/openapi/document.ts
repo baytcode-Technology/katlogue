@@ -29,9 +29,9 @@ export function buildOpenApiDocument() {
     openapi: '3.1.0',
     info: {
       title: 'Katlogue API',
-      version: '1.1.0',
+      version: '1.2.0',
       description:
-        'Merchant and storefront API for Katlogue. Authenticated routes require `Authorization: Bearer <access_token>` from `/api/auth/verify`. Public storefront routes resolve the store via subdomain host or `X-Store-Slug` header.',
+        'Merchant and storefront API for Katlogue. Authenticated routes require `Authorization: Bearer <access_token>` from `/api/auth/verify` or Google sign-in. Public storefront routes resolve the store via subdomain host or `X-Store-Slug` header. Interactive docs: `/docs` · OpenAPI JSON: `/openapi.json`.',
     },
     servers: [{ url: getServerUrl() }],
     tags: [
@@ -41,8 +41,10 @@ export function buildOpenApiDocument() {
       { name: 'Products', description: 'Product catalog (merchant)' },
       { name: 'Categories', description: 'Categories (merchant)' },
       { name: 'Uploads', description: 'File uploads (merchant)' },
+      { name: 'Orders', description: 'Order management (merchant)' },
+      { name: 'Customers', description: 'Customer records (merchant)' },
       { name: 'WhatsApp', description: 'WhatsApp Cloud API integration (merchant)' },
-      { name: 'Public', description: 'Storefront (guest) — requires store context' },
+      { name: 'Public', description: 'Storefront (guest) — no auth; requires store context' },
     ],
     components: {
       securitySchemes: {
@@ -68,6 +70,22 @@ export function buildOpenApiDocument() {
           properties: {
             email: { type: 'string', format: 'email' },
             otp: { type: 'string', minLength: 6, maxLength: 8, example: '123456' },
+          },
+        },
+        GoogleSignInBody: {
+          type: 'object',
+          required: ['idToken'],
+          properties: {
+            idToken: { type: 'string', description: 'Google ID token from native or web sign-in' },
+          },
+        },
+        GoogleCodeExchangeBody: {
+          type: 'object',
+          required: ['code', 'redirectUri', 'codeVerifier'],
+          properties: {
+            code: { type: 'string' },
+            redirectUri: { type: 'string', format: 'uri' },
+            codeVerifier: { type: 'string', description: 'PKCE code verifier' },
           },
         },
         CreateStoreBody: {
@@ -156,11 +174,132 @@ export function buildOpenApiDocument() {
             stock_qty: { type: 'integer', example: 45 },
             images: { type: 'array', items: { type: 'string', format: 'uri' } },
             thumbnail_url: { type: 'string', format: 'uri', nullable: true },
+            status: {
+              type: 'string',
+              enum: ['active', 'draft', 'unlisted'],
+              example: 'active',
+            },
             is_active: { type: 'boolean' },
+            mark_as_sold: { type: 'boolean', example: false },
+            mark_as_non_inventory: { type: 'boolean', example: false },
             sort_order: { type: 'integer' },
             metadata: { type: 'object', additionalProperties: true },
             created_at: { type: 'string', format: 'date-time' },
             updated_at: { type: 'string', format: 'date-time' },
+          },
+        },
+        ProductVariant: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            product_id: { type: 'string', format: 'uuid' },
+            name: { type: 'string', example: 'Large / Red' },
+            options: { type: 'object', additionalProperties: true },
+            price_delta: { type: 'number', example: 50 },
+            compare_at_price: { type: 'number', nullable: true },
+            stock_qty: { type: 'integer', example: 10 },
+            mark_as_sold: { type: 'boolean', example: false },
+            mark_as_non_inventory: { type: 'boolean', example: false },
+            sku: { type: 'string', nullable: true },
+            image_url: { type: 'string', format: 'uri', nullable: true },
+            is_active: { type: 'boolean', example: true },
+            sort_order: { type: 'integer' },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+          },
+        },
+        Order: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            store_id: { type: 'string', format: 'uuid' },
+            customer_id: { type: 'string', format: 'uuid', nullable: true },
+            conversation_id: { type: 'string', format: 'uuid', nullable: true },
+            order_number: {
+              type: 'string',
+              example: 'JUN26-1',
+              description: 'Per-store monthly sequence, e.g. JUN26-1',
+            },
+            order_status: {
+              type: 'string',
+              enum: ['pending', 'confirmed', 'completed', 'cancelled'],
+            },
+            payment_status: {
+              type: 'string',
+              enum: ['pending', 'confirming', 'partially_paid', 'paid', 'refunded'],
+            },
+            fulfillment_status: {
+              type: 'string',
+              enum: ['unfulfilled', 'ready', 'in_transit', 'out_for_delivery', 'fulfilled'],
+            },
+            source: { type: 'string', example: 'offline' },
+            subtotal: { type: 'number' },
+            discount_amount: { type: 'number' },
+            shipping_fee: { type: 'number' },
+            tax_amount: { type: 'number' },
+            total: { type: 'number' },
+            shipping_address: { type: 'object', additionalProperties: true },
+            notes: { type: 'string', nullable: true },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+          },
+        },
+        UpdateOrderBody: {
+          type: 'object',
+          required: ['store_id'],
+          properties: {
+            store_id: { type: 'string', format: 'uuid' },
+            order_status: {
+              type: 'string',
+              enum: ['pending', 'confirmed', 'completed', 'cancelled'],
+            },
+            payment_status: {
+              type: 'string',
+              enum: ['pending', 'confirming', 'partially_paid', 'paid', 'refunded'],
+            },
+            fulfillment_status: {
+              type: 'string',
+              enum: ['unfulfilled', 'ready', 'in_transit', 'out_for_delivery', 'fulfilled'],
+            },
+          },
+          description: 'At least one status field is required.',
+        },
+        Customer: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            store_id: { type: 'string', format: 'uuid' },
+            name: { type: 'string' },
+            email: { type: 'string', format: 'email', nullable: true },
+            phone: { type: 'string', nullable: true },
+            whatsapp_number: { type: 'string', nullable: true },
+            created_at: { type: 'string', format: 'date-time' },
+          },
+        },
+        CreateCustomerBody: {
+          type: 'object',
+          required: ['store_id', 'name'],
+          properties: {
+            store_id: { type: 'string', format: 'uuid' },
+            name: { type: 'string', maxLength: 200 },
+            email: { type: 'string', format: 'email' },
+            phone: { type: 'string' },
+          },
+        },
+        WhatsAppSendMessageBody: {
+          type: 'object',
+          required: ['message'],
+          properties: {
+            store_id: { type: 'string', format: 'uuid' },
+            conversation_id: { type: 'string', format: 'uuid' },
+            to: { type: 'string', example: '919876543210' },
+            message: { type: 'string', maxLength: 4096 },
+          },
+        },
+        WhatsAppSyncBody: {
+          type: 'object',
+          properties: {
+            store_id: { type: 'string', format: 'uuid' },
           },
         },
         CatalogData: {
@@ -191,12 +330,17 @@ export function buildOpenApiDocument() {
           type: 'object',
           required: ['items'],
           description:
-            'Only line items are required. Customer, address, and payment fields are optional — frontends enforce stricter rules when needed.',
+            'Guest checkout (POST /api/public/orders): `items` required. Merchant POS (POST /api/orders): `store_id` + `items` required; set `offline: true` for walk-in orders.',
           properties: {
             store_id: {
               type: 'string',
               format: 'uuid',
-              description: 'Required for merchant POST /api/orders only',
+              description: 'Required for merchant POST /api/orders',
+            },
+            customer_id: {
+              type: 'string',
+              format: 'uuid',
+              description: 'Optional linked customer (merchant orders)',
             },
             whatsapp_number: { type: 'string', nullable: true },
             name: { type: 'string', nullable: true },
@@ -314,6 +458,38 @@ export function buildOpenApiDocument() {
           responses: {
             '200': { description: 'Returns access and refresh tokens' },
             '400': { description: 'Invalid OTP' },
+          },
+        },
+      },
+      '/api/auth/google': {
+        post: {
+          tags: ['Auth'],
+          summary: 'Sign in with Google ID token',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/GoogleSignInBody' } },
+            },
+          },
+          responses: {
+            '200': { description: 'Returns access and refresh tokens' },
+            '400': { description: 'Google sign-in failed' },
+          },
+        },
+      },
+      '/api/auth/google/code': {
+        post: {
+          tags: ['Auth'],
+          summary: 'Sign in with Google OAuth authorization code (PKCE)',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/GoogleCodeExchangeBody' } },
+            },
+          },
+          responses: {
+            '200': { description: 'Returns access and refresh tokens' },
+            '400': { description: 'Code exchange failed' },
           },
         },
       },
@@ -502,6 +678,25 @@ export function buildOpenApiDocument() {
         },
       },
       '/api/products/{productId}': {
+        get: {
+          tags: ['Products'],
+          summary: 'Get product with variants',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: 'productId',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'Product detail including variants array',
+            },
+            '404': { description: 'Product not found' },
+          },
+        },
         patch: {
           tags: ['Products'],
           summary: 'Update product (partial)',
@@ -519,6 +714,54 @@ export function buildOpenApiDocument() {
             content: { 'application/json': { schema: { type: 'object' } } },
           },
           responses: { '200': { description: 'Product updated' } },
+        },
+      },
+      '/api/products/{productId}/variants': {
+        post: {
+          tags: ['Products'],
+          summary: 'Create product variant',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: 'productId',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/ProductVariant' } },
+            },
+          },
+          responses: { '201': { description: 'Variant created' } },
+        },
+      },
+      '/api/products/{productId}/variants/{variantId}': {
+        patch: {
+          tags: ['Products'],
+          summary: 'Update product variant',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'productId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'variantId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          ],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object' } } },
+          },
+          responses: { '200': { description: 'Variant updated' } },
+        },
+        delete: {
+          tags: ['Products'],
+          summary: 'Delete product variant',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'productId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'variantId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          ],
+          responses: { '200': { description: 'Variant deleted' } },
         },
       },
       '/api/categories': {
@@ -547,6 +790,269 @@ export function buildOpenApiDocument() {
             },
           },
           responses: { '201': { description: 'Category created' } },
+        },
+      },
+      '/api/categories/{categoryId}': {
+        patch: {
+          tags: ['Categories'],
+          summary: 'Update category',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'categoryId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          ],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object' } } },
+          },
+          responses: { '200': { description: 'Category updated' } },
+        },
+        delete: {
+          tags: ['Categories'],
+          summary: 'Delete category',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'categoryId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          ],
+          responses: { '200': { description: 'Category deleted' } },
+        },
+      },
+      '/api/categories/{categoryId}/products': {
+        put: {
+          tags: ['Categories'],
+          summary: 'Sync products assigned to category',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'categoryId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['product_ids'],
+                  properties: {
+                    product_ids: {
+                      type: 'array',
+                      items: { type: 'string', format: 'uuid' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'Category products synced' } },
+        },
+      },
+      '/api/orders': {
+        get: {
+          tags: ['Orders'],
+          summary: 'List orders for store',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+          ],
+          responses: {
+            '200': {
+              description: 'Order list',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean' },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          orders: {
+                            type: 'array',
+                            items: { $ref: '#/components/schemas/Order' },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        post: {
+          tags: ['Orders'],
+          summary: 'Create merchant / walk-in order',
+          description:
+            'POS mode: set `offline: true` to allow oversell. Requires `store_id` in body.',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/CreateOrderBody' } },
+            },
+          },
+          responses: { '201': { description: 'Order created' } },
+        },
+      },
+      '/api/orders/{orderId}': {
+        get: {
+          tags: ['Orders'],
+          summary: 'Get order detail',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+          ],
+          responses: {
+            '200': {
+              description: 'Order with items and customer',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean' },
+                      data: { $ref: '#/components/schemas/Order' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        patch: {
+          tags: ['Orders'],
+          summary: 'Update order statuses',
+          description: 'Update `order_status`, `payment_status`, and/or `fulfillment_status`.',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/UpdateOrderBody' } },
+            },
+          },
+          responses: { '200': { description: 'Order updated' } },
+        },
+      },
+      '/api/customers': {
+        get: {
+          tags: ['Customers'],
+          summary: 'List customers for store',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+          ],
+          responses: {
+            '200': {
+              description: 'Customer list',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean' },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          customers: {
+                            type: 'array',
+                            items: { $ref: '#/components/schemas/Customer' },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        post: {
+          tags: ['Customers'],
+          summary: 'Create customer',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/CreateCustomerBody' } },
+            },
+          },
+          responses: { '201': { description: 'Customer created' } },
+        },
+      },
+      '/api/whatsapp/connect': {
+        get: {
+          tags: ['WhatsApp'],
+          summary: 'Start WhatsApp / Meta OAuth connection',
+          security: [{ bearerAuth: [] }],
+          responses: { '200': { description: 'OAuth redirect URL or connection flow data' } },
+        },
+      },
+      '/api/whatsapp/connection-status': {
+        get: {
+          tags: ['WhatsApp'],
+          summary: 'WhatsApp connection status for store',
+          security: [{ bearerAuth: [] }],
+          responses: { '200': { description: 'Connected / not connected' } },
+        },
+      },
+      '/api/whatsapp/sync': {
+        post: {
+          tags: ['WhatsApp'],
+          summary: 'Trigger WhatsApp chat sync',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/WhatsAppSyncBody' } },
+            },
+          },
+          responses: { '200': { description: 'Sync started or completed' } },
+        },
+      },
+      '/api/whatsapp/send': {
+        post: {
+          tags: ['WhatsApp'],
+          summary: 'Send WhatsApp text message',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/WhatsAppSendMessageBody' } },
+            },
+          },
+          responses: { '200': { description: 'Message sent' } },
+        },
+      },
+      '/api/whatsapp/chats': {
+        get: {
+          tags: ['WhatsApp'],
+          summary: 'List WhatsApp conversations',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+          ],
+          responses: { '200': { description: 'Conversation list' } },
+        },
+      },
+      '/api/whatsapp/chats/{conversationId}/messages': {
+        get: {
+          tags: ['WhatsApp'],
+          summary: 'List messages in a conversation',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: 'conversationId',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 30 } },
+            { name: 'cursor', in: 'query', schema: { type: 'string' } },
+          ],
+          responses: { '200': { description: 'Paginated messages' } },
         },
       },
       '/api/public/store': {

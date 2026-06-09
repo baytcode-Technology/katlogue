@@ -26,11 +26,7 @@ export async function assertParentCategory(
   }
 }
 
-function mapUniqueViolation(error: { code?: string; message?: string }): never {
-  const message = error.message ?? ''
-  if (message.includes('slug')) {
-    throw new AppError(409, 'A category with this slug already exists in this store', 'SLUG_EXISTS')
-  }
+function mapUniqueViolation(_error: { code?: string; message?: string }): never {
   throw new AppError(409, 'Category already exists', 'CONFLICT')
 }
 
@@ -40,7 +36,6 @@ export async function insertCategory(input: CreateCategoryInput): Promise<Catego
     .insert({
       store_id: input.store_id,
       name: input.name,
-      slug: input.slug,
       parent_id: input.parent_id ?? null,
       image_url: input.image_url ?? null,
       sort_order: input.sort_order,
@@ -94,7 +89,6 @@ export async function updateCategory(
 ): Promise<Category> {
   const row: Record<string, unknown> = {}
   if (patch.name !== undefined) row.name = patch.name
-  if (patch.slug !== undefined) row.slug = patch.slug
   if (patch.image_url !== undefined) row.image_url = patch.image_url
   if (patch.is_active !== undefined) row.is_active = patch.is_active
   if (patch.description !== undefined) row.description = patch.description

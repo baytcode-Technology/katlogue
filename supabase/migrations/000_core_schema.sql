@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS public.categories (
   parent_id uuid REFERENCES public.categories(id) ON DELETE SET NULL,
   name text NOT NULL,
   slug text NOT NULL,
-  image_url text NOT NULL DEFAULT '',
+  image_url text,
   sort_order integer NOT NULL DEFAULT 0,
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now(),

@@ -23,7 +23,7 @@ export async function resolveStoreFromHost(
       return next(
         new AppError(
           400,
-          `Could not resolve store from host. Use a subdomain like my-shop.${env.STOREFRONT_BASE_DOMAIN}, or send X-Store-Slug header when testing on localhost.`,
+          `Could not resolve store. Use a subdomain like my-shop.${env.STOREFRONT_BASE_DOMAIN}, or send the X-Store-Slug header (e.g. ghu).`,
           'STORE_NOT_RESOLVED'
         )
       )

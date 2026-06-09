@@ -3,29 +3,14 @@ export type OrderLifecycleStatus = 'pending' | 'confirmed' | 'completed' | 'canc
 
 
 export type OrderPaymentStatus =
-
   | 'pending'
-
   | 'confirming'
-
-  | 'partially_paid'
-
   | 'paid'
-
   | 'refunded'
 
-
-
 export type OrderFulfillmentStatus =
-
   | 'unfulfilled'
-
   | 'ready'
-
-  | 'in_transit'
-
-  | 'out_for_delivery'
-
   | 'fulfilled'
 
 

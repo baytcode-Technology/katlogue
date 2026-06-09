@@ -10,7 +10,6 @@ export const orderLifecycleStatusSchema = z.enum([
 export const orderPaymentStatusSchema = z.enum([
   'pending',
   'confirming',
-  'partially_paid',
   'paid',
   'refunded',
 ])
@@ -18,8 +17,6 @@ export const orderPaymentStatusSchema = z.enum([
 export const orderFulfillmentStatusSchema = z.enum([
   'unfulfilled',
   'ready',
-  'in_transit',
-  'out_for_delivery',
   'fulfilled',
 ])
 

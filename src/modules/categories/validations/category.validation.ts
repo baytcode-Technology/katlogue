@@ -15,7 +15,9 @@ export const createCategorySchema = z.object({
       message: 'Slug must be lowercase letters, numbers, and hyphens only',
     }),
   parent_id: z.uuid('Invalid parent category id').optional(),
-  image_url: z.string().url('Category image is required'),
+  image_url: z
+    .union([z.string().url('Category image must be a valid URL'), z.null()])
+    .optional(),
   sort_order: z.coerce.number().int().default(0),
   is_active: z.boolean().default(true),
 })
@@ -37,7 +39,7 @@ export const updateCategorySchema = z
         message: 'Slug must be lowercase letters, numbers, and hyphens only',
       })
       .optional(),
-    image_url: z.string().url().optional(),
+    image_url: z.union([z.string().url(), z.null()]).optional(),
     is_active: z.boolean().optional(),
     description: z.string().max(5000).nullable().optional(),
   })

@@ -4,7 +4,7 @@ export type Category = {
   parent_id: string | null
   name: string
   slug: string
-  image_url: string
+  image_url: string | null
   sort_order: number
   is_active: boolean
   description: string | null
@@ -14,7 +14,7 @@ export type Category = {
 export type UpdateCategoryInput = Partial<{
   name: string
   slug: string
-  image_url: string
+  image_url: string | null
   is_active: boolean
   description: string | null
   parent_id: string | null
@@ -30,7 +30,7 @@ export type CreateCategoryInput = {
   name: string
   slug: string
   parent_id?: string
-  image_url: string
+  image_url?: string | null
   sort_order: number
   is_active: boolean
 }

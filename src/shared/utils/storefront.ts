@@ -53,13 +53,8 @@ export function extractStoreSlugFromRequest(
     return fromHost
   }
 
-  const hostname = host.split(':')[0].toLowerCase()
-  const isLocal =
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname.endsWith('.localhost')
-
-  if (isLocal && storeSlugHeader) {
+  // Fallback when the request hits the API host (e.g. Railway) instead of a store subdomain.
+  if (storeSlugHeader) {
     const slug = storeSlugHeader.toLowerCase().trim()
     return isValidSubdomainSlug(slug) ? slug : null
   }

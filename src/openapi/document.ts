@@ -31,7 +31,7 @@ export function buildOpenApiDocument() {
       title: 'Katlogue API',
       version: '1.2.0',
       description:
-        'Merchant and storefront API for Katlogue. Authenticated routes require `Authorization: Bearer <access_token>` from `/api/auth/verify` or Google sign-in. Public storefront routes resolve the store via subdomain host or `X-Store-Slug` header. Interactive docs: `/docs` · OpenAPI JSON: `/openapi.json`.',
+        'Merchant and storefront API for Katlogue. Authenticated routes require `Authorization: Bearer <access_token>` from `/api/auth/verify` or Google sign-in. Public storefront routes resolve the store via subdomain host (e.g. ghu.yourdomain.com) or the `X-Store-Slug` header when calling the API host directly (e.g. Railway). Interactive docs: `/docs` · OpenAPI JSON: `/openapi.json`.',
     },
     servers: [{ url: getServerUrl() }],
     tags: [
@@ -134,13 +134,13 @@ export function buildOpenApiDocument() {
         },
         CreateCategoryBody: {
           type: 'object',
-          required: ['store_id', 'name', 'slug', 'image_url'],
+          required: ['store_id', 'name', 'slug'],
           properties: {
             store_id: { type: 'string', format: 'uuid' },
             name: { type: 'string' },
             slug: { type: 'string' },
             parent_id: { type: 'string', format: 'uuid' },
-            image_url: { type: 'string', format: 'uri' },
+            image_url: { type: 'string', format: 'uri', nullable: true },
             sort_order: { type: 'integer' },
             is_active: { type: 'boolean' },
           },
@@ -153,7 +153,7 @@ export function buildOpenApiDocument() {
             parent_id: { type: 'string', format: 'uuid', nullable: true },
             name: { type: 'string', example: 'Electronics' },
             slug: { type: 'string', example: 'electronics' },
-            image_url: { type: 'string', format: 'uri' },
+            image_url: { type: 'string', format: 'uri', nullable: true },
             sort_order: { type: 'integer', example: 0 },
             is_active: { type: 'boolean', example: true },
             created_at: { type: 'string', format: 'date-time' },
@@ -1092,7 +1092,8 @@ export function buildOpenApiDocument() {
               name: 'X-Store-Slug',
               in: 'header',
               schema: { type: 'string', example: 'my-shop' },
-              description: 'Required when not calling from a store subdomain',
+              description:
+                'Store slug — use when calling the API host directly (e.g. Railway) instead of a store subdomain',
             },
             {
               name: 'category_id',

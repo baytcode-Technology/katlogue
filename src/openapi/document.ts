@@ -224,11 +224,11 @@ export function buildOpenApiDocument() {
             },
             payment_status: {
               type: 'string',
-              enum: ['pending', 'confirming', 'partially_paid', 'paid', 'refunded'],
+              enum: ['pending', 'confirming', 'paid', 'refunded'],
             },
             fulfillment_status: {
               type: 'string',
-              enum: ['unfulfilled', 'ready', 'in_transit', 'out_for_delivery', 'fulfilled'],
+              enum: ['unfulfilled', 'ready', 'fulfilled'],
             },
             source: { type: 'string', example: 'offline' },
             subtotal: { type: 'number' },
@@ -253,11 +253,11 @@ export function buildOpenApiDocument() {
             },
             payment_status: {
               type: 'string',
-              enum: ['pending', 'confirming', 'partially_paid', 'paid', 'refunded'],
+              enum: ['pending', 'confirming', 'paid', 'refunded'],
             },
             fulfillment_status: {
               type: 'string',
-              enum: ['unfulfilled', 'ready', 'in_transit', 'out_for_delivery', 'fulfilled'],
+              enum: ['unfulfilled', 'ready', 'fulfilled'],
             },
           },
           description: 'At least one status field is required.',

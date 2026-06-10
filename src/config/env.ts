@@ -48,6 +48,12 @@ export const env = {
     EMBEDDED_SIGNUP_CONFIG_ID: optionalEnv('META_EMBEDDED_SIGNUP_CONFIG_ID'),
     OAUTH_REDIRECT_URI: optionalEnv('META_OAUTH_REDIRECT_URI'),
   },
+  INSTAGRAM: {
+    WEBHOOK_VERIFY_TOKEN:
+      optionalEnv('INSTAGRAM_WEBHOOK_VERIFY_TOKEN') ??
+      optionalEnv('WHATSAPP_WEBHOOK_VERIFY_TOKEN') ??
+      optionalEnv('WHATSAPP_VERIFY_TOKEN'),
+  },
   /** Google OAuth Web client (same as Supabase Auth → Google provider). */
   GOOGLE: {
     CLIENT_ID: optionalEnv('GOOGLE_CLIENT_ID') ?? '',

@@ -10,6 +10,10 @@ import type {
   CatalogResponse,
   CatalogSort,
 } from '../types/catalog.types.js'
+import {
+  filterCatalogVariants,
+  isCatalogProductSellable,
+} from '../lib/catalog-availability.js'
 
 function filterByPrice(
   products: Product[],
@@ -23,21 +27,41 @@ function filterByPrice(
   })
 }
 
-function attachVariantsToProducts(
+function toCatalogProduct(
+  product: Product,
+  variantMap: Map<string, ProductVariant[]>
+): CatalogProduct | null {
+  if (product.mark_as_sold) return null
+
+  const allVariants = variantMap.get(product.id) ?? []
+
+  if (allVariants.length > 0) {
+    const variants = filterCatalogVariants(product, allVariants)
+    if (variants.length === 0) return null
+    return { ...product, variants }
+  }
+
+  if (!isCatalogProductSellable(product)) return null
+  return { ...product, variants: [] }
+}
+
+function buildCatalogProducts(
   products: Product[],
   variantMap: Map<string, ProductVariant[]>
 ): CatalogProduct[] {
-  return products.map((product) => ({
-    ...product,
-    variants: variantMap.get(product.id) ?? [],
-  }))
+  const catalog: CatalogProduct[] = []
+  for (const product of products) {
+    const row = toCatalogProduct(product, variantMap)
+    if (row) catalog.push(row)
+  }
+  return catalog
 }
 
-async function buildCatalogProducts(products: Product[]): Promise<CatalogProduct[]> {
+async function loadCatalogProducts(products: Product[]): Promise<CatalogProduct[]> {
   const variantMap = await variantRepository.findVariantsByProductIds(
     products.map((p) => p.id)
   )
-  return attachVariantsToProducts(products, variantMap)
+  return buildCatalogProducts(products, variantMap)
 }
 
 function sortProducts(products: Product[], sort: CatalogSort): Product[] {
@@ -78,9 +102,13 @@ export async function getCatalog(
     if (!product) {
       throw new AppError(404, 'Product not found', 'PRODUCT_NOT_FOUND')
     }
+    const catalogProduct = (await loadCatalogProducts([product]))[0]
+    if (!catalogProduct) {
+      throw new AppError(404, 'Product not found', 'PRODUCT_NOT_FOUND')
+    }
     return {
       categories,
-      products: await buildCatalogProducts([product]),
+      products: [catalogProduct],
     }
   }
 
@@ -94,6 +122,6 @@ export async function getCatalog(
 
   return {
     categories,
-    products: await buildCatalogProducts(products),
+    products: await loadCatalogProducts(products),
   }
 }

@@ -10,6 +10,9 @@ export type Store = {
   wa_phone_number_id: string | null
   wa_waba_id: string | null
   wa_access_token: string | null
+  ig_user_id: string | null
+  ig_username: string | null
+  ig_access_token: string | null
   currency: string
   timezone: string
   payment_config: Record<string, unknown>

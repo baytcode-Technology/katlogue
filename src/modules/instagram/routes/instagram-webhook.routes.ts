@@ -34,7 +34,7 @@ router.post(
     verifyMetaWebhookSignature(
       raw,
       req.header('x-hub-signature-256') ?? undefined,
-      env.META.APP_SECRET ?? env.WHATSAPP.APP_SECRET
+      env.INSTAGRAM.APP_SECRET ?? env.META.APP_SECRET ?? env.WHATSAPP.APP_SECRET
     )
 
     let body: unknown = null

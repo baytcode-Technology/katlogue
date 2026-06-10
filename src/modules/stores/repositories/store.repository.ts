@@ -123,6 +123,48 @@ export async function updateWhatsAppConnection(input: {
   return data as Store
 }
 
+export async function updateInstagramConnection(input: {
+  storeId: string
+  igUserId: string | null
+  igUsername: string | null
+  igAccessToken: string | null
+}): Promise<Store> {
+  const { data, error } = await supabaseAdmin
+    .from('stores')
+    .update({
+      ig_user_id: input.igUserId,
+      ig_username: input.igUsername,
+      ig_access_token: input.igAccessToken,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.storeId)
+    .select('*')
+    .single()
+
+  if (error) {
+    throw new AppError(400, error.message, 'STORE_UPDATE_FAILED')
+  }
+
+  return data as Store
+}
+
+export async function findStoreByInstagramUserId(igUserId: string): Promise<Store | null> {
+  const normalized = igUserId.trim()
+  if (!normalized) return null
+
+  const { data, error } = await supabaseAdmin
+    .from('stores')
+    .select('*')
+    .eq('ig_user_id', normalized)
+    .maybeSingle()
+
+  if (error) {
+    throw new AppError(400, error.message, 'STORE_LOOKUP_FAILED')
+  }
+
+  return (data as Store) ?? null
+}
+
 export async function findStoreByWhatsAppWebhookTarget(input: {
   waPhoneNumberId?: string | null
   displayPhoneNumber?: string | null

@@ -11,7 +11,7 @@ import { publicRoutes } from './modules/storefront/index.js'
 import { uploadRoutes } from './modules/uploads/index.js'
 import { orderRoutes } from './modules/orders/index.js'
 import { customerRoutes } from './modules/customers/index.js'
-import { instagramWebhookRoutes } from './modules/instagram/index.js'
+import { instagramRoutes, instagramWebhookRoutes } from './modules/instagram/index.js'
 import { whatsappRoutes, whatsappWebhookRoutes } from './modules/whatsapp/index.js'
 import { errorMiddleware } from './shared/middleware/error.middleware.js'
 
@@ -55,6 +55,7 @@ app.use('/api/uploads', uploadRoutes)
 app.use('/api/orders', orderRoutes)
 app.use('/api/customers', customerRoutes)
 app.use('/api/whatsapp', whatsappRoutes)
+app.use('/api/instagram', instagramRoutes)
 app.use('/api/public', publicRoutes)
 
 app.use(errorMiddleware)

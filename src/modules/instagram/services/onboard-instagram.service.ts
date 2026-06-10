@@ -1,5 +1,6 @@
 import { AppError } from '../../../shared/errors/app.error.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
+import { ensureInstagramWebhookSubscription } from './instagram-api.service.js'
 import {
   exchangeCodeForAccessToken,
   exchangeForLongLivedToken,
@@ -43,6 +44,11 @@ export async function onboardInstagramStore(input: {
     igAccessToken: accessToken,
   })
 
+  const updatedStore = await storeRepository.findStoreById(input.storeId)
+  if (updatedStore) {
+    await ensureInstagramWebhookSubscription(updatedStore)
+  }
+
   return {
     igUserId: profile.userId,
     igUsername: profile.username,
@@ -66,6 +72,14 @@ export async function getInstagramConnectionStatus(
   }
 
   const connected = Boolean(store.ig_user_id && store.ig_access_token)
+
+  if (connected) {
+    try {
+      await ensureInstagramWebhookSubscription(store)
+    } catch (err) {
+      console.error('[instagram] webhook subscription ensure failed on status check', err)
+    }
+  }
 
   return {
     connected,

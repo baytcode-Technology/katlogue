@@ -1,7 +1,10 @@
-import crypto from 'crypto'
 import axios from 'axios'
 import { env } from '../../../config/env.js'
 import { AppError } from '../../../shared/errors/app.error.js'
+import {
+  verifyMetaWebhookSignature,
+  verifyMetaWebhookSubscribe,
+} from '../../../shared/utils/meta-webhook.js'
 import { normalizeWhatsAppNumber } from '../../../shared/utils/phone.js'
 import type { Store } from '../../stores/types/store.types.js'
 
@@ -161,42 +164,15 @@ export function verifyWebhook(input: {
   challenge: string
   verifyToken: string | undefined
 }): string {
-  if (!input.verifyToken) {
-    throw new AppError(
-      503,
-      'WhatsApp webhook is not configured on this server',
-      'WHATSAPP_WEBHOOK_NOT_CONFIGURED'
-    )
-  }
-
-  if (input.mode === 'subscribe' && input.token === input.verifyToken) {
-    return input.challenge
-  }
-
-  throw new AppError(403, 'Webhook verification failed', 'WEBHOOK_FORBIDDEN')
+  return verifyMetaWebhookSubscribe({
+    ...input,
+    notConfiguredMessage: 'WhatsApp webhook is not configured on this server',
+  })
 }
 
 /** Verify Meta x-hub-signature-256 when app secret is configured. */
 export function verifyWebhookSignature(rawBody: Buffer, signatureHeader: string | undefined): void {
-  const secret = env.WHATSAPP.APP_SECRET
-  if (!secret) return
-
-  const signature = signatureHeader?.trim()
-  if (!signature?.startsWith('sha256=')) {
-    throw new AppError(401, 'Missing webhook signature', 'WEBHOOK_SIGNATURE_MISSING')
-  }
-
-  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex')
-  const actual = signature.slice('sha256='.length)
-
-  if (expected.length !== actual.length) {
-    throw new AppError(401, 'Invalid webhook signature', 'WEBHOOK_SIGNATURE_INVALID')
-  }
-
-  const ok = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(actual))
-  if (!ok) {
-    throw new AppError(401, 'Invalid webhook signature', 'WEBHOOK_SIGNATURE_INVALID')
-  }
+  verifyMetaWebhookSignature(rawBody, signatureHeader, env.WHATSAPP.APP_SECRET)
 }
 
 /** Parse Meta webhook payload into normalized changes. */

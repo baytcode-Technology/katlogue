@@ -11,6 +11,7 @@ import { publicRoutes } from './modules/storefront/index.js'
 import { uploadRoutes } from './modules/uploads/index.js'
 import { orderRoutes } from './modules/orders/index.js'
 import { customerRoutes } from './modules/customers/index.js'
+import { instagramWebhookRoutes } from './modules/instagram/index.js'
 import { whatsappRoutes, whatsappWebhookRoutes } from './modules/whatsapp/index.js'
 import { errorMiddleware } from './shared/middleware/error.middleware.js'
 
@@ -25,6 +26,7 @@ app.use(morgan('dev'))
 // WhatsApp webhook needs raw body parsing for signature verification.
 // It installs its own raw parser in the router.
 app.use('/api/webhooks/whatsapp', whatsappWebhookRoutes)
+app.use('/api/webhooks/instagram', instagramWebhookRoutes)
 // Meta-friendly alias (configure either URL in Meta Developer Console)
 app.use('/webhook', whatsappWebhookRoutes)
 

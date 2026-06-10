@@ -71,6 +71,75 @@ export async function findOrCreateByWhatsApp(
   return created as Customer
 }
 
+export async function findOrCreateByInstagram(
+  storeId: string,
+  igUserId: string,
+  profile: { username?: string | null; name?: string | null } = {}
+): Promise<Customer> {
+  const placeholder = `ig:${igUserId.trim()}`
+
+  const { data: existing, error: findError } = await supabaseAdmin
+    .from('customers')
+    .select('*')
+    .eq('store_id', storeId)
+    .eq('whatsapp_number', placeholder)
+    .maybeSingle()
+
+  if (findError) {
+    throw new AppError(400, findError.message, 'CUSTOMER_LOOKUP_FAILED')
+  }
+
+  if (existing) {
+    const updates: Record<string, unknown> = {
+      last_seen_at: new Date().toISOString(),
+    }
+    if (profile.name !== undefined) updates.name = profile.name
+    if (profile.username !== undefined && profile.username) {
+      updates.name = profile.name ?? profile.username
+    }
+
+    if (Object.keys(updates).length > 1) {
+      const { data: updated, error: updateError } = await supabaseAdmin
+        .from('customers')
+        .update(updates)
+        .eq('id', existing.id)
+        .select()
+        .single()
+
+      if (updateError) {
+        throw new AppError(400, updateError.message, 'CUSTOMER_UPDATE_FAILED')
+      }
+      return updated as Customer
+    }
+
+    await supabaseAdmin
+      .from('customers')
+      .update({ last_seen_at: updates.last_seen_at })
+      .eq('id', existing.id)
+
+    return existing as Customer
+  }
+
+  const displayName = profile.name ?? profile.username ?? null
+  const { data: created, error: insertError } = await supabaseAdmin
+    .from('customers')
+    .insert({
+      store_id: storeId,
+      whatsapp_number: placeholder,
+      name: displayName,
+      address: {},
+      last_seen_at: new Date().toISOString(),
+    })
+    .select()
+    .single()
+
+  if (insertError) {
+    throw new AppError(400, insertError.message, 'CUSTOMER_CREATE_FAILED')
+  }
+
+  return created as Customer
+}
+
 export async function findCustomersByStoreId(storeId: string): Promise<Customer[]> {
   const { data, error } = await supabaseAdmin
     .from('customers')

@@ -49,6 +49,10 @@ export const env = {
     OAUTH_REDIRECT_URI: optionalEnv('META_OAUTH_REDIRECT_URI'),
   },
   INSTAGRAM: {
+    APP_ID: optionalEnv('INSTAGRAM_APP_ID'),
+    APP_SECRET: optionalEnv('INSTAGRAM_APP_SECRET'),
+    OAUTH_REDIRECT_URI: optionalEnv('INSTAGRAM_OAUTH_REDIRECT_URI'),
+    API_VERSION: optionalEnv('INSTAGRAM_API_VERSION') ?? 'v21.0',
     WEBHOOK_VERIFY_TOKEN:
       optionalEnv('INSTAGRAM_WEBHOOK_VERIFY_TOKEN') ??
       optionalEnv('WHATSAPP_WEBHOOK_VERIFY_TOKEN') ??
@@ -67,4 +71,10 @@ export function isGoogleOAuthConfigured(): boolean {
 
 export function isWhatsAppConfigured(): boolean {
   return Boolean(env.WHATSAPP.ACCESS_TOKEN && env.WHATSAPP.PHONE_NUMBER_ID)
+}
+
+export function isInstagramOAuthConfigured(): boolean {
+  return Boolean(
+    env.INSTAGRAM.APP_ID && env.INSTAGRAM.APP_SECRET && env.INSTAGRAM.OAUTH_REDIRECT_URI
+  )
 }

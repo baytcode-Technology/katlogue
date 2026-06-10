@@ -1094,7 +1094,7 @@ export function buildOpenApiDocument() {
             'Returns a single catalog shape:',
             '',
             '- **categories**: always all active categories for the store (empty array if none).',
-            '- **products**: all active products by default; each product includes a **variants** array (active variants only, empty when none).',
+            '- **products**: all active, in-stock products by default; each product includes a **variants** array (sellable variants only, empty when none). Products with `mark_as_sold` or stock &lt; 1 are omitted; variant products omit sold/out-of-stock variants and are omitted entirely when no variants remain.',
             '',
             '**Filters (products only):**',
             '- `category_id` — only products in that category.',

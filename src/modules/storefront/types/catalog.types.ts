@@ -1,5 +1,6 @@
 import type { Category } from '../../categories/types/category.types.js'
 import type { Product } from '../../products/types/product.types.js'
+import type { ProductVariant } from '../../products/types/product-variant.types.js'
 
 export type CatalogSort =
   | 'default'
@@ -16,8 +17,12 @@ export type CatalogQuery = {
   max_price?: number
 }
 
+export type CatalogProduct = Product & {
+  variants: ProductVariant[]
+}
+
 export type CatalogResponse = {
   categories: Category[]
-  products: Product[]
+  products: CatalogProduct[]
 }
 

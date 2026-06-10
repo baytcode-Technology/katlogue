@@ -1,8 +1,15 @@
 import { AppError } from '../../../shared/errors/app.error.js'
 import { findActiveCategoriesByStoreId } from '../../categories/repositories/category.repository.js'
 import { findActiveProductsByStoreId } from '../../products/repositories/product.repository.js'
+import * as variantRepository from '../../products/repositories/product-variant.repository.js'
 import type { Product } from '../../products/types/product.types.js'
-import type { CatalogQuery, CatalogResponse, CatalogSort } from '../types/catalog.types.js'
+import type { ProductVariant } from '../../products/types/product-variant.types.js'
+import type {
+  CatalogProduct,
+  CatalogQuery,
+  CatalogResponse,
+  CatalogSort,
+} from '../types/catalog.types.js'
 
 function filterByPrice(
   products: Product[],
@@ -14,6 +21,23 @@ function filterByPrice(
     if (maxPrice !== undefined && p.base_price > maxPrice) return false
     return true
   })
+}
+
+function attachVariantsToProducts(
+  products: Product[],
+  variantMap: Map<string, ProductVariant[]>
+): CatalogProduct[] {
+  return products.map((product) => ({
+    ...product,
+    variants: variantMap.get(product.id) ?? [],
+  }))
+}
+
+async function buildCatalogProducts(products: Product[]): Promise<CatalogProduct[]> {
+  const variantMap = await variantRepository.findVariantsByProductIds(
+    products.map((p) => p.id)
+  )
+  return attachVariantsToProducts(products, variantMap)
 }
 
 function sortProducts(products: Product[], sort: CatalogSort): Product[] {
@@ -56,7 +80,7 @@ export async function getCatalog(
     }
     return {
       categories,
-      products: [product],
+      products: await buildCatalogProducts([product]),
     }
   }
 
@@ -70,6 +94,6 @@ export async function getCatalog(
 
   return {
     categories,
-    products,
+    products: await buildCatalogProducts(products),
   }
 }

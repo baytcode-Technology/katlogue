@@ -300,11 +300,28 @@ export function buildOpenApiDocument() {
             store_id: { type: 'string', format: 'uuid' },
           },
         },
+        CatalogProduct: {
+          allOf: [
+            { $ref: '#/components/schemas/Product' },
+            {
+              type: 'object',
+              required: ['variants'],
+              properties: {
+                variants: {
+                  type: 'array',
+                  description:
+                    'Active variants for this product. Empty array when the product has no variants.',
+                  items: { $ref: '#/components/schemas/ProductVariant' },
+                },
+              },
+            },
+          ],
+        },
         CatalogData: {
           type: 'object',
           required: ['categories', 'products'],
           description:
-            'Always returns all active categories. Products are filtered when category_id or product_id is provided.',
+            'Always returns all active categories. Products are filtered when category_id or product_id is provided. Each product includes a variants array (empty when none).',
           properties: {
             categories: {
               type: 'array',
@@ -312,7 +329,7 @@ export function buildOpenApiDocument() {
             },
             products: {
               type: 'array',
-              items: { $ref: '#/components/schemas/Product' },
+              items: { $ref: '#/components/schemas/CatalogProduct' },
             },
           },
         },
@@ -1077,7 +1094,7 @@ export function buildOpenApiDocument() {
             'Returns a single catalog shape:',
             '',
             '- **categories**: always all active categories for the store (empty array if none).',
-            '- **products**: all active products by default.',
+            '- **products**: all active products by default; each product includes a **variants** array (active variants only, empty when none).',
             '',
             '**Filters (products only):**',
             '- `category_id` — only products in that category.',
@@ -1161,6 +1178,23 @@ export function buildOpenApiDocument() {
                               metadata: {},
                               created_at: '2026-05-19T10:00:00.000Z',
                               updated_at: '2026-05-19T10:00:00.000Z',
+                              variants: [
+                                {
+                                  id: '44444444-4444-4444-4444-444444444444',
+                                  product_id: '33333333-3333-3333-3333-333333333333',
+                                  name: 'Black',
+                                  options: { Color: 'Black' },
+                                  price_delta: 0,
+                                  compare_at_price: null,
+                                  stock_qty: 12,
+                                  mark_as_sold: false,
+                                  mark_as_non_inventory: false,
+                                  sku: 'SKU-001-BLK',
+                                  image_url: 'https://cdn.example.com/headphones-black.jpg',
+                                  is_active: true,
+                                  sort_order: 0,
+                                },
+                              ],
                             },
                           ],
                         },
@@ -1203,6 +1237,7 @@ export function buildOpenApiDocument() {
                               metadata: {},
                               created_at: '2026-05-19T10:00:00.000Z',
                               updated_at: '2026-05-19T10:00:00.000Z',
+                              variants: [],
                             },
                           ],
                         },

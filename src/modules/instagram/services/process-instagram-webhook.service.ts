@@ -11,6 +11,9 @@ type InstagramMessagingEvent = {
   message?: {
     mid?: string
     text?: string
+    is_echo?: boolean
+    is_self?: boolean
+    attachments?: Array<{ type?: string }>
   }
 }
 
@@ -19,6 +22,10 @@ type InstagramWebhookBody = {
   entry?: Array<{
     id?: string
     messaging?: InstagramMessagingEvent[]
+    changes?: Array<{
+      field?: string
+      value?: unknown
+    }>
   }>
 }
 
@@ -40,15 +47,29 @@ function parseMessagingEvents(body: unknown): Array<{
     raw: InstagramMessagingEvent
   }> = []
 
-  if (payload.object && payload.object !== 'instagram') return results
+  const objectType = payload.object
+  if (objectType && objectType !== 'instagram' && objectType !== 'page') {
+    return results
+  }
 
   for (const entry of payload.entry ?? []) {
+    const entryIgId = entry.id?.trim()
+
     for (const event of entry.messaging ?? []) {
       const senderIgId = event.sender?.id?.trim()
-      const recipientIgId = event.recipient?.id?.trim()
+      const recipientIgId = event.recipient?.id?.trim() ?? entryIgId
       const metaMessageId = event.message?.mid?.trim()
 
       if (!senderIgId || !recipientIgId || !metaMessageId || !event.message) continue
+
+      // Skip echoes of messages we sent via API
+      if (event.message.is_echo && !event.message.is_self) continue
+
+      const textBody =
+        event.message.text?.trim() ??
+        (event.message.attachments?.length
+          ? `[${event.message.attachments[0]?.type ?? 'attachment'}]`
+          : null)
 
       const rawTs = event.timestamp ?? 0
       const ms = rawTs > 0 && rawTs < 1_000_000_000_000 ? rawTs * 1000 : rawTs
@@ -58,7 +79,7 @@ function parseMessagingEvents(body: unknown): Array<{
         recipientIgId,
         senderIgId,
         metaMessageId,
-        textBody: event.message.text?.trim() ?? null,
+        textBody,
         timestamp: ts,
         raw: event,
       })
@@ -107,14 +128,32 @@ function emitConversationUpdated(
   })
 }
 
+async function resolveStoreForRecipient(recipientIgId: string) {
+  const store = await storeRepository.findStoreByInstagramUserId(recipientIgId)
+  if (store) return store
+  return null
+}
+
 export async function processInstagramWebhook(body: unknown): Promise<void> {
   const events = parseMessagingEvents(body)
+
+  if (events.length === 0) {
+    const payload = body as InstagramWebhookBody
+    const summary = JSON.stringify({
+      object: payload.object,
+      entryCount: payload.entry?.length ?? 0,
+      hasMessaging: payload.entry?.some((e) => (e.messaging?.length ?? 0) > 0),
+      hasChanges: payload.entry?.some((e) => (e.changes?.length ?? 0) > 0),
+    })
+    console.info('[instagram webhook] no messaging events parsed %s', summary)
+    return
+  }
 
   for (const event of events) {
     const isNew = await chatRepository.claimWebhookEvent(event.metaMessageId)
     if (!isNew) continue
 
-    const store = await storeRepository.findStoreByInstagramUserId(event.recipientIgId)
+    const store = await resolveStoreForRecipient(event.recipientIgId)
     if (!store) {
       console.info('[instagram webhook] no store for recipient=%s', event.recipientIgId)
       continue
@@ -149,6 +188,12 @@ export async function processInstagramWebhook(body: unknown): Promise<void> {
     })
 
     if (!saved) continue
+
+    console.info(
+      '[instagram webhook] saved inbound message store=%s conversation=%s',
+      store.id,
+      conversation.id
+    )
 
     emitNewMessage(store.id, conversation.id, saved)
     emitConversationUpdated(store.id, conversation)

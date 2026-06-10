@@ -18,6 +18,47 @@ export function resolveStoreInstagramCredentials(store: Store): {
   }
 }
 
+/** Subscribe the connected IG account to webhook fields (required for DM delivery). */
+export async function subscribeInstagramWebhooks(input: {
+  igUserId: string
+  accessToken: string
+}): Promise<void> {
+  const url = `https://graph.instagram.com/${env.INSTAGRAM.API_VERSION}/${input.igUserId}/subscribed_apps`
+
+  try {
+    const { data } = await axios.post<{ success?: boolean }>(url, null, {
+      params: {
+        subscribed_fields: 'messages,message_reactions',
+        access_token: input.accessToken,
+      },
+      timeout: 15_000,
+    })
+
+    if (!data.success) {
+      console.warn('[instagram] subscribed_apps returned success=false', data)
+    }
+  } catch (err) {
+    const detail =
+      axios.isAxiosError(err) && err.response?.data
+        ? JSON.stringify(err.response.data)
+        : err instanceof Error
+          ? err.message
+          : 'unknown error'
+    console.error('[instagram] subscribed_apps failed', detail)
+    throw new AppError(
+      502,
+      'Failed to subscribe Instagram account to message webhooks',
+      'INSTAGRAM_WEBHOOK_SUBSCRIBE_FAILED'
+    )
+  }
+}
+
+export async function ensureInstagramWebhookSubscription(store: Store): Promise<void> {
+  const credentials = resolveStoreInstagramCredentials(store)
+  if (!credentials) return
+  await subscribeInstagramWebhooks(credentials)
+}
+
 export async function sendInstagramTextMessage(input: {
   igUserId: string
   accessToken: string

@@ -105,6 +105,24 @@ export function buildOpenApiDocument() {
             industry: { type: 'string', nullable: true, example: 'Fashion' },
           },
         },
+        UpdateStoreBody: {
+          type: 'object',
+          description: 'Partial update — include only fields to change',
+          properties: {
+            name: { type: 'string', maxLength: 200 },
+            slug: { type: 'string', minLength: 3, maxLength: 63 },
+            whatsapp_number: { type: 'string' },
+            currency: { type: 'string', minLength: 3, maxLength: 3 },
+            description: { type: 'string', nullable: true },
+            logo_url: { type: 'string', format: 'uri', nullable: true },
+            banner_url: { type: 'string', format: 'uri', nullable: true },
+            timezone: { type: 'string' },
+            industry: { type: 'string', nullable: true },
+            ai_language: { type: 'string', nullable: true },
+            ai_system_prompt: { type: 'string', nullable: true },
+            is_active: { type: 'boolean' },
+          },
+        },
         CreateProductBody: {
           type: 'object',
           required: ['store_id', 'name', 'base_price', 'images', 'thumbnail_url'],
@@ -552,6 +570,23 @@ export function buildOpenApiDocument() {
           responses: {
             '200': { description: 'Store or hasStore: false' },
             '401': { description: 'Unauthorized' },
+          },
+        },
+        patch: {
+          tags: ['Stores'],
+          summary: 'Update current user store (partial)',
+          description:
+            'Send only fields to change. Email is not stored on the store. WhatsApp/Instagram connection tokens are not updated via this route.',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/UpdateStoreBody' } },
+            },
+          },
+          responses: {
+            '200': { description: 'Store updated' },
+            '404': { description: 'No store' },
           },
         },
       },

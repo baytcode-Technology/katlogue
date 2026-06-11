@@ -7,6 +7,7 @@ import { authRoutes } from './modules/auth/index.js'
 import { storeRoutes } from './modules/stores/index.js'
 import { productRoutes } from './modules/products/index.js'
 import { categoryRoutes } from './modules/categories/index.js'
+import { industryRoutes } from './modules/industries/index.js'
 import { publicRoutes } from './modules/storefront/index.js'
 import { uploadRoutes } from './modules/uploads/index.js'
 import { orderRoutes } from './modules/orders/index.js'
@@ -51,6 +52,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/stores', storeRoutes)
 app.use('/api/products', productRoutes)
 app.use('/api/categories', categoryRoutes)
+app.use('/api/industries', industryRoutes)
 app.use('/api/uploads', uploadRoutes)
 app.use('/api/orders', orderRoutes)
 app.use('/api/customers', customerRoutes)

@@ -42,6 +42,20 @@ export async function verifySignInOtp(
   return buildAuthResult(user, session)
 }
 
+export async function refreshAuthSession(refreshToken: string): Promise<VerifyOtpResult> {
+  const { data, error } = await supabaseAuth.auth.refreshSession({ refresh_token: refreshToken })
+
+  if (error || !data.session || !data.user) {
+    throw new AppError(
+      401,
+      error?.message ?? 'Invalid or expired refresh token',
+      'INVALID_REFRESH_TOKEN'
+    )
+  }
+
+  return buildAuthResult(data.user, data.session)
+}
+
 export async function signInWithGoogleIdToken(idToken: string): Promise<VerifyOtpResult> {
   const { data, error } = await supabaseAuth.auth.signInWithIdToken({
     provider: 'google',

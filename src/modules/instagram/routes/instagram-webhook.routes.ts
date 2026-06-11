@@ -3,7 +3,7 @@ import { env } from '../../../config/env.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import { asyncHandler } from '../../../shared/helpers/async-handler.js'
 import {
-  verifyMetaWebhookSignature,
+  verifyMetaWebhookSignatureAny,
   verifyMetaWebhookSubscribe,
 } from '../../../shared/utils/meta-webhook.js'
 import { processInstagramWebhook } from '../services/process-instagram-webhook.service.js'
@@ -31,11 +31,11 @@ router.post(
   '/',
   asyncHandler(async (req, res) => {
     const raw = req.body as Buffer
-    verifyMetaWebhookSignature(
-      raw,
-      req.header('x-hub-signature-256') ?? undefined,
-      env.INSTAGRAM.APP_SECRET ?? env.META.APP_SECRET ?? env.WHATSAPP.APP_SECRET
-    )
+    verifyMetaWebhookSignatureAny(raw, req.header('x-hub-signature-256') ?? undefined, [
+      env.META.APP_SECRET,
+      env.INSTAGRAM.APP_SECRET,
+      env.WHATSAPP.APP_SECRET,
+    ])
 
     let body: unknown = null
     try {

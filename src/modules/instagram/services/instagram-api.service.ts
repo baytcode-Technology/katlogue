@@ -18,39 +18,56 @@ export function resolveStoreInstagramCredentials(store: Store): {
   }
 }
 
+function formatMetaAxiosError(err: unknown): string {
+  if (!axios.isAxiosError(err) || !err.response?.data) {
+    return err instanceof Error ? err.message : 'unknown error'
+  }
+  const data = err.response.data as { error?: { message?: string } }
+  return data.error?.message ?? JSON.stringify(err.response.data)
+}
+
 /** Subscribe the connected IG account to webhook fields (required for DM delivery). */
 export async function subscribeInstagramWebhooks(input: {
   igUserId: string
   accessToken: string
 }): Promise<void> {
-  const url = `https://graph.instagram.com/${env.INSTAGRAM.API_VERSION}/${input.igUserId}/subscribed_apps`
-
-  try {
-    const { data } = await axios.post<{ success?: boolean }>(url, null, {
-      params: {
-        subscribed_fields: 'messages,message_reactions',
-        access_token: input.accessToken,
-      },
-      timeout: 15_000,
-    })
-
-    if (!data.success) {
-      console.warn('[instagram] subscribed_apps returned success=false', data)
-    }
-  } catch (err) {
-    const detail =
-      axios.isAxiosError(err) && err.response?.data
-        ? JSON.stringify(err.response.data)
-        : err instanceof Error
-          ? err.message
-          : 'unknown error'
-    console.error('[instagram] subscribed_apps failed', detail)
-    throw new AppError(
-      502,
-      'Failed to subscribe Instagram account to message webhooks',
-      'INSTAGRAM_WEBHOOK_SUBSCRIBE_FAILED'
-    )
+  const version = env.INSTAGRAM.API_VERSION
+  const params = {
+    subscribed_fields: 'messages',
+    access_token: input.accessToken,
   }
+
+  const urls = [
+    `https://graph.instagram.com/${version}/me/subscribed_apps`,
+    `https://graph.instagram.com/${version}/${input.igUserId}/subscribed_apps`,
+  ]
+
+  let lastError: string | null = null
+
+  for (const url of urls) {
+    try {
+      const { data } = await axios.post<{ success?: boolean }>(url, null, {
+        params,
+        timeout: 15_000,
+      })
+
+      if (data.success !== false) {
+        console.info('[instagram] subscribed_apps ok url=%s igUserId=%s', url, input.igUserId)
+        return
+      }
+
+      lastError = JSON.stringify(data)
+    } catch (err) {
+      lastError = formatMetaAxiosError(err)
+      console.warn('[instagram] subscribed_apps attempt failed url=%s %s', url, lastError)
+    }
+  }
+
+  throw new AppError(
+    502,
+    lastError ?? 'Failed to subscribe Instagram account to message webhooks',
+    'INSTAGRAM_WEBHOOK_SUBSCRIBE_FAILED'
+  )
 }
 
 export async function ensureInstagramWebhookSubscription(store: Store): Promise<void> {

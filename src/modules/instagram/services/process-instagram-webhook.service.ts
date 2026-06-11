@@ -137,6 +137,10 @@ async function resolveStoreForRecipient(recipientIgId: string) {
 export async function processInstagramWebhook(body: unknown): Promise<void> {
   const events = parseMessagingEvents(body)
 
+  if (events.length > 0) {
+    console.info('[instagram webhook] parsed %d messaging event(s)', events.length)
+  }
+
   if (events.length === 0) {
     const payload = body as InstagramWebhookBody
     const summary = JSON.stringify({

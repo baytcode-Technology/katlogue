@@ -49,3 +49,29 @@ export function verifyMetaWebhookSignature(
     throw new AppError(401, 'Invalid webhook signature', 'WEBHOOK_SIGNATURE_INVALID')
   }
 }
+
+/** Try each secret until one matches (Meta may sign with app secret vs product secret). */
+export function verifyMetaWebhookSignatureAny(
+  rawBody: Buffer,
+  signatureHeader: string | undefined,
+  appSecrets: Array<string | undefined>
+): void {
+  const secrets = appSecrets.map((s) => s?.trim()).filter((s): s is string => Boolean(s))
+  if (secrets.length === 0) return
+
+  let lastError: AppError | null = null
+  for (const secret of secrets) {
+    try {
+      verifyMetaWebhookSignature(rawBody, signatureHeader, secret)
+      return
+    } catch (err) {
+      if (err instanceof AppError && err.code === 'WEBHOOK_SIGNATURE_INVALID') {
+        lastError = err
+        continue
+      }
+      throw err
+    }
+  }
+
+  throw lastError ?? new AppError(401, 'Invalid webhook signature', 'WEBHOOK_SIGNATURE_INVALID')
+}

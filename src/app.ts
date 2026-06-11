@@ -11,8 +11,9 @@ import { publicRoutes } from './modules/storefront/index.js'
 import { uploadRoutes } from './modules/uploads/index.js'
 import { orderRoutes } from './modules/orders/index.js'
 import { customerRoutes } from './modules/customers/index.js'
-import { instagramRoutes, instagramWebhookRoutes } from './modules/instagram/index.js'
-import { whatsappRoutes, whatsappWebhookRoutes } from './modules/whatsapp/index.js'
+import { instagramRoutes } from './modules/instagram/index.js'
+import metaWebhookRoutes from './modules/meta/routes/meta-webhook.routes.js'
+import { whatsappRoutes } from './modules/whatsapp/index.js'
 import { errorMiddleware } from './shared/middleware/error.middleware.js'
 
 const app = express()
@@ -23,12 +24,11 @@ app.use(cors())
 app.use(helmet())
 app.use(morgan('dev'))
 
-// WhatsApp webhook needs raw body parsing for signature verification.
-// It installs its own raw parser in the router.
-app.use('/api/webhooks/whatsapp', whatsappWebhookRoutes)
-app.use('/api/webhooks/instagram', instagramWebhookRoutes)
-// Meta-friendly alias (configure either URL in Meta Developer Console)
-app.use('/webhook', whatsappWebhookRoutes)
+// Meta webhooks need raw body for signature verification (router installs raw parser).
+// All paths share one dispatcher so Instagram DMs work whether Meta hits /webhook or /api/webhooks/instagram.
+app.use('/api/webhooks/whatsapp', metaWebhookRoutes)
+app.use('/api/webhooks/instagram', metaWebhookRoutes)
+app.use('/webhook', metaWebhookRoutes)
 
 app.use(express.json())
 

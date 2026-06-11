@@ -23,7 +23,12 @@ export const googleCodeExchangeSchema = z.object({
   codeVerifier: z.string().trim().min(1, 'PKCE code verifier is required'),
 })
 
+export const refreshTokenSchema = z.object({
+  refreshToken: z.string().trim().min(1, 'Refresh token is required'),
+})
+
 export type SignInInput = z.infer<typeof signInSchema>
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>
 export type GoogleSignInInput = z.infer<typeof googleSignInSchema>
 export type GoogleCodeExchangeInput = z.infer<typeof googleCodeExchangeSchema>
+export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>

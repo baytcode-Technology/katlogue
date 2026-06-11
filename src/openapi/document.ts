@@ -526,6 +526,30 @@ export function buildOpenApiDocument() {
           },
         },
       },
+      '/api/auth/refresh': {
+        post: {
+          tags: ['Auth'],
+          summary: 'Refresh access token',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['refreshToken'],
+                  properties: {
+                    refreshToken: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '200': { description: 'Returns new access and refresh tokens' },
+            '401': { description: 'Invalid or expired refresh token' },
+          },
+        },
+      },
       '/api/whatsapp/send-template': {
         post: {
           tags: ['WhatsApp'],

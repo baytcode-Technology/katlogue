@@ -29,6 +29,22 @@ export type MyStoreResult = {
   store: Store | null
 }
 
+/** Partial PATCH — only defined keys are updated. */
+export type UpdateStoreInput = {
+  name?: string
+  slug?: string
+  description?: string | null
+  logo_url?: string | null
+  banner_url?: string | null
+  whatsapp_number?: string
+  currency?: string
+  timezone?: string
+  industry?: string | null
+  ai_system_prompt?: string | null
+  ai_language?: string | null
+  is_active?: boolean
+}
+
 export type CreateStoreInput = {
   name: string
   slug: string

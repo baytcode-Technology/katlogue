@@ -1,6 +1,6 @@
 import { supabaseAdmin } from '../../../config/supabase.js'
 import { AppError } from '../../../shared/errors/app.error.js'
-import type { CreateStoreInput, Store } from '../types/store.types.js'
+import type { CreateStoreInput, Store, UpdateStoreInput } from '../types/store.types.js'
 
 export async function assertStoreOwner(
   storeId: string,
@@ -61,6 +61,41 @@ export async function insertStore(
       mapUniqueViolation(error)
     }
     throw new AppError(400, error.message, 'STORE_CREATE_FAILED')
+  }
+
+  return data as Store
+}
+
+export async function updateStore(storeId: string, patch: UpdateStoreInput): Promise<Store> {
+  const row: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  }
+
+  if (patch.name !== undefined) row.name = patch.name
+  if (patch.slug !== undefined) row.slug = patch.slug
+  if (patch.description !== undefined) row.description = patch.description
+  if (patch.logo_url !== undefined) row.logo_url = patch.logo_url
+  if (patch.banner_url !== undefined) row.banner_url = patch.banner_url
+  if (patch.whatsapp_number !== undefined) row.whatsapp_number = patch.whatsapp_number
+  if (patch.currency !== undefined) row.currency = patch.currency
+  if (patch.timezone !== undefined) row.timezone = patch.timezone
+  if (patch.industry !== undefined) row.industry = patch.industry
+  if (patch.ai_system_prompt !== undefined) row.ai_system_prompt = patch.ai_system_prompt
+  if (patch.ai_language !== undefined) row.ai_language = patch.ai_language
+  if (patch.is_active !== undefined) row.is_active = patch.is_active
+
+  const { data, error } = await supabaseAdmin
+    .from('stores')
+    .update(row)
+    .eq('id', storeId)
+    .select('*')
+    .single()
+
+  if (error) {
+    if (error.code === '23505') {
+      mapUniqueViolation(error)
+    }
+    throw new AppError(400, error.message, 'STORE_UPDATE_FAILED')
   }
 
   return data as Store

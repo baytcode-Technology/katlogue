@@ -11,6 +11,7 @@ import { instagramConnectionStatus } from '../controllers/connection-status.cont
 import { listInstagramChats } from '../controllers/list-chats.controller.js'
 import { listInstagramChatMessages } from '../controllers/list-messages.controller.js'
 import { sendInstagramMessage } from '../controllers/send-message.controller.js'
+import { subscribeInstagramWebhooksHandler } from '../controllers/subscribe-webhooks.controller.js'
 import { sendMessageSchema } from '../validations/send-message.validation.js'
 import {
   listChatsQuerySchema,
@@ -23,6 +24,7 @@ const router = Router()
 router.get('/connect', requireAuth, connectInstagram)
 router.get('/oauth/callback', instagramOAuthCallback)
 router.get('/connection-status', requireAuth, instagramConnectionStatus)
+router.post('/subscribe-webhooks', requireAuth, subscribeInstagramWebhooksHandler)
 
 router.post('/send', requireAuth, validateBody(sendMessageSchema), sendInstagramMessage)
 router.get('/chats', requireAuth, validateQuery(listChatsQuerySchema), listInstagramChats)

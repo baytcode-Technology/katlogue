@@ -63,6 +63,8 @@ export const env = {
     CLIENT_ID: optionalEnv('GOOGLE_CLIENT_ID') ?? '',
     CLIENT_SECRET: optionalEnv('GOOGLE_CLIENT_SECRET') ?? '',
   },
+  /** 32+ char secret for encrypting per-store Razorpay credentials at rest. */
+  PAYMENT_ENCRYPTION_KEY: optionalEnv('PAYMENT_ENCRYPTION_KEY'),
 } as const
 
 export function isGoogleOAuthConfigured(): boolean {

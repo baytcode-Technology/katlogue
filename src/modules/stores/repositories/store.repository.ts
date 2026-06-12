@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../../../config/supabase.js'
 import { AppError } from '../../../shared/errors/app.error.js'
+import type { StoredPaymentConfig } from '../../payments/types/payment-config.types.js'
 import type { CreateStoreInput, Store, UpdateStoreInput } from '../types/store.types.js'
 
 export async function assertStoreOwner(
@@ -253,6 +254,27 @@ export async function findStoreByWhatsAppWebhookTarget(input: {
   }
 
   return null
+}
+
+export async function updatePaymentConfig(
+  storeId: string,
+  paymentConfig: StoredPaymentConfig
+): Promise<Store> {
+  const { data, error } = await supabaseAdmin
+    .from('stores')
+    .update({
+      payment_config: paymentConfig,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', storeId)
+    .select('*')
+    .single()
+
+  if (error) {
+    throw new AppError(400, error.message, 'PAYMENT_CONFIG_UPDATE_FAILED')
+  }
+
+  return data as Store
 }
 
 export async function findActiveStoreBySlug(slug: string): Promise<Store | null> {

@@ -11,6 +11,8 @@ import { industryRoutes } from './modules/industries/index.js'
 import { publicRoutes } from './modules/storefront/index.js'
 import { uploadRoutes } from './modules/uploads/index.js'
 import { orderRoutes } from './modules/orders/index.js'
+import { paymentConfigRoutes } from './modules/payments/index.js'
+import razorpayWebhookRoutes from './modules/payments/routes/razorpay-webhook.routes.js'
 import { customerRoutes } from './modules/customers/index.js'
 import { instagramRoutes } from './modules/instagram/index.js'
 import metaWebhookRoutes from './modules/meta/routes/meta-webhook.routes.js'
@@ -31,6 +33,8 @@ app.use('/api/webhooks/whatsapp', metaWebhookRoutes)
 app.use('/api/webhooks/instagram', metaWebhookRoutes)
 app.use('/webhook', metaWebhookRoutes)
 
+app.use('/api/webhooks/razorpay', razorpayWebhookRoutes)
+
 app.use(express.json())
 
 app.get('/', (_req, res) => {
@@ -50,6 +54,7 @@ app.get('/', (_req, res) => {
 
 app.use('/api/auth', authRoutes)
 app.use('/api/stores', storeRoutes)
+app.use('/api/stores', paymentConfigRoutes)
 app.use('/api/products', productRoutes)
 app.use('/api/categories', categoryRoutes)
 app.use('/api/industries', industryRoutes)

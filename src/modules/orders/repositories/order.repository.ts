@@ -11,37 +11,22 @@ import type { Order, OrderItem, Payment, UpdateOrderInput } from '../types/order
 
 
 export type InsertOrderRow = {
-
   store_id: string
-
   customer_id: string | null
-
   conversation_id?: string | null
-
   order_number: string
-
   order_status: string
-
   payment_status: string
-
   fulfillment_status: string
-
   source: string
-
   subtotal: number
-
   discount_amount: number
-
   shipping_fee: number
-
   tax_amount: number
-
   total: number
-
   shipping_address: Record<string, unknown>
-
   notes?: string | null
-
+  checkout_token?: string | null
 }
 
 
@@ -148,19 +133,13 @@ export async function insertOrderItems(rows: InsertOrderItemRow[]): Promise<Orde
 
 
 export async function insertPayment(row: {
-
   order_id: string
-
   store_id: string
-
   provider: string
-
   amount: number
-
   currency: string
-
   status: string
-
+  provider_order_id?: string | null
 }): Promise<Payment> {
 
   const { data, error } = await supabaseAdmin
@@ -329,4 +308,82 @@ export async function findOrderItemsByOrderIds(orderIds: string[]): Promise<Orde
 
 }
 
+export async function findPaymentByOrderId(orderId: string): Promise<Payment | null> {
+  const { data, error } = await supabaseAdmin
+    .from('payments')
+    .select('*')
+    .eq('order_id', orderId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    throw new AppError(400, error.message, 'PAYMENT_LOOKUP_FAILED')
+  }
+
+  return (data as Payment | null) ?? null
+}
+
+export async function findPaymentByProviderOrderId(
+  providerOrderId: string
+): Promise<Payment | null> {
+  const { data, error } = await supabaseAdmin
+    .from('payments')
+    .select('*')
+    .eq('provider_order_id', providerOrderId)
+    .maybeSingle()
+
+  if (error) {
+    throw new AppError(400, error.message, 'PAYMENT_LOOKUP_FAILED')
+  }
+
+  return (data as Payment | null) ?? null
+}
+
+export async function updatePayment(
+  paymentId: string,
+  patch: Partial<{
+    status: string
+    provider_order_id: string | null
+    provider_payment_id: string | null
+    paid_at: string | null
+  }>
+): Promise<Payment> {
+  const row: Record<string, unknown> = {}
+  if (patch.status !== undefined) row.status = patch.status
+  if (patch.provider_order_id !== undefined) row.provider_order_id = patch.provider_order_id
+  if (patch.provider_payment_id !== undefined) row.provider_payment_id = patch.provider_payment_id
+  if (patch.paid_at !== undefined) row.paid_at = patch.paid_at
+
+  const { data, error } = await supabaseAdmin
+    .from('payments')
+    .update(row)
+    .eq('id', paymentId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new AppError(400, error.message, 'PAYMENT_UPDATE_FAILED')
+  }
+
+  return data as Payment
+}
+
+export async function findOrderByIdAndCheckoutToken(
+  orderId: string,
+  checkoutToken: string
+): Promise<Order | null> {
+  const { data, error } = await supabaseAdmin
+    .from('orders')
+    .select('*')
+    .eq('id', orderId)
+    .eq('checkout_token', checkoutToken)
+    .maybeSingle()
+
+  if (error) {
+    throw new AppError(400, error.message, 'ORDER_LOOKUP_FAILED')
+  }
+
+  return (data as Order | null) ?? null
+}
 

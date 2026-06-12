@@ -1,0 +1,255 @@
+# Storefront public API
+
+Customer-facing HTTP API for building a store website or checkout flow. All routes live under `/api/public/*`.
+
+Interactive OpenAPI docs: `GET /api/docs` (when the backend is running).
+
+## Store resolution
+
+Every public request must identify which store to use:
+
+| Method | Example |
+|--------|---------|
+| **Subdomain** | `https://my-shop.yourdomain.com/api/public/catalog` |
+| **Header** | `X-Store-Slug: my-shop` on the API host (e.g. local dev or Railway) |
+
+If the store cannot be resolved, responses return `404 STORE_NOT_FOUND`.
+
+---
+
+## `GET /api/public/store`
+
+Returns public store metadata and enabled payment methods (no secrets).
+
+**Response `data`:**
+
+```json
+{
+  "store": {
+    "id": "uuid",
+    "name": "My Shop",
+    "slug": "my-shop",
+    "currency": "USD",
+    "payment_methods": {
+      "cod": { "enabled": true },
+      "razorpay": { "enabled": true, "key_id": "rzp_test_..." },
+      "upi": {
+        "enabled": false,
+        "vpa": null,
+        "display_name": null,
+        "qr_image_url": null
+      }
+    }
+  },
+  "subdomainUrl": "https://my-shop.example.com"
+}
+```
+
+Use `payment_methods` to show checkout options. Only methods with `enabled: true` are accepted on order creation.
+
+---
+
+## `GET /api/public/catalog`
+
+Primary endpoint for product listing pages. Returns categories and products in one payload.
+
+### Query parameters
+
+| Param | Description |
+|-------|-------------|
+| `category_id` | Filter products to one category |
+| `product_id` | Return a single product (`products` length 1) |
+| `sort` | `default` \| `name_asc` \| `name_desc` \| `price_asc` \| `price_desc` |
+| `min_price` | Minimum `base_price` |
+| `max_price` | Maximum `base_price` |
+
+### Response shape
+
+```json
+{
+  "success": true,
+  "message": "Catalog fetched successfully",
+  "data": {
+    "categories": [ /* all active categories */ ],
+    "products": [ /* all active products, including sold out */ ]
+  }
+}
+```
+
+### Sold-out availability
+
+Each product includes:
+
+- **`sold_out`** (boolean) — customer cannot purchase this product as a whole.
+- **`variants`** — all **active** variants, each with **`sold_out`**.
+
+A product or variant is **sold out** when:
+
+1. `mark_as_sold` is `true` (product-level flag applies to all variants), or
+2. Inventory is tracked (`track_inventory: true`) and `stock_qty < 1` (zero or negative).
+
+**Not sold out:** `mark_as_non_inventory: true` (product or variant) skips stock checks.
+
+**Variant products:** `product.sold_out` is `true` only when **every** active variant is sold out. Individual variants can be sold out while others remain purchasable.
+
+**Website integration:** Show sold-out items in the catalog with a badge and disable “Add to cart”. Checkout still validates stock and returns `400 INSUFFICIENT_STOCK` if a sold-out line is submitted.
+
+### Example product (simple, sold out)
+
+```json
+{
+  "id": "uuid",
+  "name": "Vintage Camera",
+  "base_price": 899,
+  "track_inventory": true,
+  "stock_qty": -2,
+  "mark_as_sold": false,
+  "mark_as_non_inventory": false,
+  "sold_out": true,
+  "variants": []
+}
+```
+
+### Example product (variants)
+
+```json
+{
+  "id": "uuid",
+  "name": "T-Shirt",
+  "base_price": 29,
+  "sold_out": false,
+  "variants": [
+    { "id": "uuid", "name": "M / Blue", "stock_qty": 5, "sold_out": false },
+    { "id": "uuid", "name": "L / Blue", "stock_qty": 0, "sold_out": true }
+  ]
+}
+```
+
+---
+
+## `GET /api/public/categories`
+
+Lists active categories only. Prefer `/catalog` when you need products too.
+
+---
+
+## `GET /api/public/products`
+
+Lists raw active products (merchant product rows). Does **not** attach `sold_out` or variant availability — use `/catalog` for storefront UI.
+
+---
+
+## `POST /api/public/orders`
+
+Guest checkout.
+
+### Request body
+
+```json
+{
+  "items": [
+    { "product_id": "uuid", "quantity": 1 },
+    { "product_id": "uuid", "variant_id": "uuid", "quantity": 2 }
+  ],
+  "payment_method": "cod",
+  "whatsapp_number": "919876543210",
+  "name": "Customer name",
+  "shipping_address": {
+    "name": "Customer name",
+    "phone_number": "919876543210",
+    "line1": "Street",
+    "city": "City"
+  }
+}
+```
+
+| Field | Notes |
+|-------|-------|
+| `payment_method` | `cod` \| `razorpay` \| `upi` — must be enabled on the store |
+| `items[].variant_id` | Required when the product has variants |
+| `whatsapp_number` | Used for customer record and notifications |
+
+### Payment flows
+
+| Method | Order status | Payment status | Next step |
+|--------|--------------|----------------|-----------|
+| **cod** | `confirmed` | `pending` | Pay on delivery |
+| **upi** | `pending` | `confirming` | Show UPI details from response `data.upi` |
+| **razorpay** | `pending` | `pending` | Open Razorpay with `data.razorpay`; poll status endpoint |
+
+### Response highlights
+
+```json
+{
+  "success": true,
+  "data": {
+    "order": { "id": "uuid", "order_number": "MAY26-1", "total": 599, "payment_status": "pending", "order_status": "pending" },
+    "checkout_token": "hex-string",
+    "razorpay": { "key_id": "rzp_...", "order_id": "order_...", "amount": 59900, "currency": "INR" },
+    "upi": { "vpa": "shop@upi", "amount": 599, "currency": "INR", "reference": "MAY26-1", "qr_image_url": null }
+  }
+}
+```
+
+Save `checkout_token` for Razorpay polling.
+
+---
+
+## `GET /api/public/orders/:orderId/status?token=...`
+
+Poll payment after Razorpay checkout.
+
+**Query:** `token` = `checkout_token` from create-order.
+
+```json
+{
+  "success": true,
+  "data": {
+    "order_id": "uuid",
+    "order_number": "MAY26-1",
+    "order_status": "confirmed",
+    "payment_status": "paid",
+    "total": 599
+  }
+}
+```
+
+Poll every 2–3 seconds until `payment_status` is `paid` or the user dismisses checkout.
+
+---
+
+## Razorpay webhook (server-side)
+
+Configure in the Razorpay dashboard:
+
+- **URL:** `https://your-api-host/api/webhooks/razorpay`
+- **Event:** `payment.captured`
+
+The backend verifies the signature, updates payment and order status, and is idempotent.
+
+Merchant Razorpay keys are configured per store in the merchant app (Settings → Payment methods → Razorpay).
+
+---
+
+## Error codes (common)
+
+| Code | HTTP | Meaning |
+|------|------|---------|
+| `STORE_NOT_FOUND` | 404 | Invalid slug / subdomain |
+| `PRODUCT_NOT_FOUND` | 404 | `product_id` filter invalid |
+| `INSUFFICIENT_STOCK` | 400 | Sold-out or not enough quantity |
+| `VARIANT_REQUIRED` | 400 | Product has variants but none selected |
+| `PAYMENT_METHOD_DISABLED` | 400 | Method not enabled for store |
+
+---
+
+## Quick integration checklist
+
+1. Resolve store via subdomain or `X-Store-Slug`.
+2. `GET /api/public/store` — branding, currency, payment methods.
+3. `GET /api/public/catalog` — categories + products; respect `sold_out`.
+4. `POST /api/public/orders` — checkout with enabled `payment_method`.
+5. Razorpay: open checkout → poll `GET .../status?token=checkout_token`.
+6. UPI: display `data.upi` and wait for merchant confirmation.
+
+Demo reference implementation: `storefront-web/` in this repo.

@@ -318,18 +318,41 @@ export function buildOpenApiDocument() {
             store_id: { type: 'string', format: 'uuid' },
           },
         },
+        CatalogVariant: {
+          allOf: [
+            { $ref: '#/components/schemas/ProductVariant' },
+            {
+              type: 'object',
+              required: ['sold_out'],
+              properties: {
+                sold_out: {
+                  type: 'boolean',
+                  description:
+                    'True when the variant cannot be purchased (marked sold, or tracked inventory with stock_qty < 1).',
+                  example: false,
+                },
+              },
+            },
+          ],
+        },
         CatalogProduct: {
           allOf: [
             { $ref: '#/components/schemas/Product' },
             {
               type: 'object',
-              required: ['variants'],
+              required: ['variants', 'sold_out'],
               properties: {
+                sold_out: {
+                  type: 'boolean',
+                  description:
+                    'True when the product cannot be purchased. For variant products, true only when every active variant is sold out.',
+                  example: false,
+                },
                 variants: {
                   type: 'array',
                   description:
-                    'Active variants for this product. Empty array when the product has no variants.',
-                  items: { $ref: '#/components/schemas/ProductVariant' },
+                    'All active variants for this product, including sold-out variants. Empty array when the product has no variants.',
+                  items: { $ref: '#/components/schemas/CatalogVariant' },
                 },
               },
             },
@@ -339,7 +362,7 @@ export function buildOpenApiDocument() {
           type: 'object',
           required: ['categories', 'products'],
           description:
-            'Always returns all active categories. Products are filtered when category_id or product_id is provided. Each product includes a variants array (empty when none).',
+            'Always returns all active categories. Products are filtered when category_id or product_id is provided. Each active product is included even when sold out; use sold_out on the product and variants to disable purchase in the storefront UI.',
           properties: {
             categories: {
               type: 'array',
@@ -1153,7 +1176,7 @@ export function buildOpenApiDocument() {
             'Returns a single catalog shape:',
             '',
             '- **categories**: always all active categories for the store (empty array if none).',
-            '- **products**: all active, in-stock products by default; each product includes a **variants** array (sellable variants only, empty when none). Products with `mark_as_sold` or stock &lt; 1 are omitted; variant products omit sold/out-of-stock variants and are omitted entirely when no variants remain.',
+            '- **products**: all active products, including sold-out items. Each product has **sold_out** (boolean) and a **variants** array (all active variants, each with **sold_out**). Sold out when `mark_as_sold` is true or tracked inventory has `stock_qty` &lt; 1 (zero or negative). Non-inventory items are never sold out.',
             '',
             '**Filters (products only):**',
             '- `category_id` — only products in that category.',
@@ -1235,8 +1258,11 @@ export function buildOpenApiDocument() {
                               is_active: true,
                               sort_order: 0,
                               metadata: {},
+                              mark_as_sold: false,
+                              mark_as_non_inventory: false,
                               created_at: '2026-05-19T10:00:00.000Z',
                               updated_at: '2026-05-19T10:00:00.000Z',
+                              sold_out: false,
                               variants: [
                                 {
                                   id: '44444444-4444-4444-4444-444444444444',
@@ -1252,8 +1278,32 @@ export function buildOpenApiDocument() {
                                   image_url: 'https://cdn.example.com/headphones-black.jpg',
                                   is_active: true,
                                   sort_order: 0,
+                                  sold_out: false,
                                 },
                               ],
+                            },
+                            {
+                              id: '55555555-5555-5555-5555-555555555555',
+                              store_id: '22222222-2222-2222-2222-222222222222',
+                              category_id: '11111111-1111-1111-1111-111111111111',
+                              name: 'Vintage Camera',
+                              description: 'Limited edition — no longer available',
+                              sku: 'SKU-002',
+                              base_price: 899,
+                              compare_at_price: null,
+                              track_inventory: true,
+                              stock_qty: -2,
+                              images: [],
+                              thumbnail_url: null,
+                              is_active: true,
+                              sort_order: 1,
+                              metadata: {},
+                              mark_as_sold: false,
+                              mark_as_non_inventory: false,
+                              created_at: '2026-05-19T10:00:00.000Z',
+                              updated_at: '2026-05-19T10:00:00.000Z',
+                              sold_out: true,
+                              variants: [],
                             },
                           ],
                         },
@@ -1294,8 +1344,11 @@ export function buildOpenApiDocument() {
                               is_active: true,
                               sort_order: 0,
                               metadata: {},
+                              mark_as_sold: false,
+                              mark_as_non_inventory: false,
                               created_at: '2026-05-19T10:00:00.000Z',
                               updated_at: '2026-05-19T10:00:00.000Z',
+                              sold_out: false,
                               variants: [],
                             },
                           ],
@@ -1355,6 +1408,8 @@ export function buildOpenApiDocument() {
         post: {
           tags: ['Public'],
           summary: 'Create guest order',
+          description:
+            'Checkout rejects sold-out lines (`INSUFFICIENT_STOCK`) even though the catalog lists them with `sold_out: true`.',
           parameters: [{ name: 'X-Store-Slug', in: 'header', schema: { type: 'string' } }],
           requestBody: {
             required: true,
@@ -1363,6 +1418,29 @@ export function buildOpenApiDocument() {
             },
           },
           responses: { '201': { description: 'Order created' } },
+        },
+      },
+      '/api/public/orders/{orderId}/status': {
+        get: {
+          tags: ['Public'],
+          summary: 'Poll guest order payment status',
+          description:
+            'Requires the `checkout_token` returned from POST /api/public/orders. Used after Razorpay checkout.',
+          parameters: [
+            { name: 'X-Store-Slug', in: 'header', schema: { type: 'string' } },
+            { name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+            {
+              name: 'token',
+              in: 'query',
+              required: true,
+              schema: { type: 'string' },
+              description: 'checkout_token from create-order response',
+            },
+          ],
+          responses: {
+            '200': { description: 'Order status' },
+            '404': { description: 'Order not found or invalid token' },
+          },
         },
       },
     },

@@ -17,12 +17,16 @@ export type CatalogQuery = {
   max_price?: number
 }
 
+export type CatalogVariant = ProductVariant & {
+  sold_out: boolean
+}
+
 export type CatalogProduct = Product & {
-  variants: ProductVariant[]
+  variants: CatalogVariant[]
+  sold_out: boolean
 }
 
 export type CatalogResponse = {
   categories: Category[]
   products: CatalogProduct[]
 }
-

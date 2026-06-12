@@ -9,5 +9,6 @@ export async function createStore(
     ...input,
     description: input.description?.trim() || null,
     industry: input.industry?.trim() || null,
+    country: input.country.trim(),
   })
 }

@@ -38,7 +38,8 @@ export const createStoreSchema = z.object({
   timezone: z.string().trim().min(1).max(64).optional(),
   ai_language: z.string().trim().max(16).optional().nullable(),
   ai_system_prompt: z.string().trim().max(8000).optional().nullable(),
-  industry: z.string().trim().max(100).optional().nullable(),
+  industry: z.string().trim().max(1000).optional().nullable(),
+  country: z.string().trim().min(1, 'Country is required').max(100),
 })
 
 const optionalUrl = z
@@ -78,7 +79,8 @@ export const updateStoreSchema = z
       .transform((s) => s.toUpperCase())
       .optional(),
     timezone: z.string().trim().min(1).max(64).optional(),
-    industry: z.union([z.string().trim().max(100), z.null()]).optional(),
+    industry: z.union([z.string().trim().max(1000), z.null()]).optional(),
+    country: z.string().trim().min(1, 'Country is required').max(100).optional(),
     ai_system_prompt: z.union([z.string().trim().max(8000), z.null()]).optional(),
     ai_language: z.union([z.string().trim().max(16), z.null()]).optional(),
     is_active: z.boolean().optional(),

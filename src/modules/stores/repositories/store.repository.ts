@@ -45,6 +45,7 @@ export async function insertStore(
       slug: input.slug,
       whatsapp_number: input.whatsapp_number,
       currency: input.currency,
+      country: input.country,
       description: input.description ?? null,
       logo_url: input.logo_url ?? null,
       banner_url: input.banner_url ?? null,
@@ -78,6 +79,7 @@ export async function updateStore(storeId: string, patch: UpdateStoreInput): Pro
   if (patch.banner_url !== undefined) row.banner_url = patch.banner_url
   if (patch.whatsapp_number !== undefined) row.whatsapp_number = patch.whatsapp_number
   if (patch.currency !== undefined) row.currency = patch.currency
+  if (patch.country !== undefined) row.country = patch.country
   if (patch.timezone !== undefined) row.timezone = patch.timezone
   if (patch.industry !== undefined) row.industry = patch.industry
   if (patch.ai_system_prompt !== undefined) row.ai_system_prompt = patch.ai_system_prompt

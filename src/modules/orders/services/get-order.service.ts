@@ -4,8 +4,11 @@ import { AppError } from '../../../shared/errors/app.error.js'
 import type { OrderItem } from '../types/order.types.js'
 import type { OrderWithCustomer } from '../repositories/order.repository.js'
 
+import type { Payment } from '../types/order.types.js'
+
 export type OrderDetail = OrderWithCustomer & {
   items: OrderItem[]
+  payment: Payment | null
 }
 
 export async function getOrderById(
@@ -20,11 +23,15 @@ export async function getOrderById(
     throw new AppError(404, 'Order not found', 'ORDER_NOT_FOUND')
   }
 
-  const items = await orderRepository.findOrderItemsByOrderIds([orderId])
+  const [items, payment] = await Promise.all([
+    orderRepository.findOrderItemsByOrderIds([orderId]),
+    orderRepository.findPaymentByOrderId(orderId),
+  ])
 
   return {
     ...order,
     items,
+    payment,
   }
 }
 

@@ -1,7 +1,15 @@
+import { randomBytes } from 'crypto'
 import {
   findCustomerById,
   findOrCreateByWhatsApp,
 } from '../../customers/repositories/customer.repository.js'
+import * as storeRepository from '../../stores/repositories/store.repository.js'
+import {
+  assertPaymentMethodEnabled,
+  parseStoredPaymentConfig,
+  toPublicPaymentMethods,
+} from '../../payments/lib/payment-config.js'
+import { createRazorpayOrder } from '../../payments/services/razorpay.service.js'
 import {
   adjustProductStock,
   findProductsByIds,
@@ -237,9 +245,23 @@ export async function createOrder(
   const subtotal = lines.reduce((sum, line) => sum + line.line_total, 0)
   const total = subtotal
 
+  const store = await storeRepository.findStoreById(storeId)
+  if (!store) {
+    throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
+  }
+
+  const storedPaymentConfig = parseStoredPaymentConfig(store.payment_config)
+  if (input.source === 'storefront' || !input.offline) {
+    assertPaymentMethodEnabled(storedPaymentConfig, input.payment_method)
+  }
+
   const isCod = input.payment_method === 'cod'
-  const paymentProvider = isCod ? 'manual' : 'razorpay'
-  const paymentStatus = 'pending'
+  const isUpi = input.payment_method === 'upi'
+  const paymentProvider = isCod ? 'manual' : isUpi ? 'upi_manual' : 'razorpay'
+  const paymentStatus = isUpi ? 'confirming' : 'pending'
+  const orderStatus = isCod ? 'confirmed' : 'pending'
+  const orderPaymentStatus = isUpi ? 'confirming' : 'pending'
+  const checkoutToken = randomBytes(24).toString('hex')
 
   const orderNumber = await orderRepository.allocateOrderNumber(storeId)
 
@@ -248,8 +270,8 @@ export async function createOrder(
     customer_id: customerId,
     conversation_id: input.conversation_id ?? null,
     order_number: orderNumber,
-    order_status: 'pending',
-    payment_status: 'pending',
+    order_status: orderStatus,
+    payment_status: orderPaymentStatus,
     fulfillment_status: 'unfulfilled',
     source: input.source ?? 'storefront',
     subtotal,
@@ -259,6 +281,7 @@ export async function createOrder(
     total,
     shipping_address: shippingAddress,
     notes: input.notes ?? null,
+    checkout_token: checkoutToken,
   })
 
   try {
@@ -273,7 +296,7 @@ export async function createOrder(
       }))
     )
 
-    const payment = await orderRepository.insertPayment({
+    let payment = await orderRepository.insertPayment({
       order_id: order.id,
       store_id: storeId,
       provider: paymentProvider,
@@ -290,13 +313,37 @@ export async function createOrder(
       payment,
       customer_id: customerId,
       payment_method: input.payment_method,
+      checkout_token: checkoutToken,
     }
 
-    if (!isCod) {
-      result.razorpay = {
-        pending: true,
-        message:
-          'Razorpay payment link will be generated here. Complete Razorpay integration to enable online pay.',
+    if (input.payment_method === 'razorpay') {
+      const razorpayOrder = await createRazorpayOrder({
+        storedConfig: storedPaymentConfig,
+        amount: total,
+        currency: storeCurrency,
+        receipt: order.order_number,
+        notes: {
+          store_id: storeId,
+          order_id: order.id,
+          payment_id: payment.id,
+        },
+      })
+      payment = await orderRepository.updatePayment(payment.id, {
+        provider_order_id: razorpayOrder.order_id,
+      })
+      result.payment = payment
+      result.razorpay = razorpayOrder
+    }
+
+    if (isUpi) {
+      const publicMethods = toPublicPaymentMethods(storedPaymentConfig)
+      result.upi = {
+        vpa: publicMethods.upi.vpa ?? '',
+        qr_image_url: publicMethods.upi.qr_image_url,
+        display_name: publicMethods.upi.display_name,
+        amount: total,
+        currency: storeCurrency,
+        reference: order.order_number,
       }
     }
 

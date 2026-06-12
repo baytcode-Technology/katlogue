@@ -19,7 +19,7 @@ import type { OptionalShippingAddress } from '../../../shared/validations/shippi
 
 
 
-export type PaymentMethod = 'razorpay' | 'cod'
+export type PaymentMethod = 'razorpay' | 'cod' | 'upi'
 
 
 
@@ -111,6 +111,8 @@ export type Order = {
 
   admin_notes: string | null
 
+  checkout_token: string | null
+
   created_at: string
 
   updated_at: string
@@ -193,12 +195,22 @@ export type CreateOrderResult = {
 
   payment_method: PaymentMethod
 
+  checkout_token?: string | null
+
   razorpay?: {
+    key_id: string
+    order_id: string
+    amount: number
+    currency: string
+  }
 
-    pending: true
-
-    message: string
-
+  upi?: {
+    vpa: string
+    qr_image_url: string | null
+    display_name: string | null
+    amount: number
+    currency: string
+    reference: string
   }
 
 }

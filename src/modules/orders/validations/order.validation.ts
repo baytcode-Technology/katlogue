@@ -13,7 +13,7 @@ export const createOrderSchema = z.object({
   name: z.string().trim().max(200).optional(),
   email: z.email('Invalid email').optional(),
   items: z.array(orderItemSchema).min(1, 'At least one item is required'),
-  payment_method: z.enum(['razorpay', 'cod']).default('cod'),
+  payment_method: z.enum(['razorpay', 'cod', 'upi']).default('cod'),
   shipping_address: optionalShippingAddressSchema.optional(),
   notes: z.string().trim().max(1000).optional(),
   conversation_id: z.uuid('Invalid conversation id').optional(),

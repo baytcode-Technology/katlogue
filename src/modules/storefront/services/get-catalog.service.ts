@@ -4,16 +4,17 @@ import { findActiveProductsByStoreId } from '../../products/repositories/product
 import * as variantRepository from '../../products/repositories/product-variant.repository.js'
 import type { Product } from '../../products/types/product.types.js'
 import type { ProductVariant } from '../../products/types/product-variant.types.js'
+import {
+  isCatalogProductSoldOut,
+  isCatalogVariantSoldOut,
+} from '../lib/catalog-availability.js'
 import type {
   CatalogProduct,
   CatalogQuery,
   CatalogResponse,
   CatalogSort,
+  CatalogVariant,
 } from '../types/catalog.types.js'
-import {
-  filterCatalogVariants,
-  isCatalogProductSellable,
-} from '../lib/catalog-availability.js'
 
 function filterByPrice(
   products: Product[],
@@ -30,31 +31,30 @@ function filterByPrice(
 function toCatalogProduct(
   product: Product,
   variantMap: Map<string, ProductVariant[]>
-): CatalogProduct | null {
-  if (product.mark_as_sold) return null
-
+): CatalogProduct {
   const allVariants = variantMap.get(product.id) ?? []
 
   if (allVariants.length > 0) {
-    const variants = filterCatalogVariants(product, allVariants)
-    if (variants.length === 0) return null
-    return { ...product, variants }
+    const variants: CatalogVariant[] = allVariants.map((variant) => ({
+      ...variant,
+      sold_out: isCatalogVariantSoldOut(product, variant),
+    }))
+    const sold_out = variants.every((variant) => variant.sold_out)
+    return { ...product, variants, sold_out }
   }
 
-  if (!isCatalogProductSellable(product)) return null
-  return { ...product, variants: [] }
+  return {
+    ...product,
+    variants: [],
+    sold_out: isCatalogProductSoldOut(product),
+  }
 }
 
 function buildCatalogProducts(
   products: Product[],
   variantMap: Map<string, ProductVariant[]>
 ): CatalogProduct[] {
-  const catalog: CatalogProduct[] = []
-  for (const product of products) {
-    const row = toCatalogProduct(product, variantMap)
-    if (row) catalog.push(row)
-  }
-  return catalog
+  return products.map((product) => toCatalogProduct(product, variantMap))
 }
 
 async function loadCatalogProducts(products: Product[]): Promise<CatalogProduct[]> {
@@ -103,9 +103,6 @@ export async function getCatalog(
       throw new AppError(404, 'Product not found', 'PRODUCT_NOT_FOUND')
     }
     const catalogProduct = (await loadCatalogProducts([product]))[0]
-    if (!catalogProduct) {
-      throw new AppError(404, 'Product not found', 'PRODUCT_NOT_FOUND')
-    }
     return {
       categories,
       products: [catalogProduct],

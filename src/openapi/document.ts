@@ -382,6 +382,40 @@ export function buildOpenApiDocument() {
             data: { $ref: '#/components/schemas/CatalogData' },
           },
         },
+        NotificationPreferences: {
+          type: 'object',
+          properties: {
+            chats: { type: 'boolean', example: true },
+            online_orders: { type: 'boolean', example: true },
+            pos_orders: { type: 'boolean', example: true },
+            sound_id: {
+              type: 'string',
+              enum: ['default', 'chime', 'bell', 'ping', 'alert', 'soft', 'bright', 'pulse'],
+              example: 'default',
+            },
+          },
+        },
+        UpdateNotificationPreferencesBody: {
+          type: 'object',
+          properties: {
+            chats: { type: 'boolean' },
+            online_orders: { type: 'boolean' },
+            pos_orders: { type: 'boolean' },
+            sound_id: {
+              type: 'string',
+              enum: ['default', 'chime', 'bell', 'ping', 'alert', 'soft', 'bright', 'pulse'],
+            },
+          },
+        },
+        UpsertPushTokenBody: {
+          type: 'object',
+          required: ['expo_push_token', 'platform'],
+          properties: {
+            expo_push_token: { type: 'string' },
+            platform: { type: 'string', enum: ['ios', 'android', 'web'] },
+            sound_channel_id: { type: 'string' },
+          },
+        },
         CreateOrderBody: {
           type: 'object',
           required: ['items'],
@@ -635,6 +669,44 @@ export function buildOpenApiDocument() {
             '200': { description: 'Store updated' },
             '404': { description: 'No store' },
           },
+        },
+      },
+      '/api/stores/me/notification-preferences': {
+        get: {
+          tags: ['Stores'],
+          summary: 'Get store notification preferences',
+          security: [{ bearerAuth: [] }],
+          responses: { '200': { description: 'Notification preferences' } },
+        },
+        patch: {
+          tags: ['Stores'],
+          summary: 'Update store notification preferences',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/UpdateNotificationPreferencesBody' },
+              },
+            },
+          },
+          responses: { '200': { description: 'Preferences saved' } },
+        },
+      },
+      '/api/stores/me/push-token': {
+        put: {
+          tags: ['Stores'],
+          summary: 'Register Expo push token for this store device',
+          description:
+            'Called by the merchant app after notification permission is granted. Used for push alerts when the app is closed.',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/UpsertPushTokenBody' } },
+            },
+          },
+          responses: { '200': { description: 'Token registered' } },
         },
       },
       '/api/stores': {

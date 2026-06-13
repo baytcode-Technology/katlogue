@@ -12,6 +12,7 @@ import { publicRoutes } from './modules/storefront/index.js'
 import { uploadRoutes } from './modules/uploads/index.js'
 import { orderRoutes } from './modules/orders/index.js'
 import { paymentConfigRoutes } from './modules/payments/index.js'
+import { notificationRoutes } from './modules/notifications/index.js'
 import razorpayWebhookRoutes from './modules/payments/routes/razorpay-webhook.routes.js'
 import { customerRoutes } from './modules/customers/index.js'
 import { instagramRoutes } from './modules/instagram/index.js'
@@ -55,6 +56,7 @@ app.get('/', (_req, res) => {
 app.use('/api/auth', authRoutes)
 app.use('/api/stores', storeRoutes)
 app.use('/api/stores', paymentConfigRoutes)
+app.use('/api/stores', notificationRoutes)
 app.use('/api/products', productRoutes)
 app.use('/api/categories', categoryRoutes)
 app.use('/api/industries', industryRoutes)

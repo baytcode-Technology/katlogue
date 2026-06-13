@@ -27,6 +27,9 @@ import {
 } from '../../products/utils/product-inventory.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import { normalizeWhatsAppNumber } from '../../../shared/utils/phone.js'
+import { notifyNewOrder } from '../../notifications/services/send-store-notification.service.js'
+import { emitToStore } from '../../../websocket/index.js'
+import { SOCKET_EVENTS } from '../../../websocket/events.js'
 import type { OptionalShippingAddress } from '../../../shared/validations/shipping-address.validation.js'
 import * as orderRepository from '../repositories/order.repository.js'
 import type {
@@ -346,6 +349,31 @@ export async function createOrder(
         reference: order.order_number,
       }
     }
+
+    const orderSource = input.source ?? 'storefront'
+    emitToStore(storeId, SOCKET_EVENTS.ORDER_NEW, {
+      storeId,
+      order: {
+        id: order.id,
+        order_number: order.order_number,
+        total: order.total,
+        currency: storeCurrency,
+        source: orderSource,
+        store_slug: store.slug,
+      },
+    })
+
+    void notifyNewOrder({
+      storeId,
+      storeSlug: store.slug,
+      orderId: order.id,
+      orderNumber: order.order_number,
+      total: order.total,
+      currency: storeCurrency,
+      source: orderSource,
+    }).catch((err) => {
+      console.error('[notifications] order push failed', err)
+    })
 
     return result
   } catch (err) {

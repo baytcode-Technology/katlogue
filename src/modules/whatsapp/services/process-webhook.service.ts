@@ -1,5 +1,6 @@
 import * as customerRepository from '../../customers/repositories/customer.repository.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
+import { notifyWhatsAppChat } from '../../notifications/services/send-store-notification.service.js'
 import { emitToStore } from '../../../websocket/index.js'
 import { SOCKET_EVENTS } from '../../../websocket/events.js'
 import * as chatRepository from '../repositories/whatsapp-chat.repository.js'
@@ -170,6 +171,16 @@ export async function processWhatsAppWebhook(body: unknown): Promise<void> {
             },
           })
         }
+
+        void notifyWhatsAppChat({
+          storeId: store.id,
+          storeSlug: store.slug,
+          conversationId: saved.conversation_id,
+          preview: saved.text_body ?? `[${saved.type}]`,
+          fromNumber: msg.from,
+        }).catch((err) => {
+          console.error('[notifications] WhatsApp push failed', err)
+        })
       }
 
       if (credentials && msg.type === 'text') {

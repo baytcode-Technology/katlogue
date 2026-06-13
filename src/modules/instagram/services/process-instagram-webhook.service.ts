@@ -1,5 +1,6 @@
 import * as customerRepository from '../../customers/repositories/customer.repository.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
+import { notifyInstagramChat } from '../../notifications/services/send-store-notification.service.js'
 import { emitToStore } from '../../../websocket/index.js'
 import { SOCKET_EVENTS } from '../../../websocket/events.js'
 import * as chatRepository from '../repositories/instagram-chat.repository.js'
@@ -201,5 +202,15 @@ export async function processInstagramWebhook(body: unknown): Promise<void> {
 
     emitNewMessage(store.id, conversation.id, saved)
     emitConversationUpdated(store.id, conversation)
+
+    void notifyInstagramChat({
+      storeId: store.id,
+      storeSlug: store.slug,
+      conversationId: conversation.id,
+      preview: event.textBody ?? '[message]',
+      username: conversation.customer_ig_username,
+    }).catch((err) => {
+      console.error('[notifications] Instagram push failed', err)
+    })
   }
 }

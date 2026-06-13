@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '../../../config/supabase.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import type { StoredPaymentConfig } from '../../payments/types/payment-config.types.js'
+import type { StoredNotificationPreferences } from '../../notifications/types/notification.types.js'
 import type { CreateStoreInput, Store, UpdateStoreInput } from '../types/store.types.js'
 
 export async function assertStoreOwner(
@@ -272,6 +273,27 @@ export async function updatePaymentConfig(
 
   if (error) {
     throw new AppError(400, error.message, 'PAYMENT_CONFIG_UPDATE_FAILED')
+  }
+
+  return data as Store
+}
+
+export async function updateNotificationPreferences(
+  storeId: string,
+  preferences: StoredNotificationPreferences
+): Promise<Store> {
+  const { data, error } = await supabaseAdmin
+    .from('stores')
+    .update({
+      notification_preferences: preferences,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', storeId)
+    .select('*')
+    .single()
+
+  if (error) {
+    throw new AppError(400, error.message, 'NOTIFICATION_PREFERENCES_UPDATE_FAILED')
   }
 
   return data as Store

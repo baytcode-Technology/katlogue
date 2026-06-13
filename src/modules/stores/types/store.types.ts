@@ -17,6 +17,7 @@ export type Store = {
   country: string
   timezone: string
   payment_config: Record<string, unknown>
+  notification_preferences: Record<string, unknown>
   ai_system_prompt: string | null
   ai_language: string | null
   industry: string | null

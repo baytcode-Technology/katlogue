@@ -1,125 +1,134 @@
-# Push notifications setup (merchant app)
+# Push notifications — alerts when app is closed
 
-The AiShopy merchant app uses **Expo Push Notifications** for alerts when the app is closed or in the background.
+AiShopy uses **Expo Push + Firebase (FCM)** on Android so chats and orders show in the **notification bar** with your **phone’s default notification sound**, even when the app is fully closed.
 
-## What gets notified
+## How alerts work today
 
-| Event | Toggle | Push title | Push body |
-|-------|--------|------------|-----------|
-| WhatsApp inbound message | `chats` | WhatsApp | `{phone}: {message}` |
-| Instagram inbound DM | `chats` | Instagram | `{@user}: {message}` |
-| Storefront order | `online_orders` | `{store.slug}` | `New online order · {order_number} · {total}` |
-| POS / offline order | `pos_orders` | `{store.slug}` | `POS order · {order_number} · {total}` |
+| App state | What you get |
+|-----------|----------------|
+| **Open** | In-app toast at the top (no custom ringtone) |
+| **Background** (minimized) | System notification + default sound (if socket still connected) |
+| **Closed / killed** | **Requires FCM setup below** — server push via Expo |
 
-Preferences are stored on the store (`stores.notification_preferences`) so the backend can respect toggles when sending push from webhooks.
+The **Notification sound** picker in Settings is **coming soon**. All alerts use the system default tone for now.
 
-## API endpoints
+---
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/api/stores/me/notification-preferences` | Load toggles + sound |
-| PATCH | `/api/stores/me/notification-preferences` | Save toggles + sound |
-| PUT | `/api/stores/me/push-token` | Register device Expo push token |
+## One-time Android setup (required for closed-app push)
 
-### PATCH body example
+### Step 1 — Firebase project
 
-```json
-{
-  "chats": true,
-  "online_orders": true,
-  "pos_orders": false,
-  "sound_id": "chime"
-}
+1. Open [Firebase Console](https://console.firebase.google.com/)
+2. Create a project (or use an existing one)
+3. **Add Android app**
+   - Package name: `com.aishopy.app` (must match exactly)
+4. Download **`google-services.json`**
+
+### Step 2 — Add file to the app
+
+Copy the file here:
+
+```
+aiShopy-app/google-services.json
 ```
 
-### Push token body example
+`app.json` already points to this path (`android.googleServicesFile`).
 
-```json
-{
-  "expo_push_token": "ExponentPushToken[xxxx]",
-  "platform": "android",
-  "sound_channel_id": "aishopy-chime"
-}
+### Step 3 — Upload FCM key to Expo
+
+Expo’s push service needs your Firebase credentials:
+
+```bash
+cd aiShopy-app
+npx eas-cli login
+npx eas credentials
 ```
 
-## Database
+- Select **Android** → **production** (or development)
+- Choose **Google Service Account** / **FCM V1**
+- Follow prompts to upload the Firebase service account JSON
 
-Run migration `021_notification_preferences.sql`:
+Guide: [Expo FCM credentials](https://docs.expo.dev/push-notifications/fcm-credentials/)
 
-- `stores.notification_preferences` JSONB
-- `store_push_tokens` table (one row per device token)
+### Step 4 — Rebuild the native app
 
-## Android (FCM) — required for killed-app push
+`npm run android` alone is not enough after adding Firebase — rebuild native code:
 
-1. Create a Firebase project and add an Android app with package `com.aishopy.app`.
-2. Download `google-services.json`.
-3. Upload FCM credentials to EAS:
-   ```bash
-   cd aiShopy-app
-   eas credentials
-   ```
-4. Rebuild the APK after adding the `expo-notifications` plugin:
-   ```bash
-   npm run build:apk
-   ```
-   Or use EAS Build for a development/preview build with FCM configured.
+**Option A — local dev (`npm run android`):**
 
-5. On Android 13+, the app requests `POST_NOTIFICATIONS` at runtime when opening **Settings → Notifications**.
-
-## iOS (APNs)
-
-Configure push credentials in EAS when testing on a physical iPhone. Simulator does not receive remote push.
-
-## Sound IDs
-
-Bundled preset sounds (also used for Android notification channels):
-
-`default`, `chime`, `bell`, `ping`, `alert`, `soft`, `bright`, `pulse`
-
-Custom upload is reserved for a future release.
-
-## Push payload `data` (tap to open)
-
-**Chat**
-
-```json
-{
-  "type": "chat",
-  "channel": "whatsapp",
-  "conversationId": "uuid",
-  "storeSlug": "my-shop"
-}
+```bash
+cd aiShopy-app
+npx expo prebuild --platform android --clean
+npm run android
 ```
 
-**Order**
+**Option B — release APK (recommended for testing push):**
 
-```json
-{
-  "type": "order",
-  "orderId": "uuid",
-  "orderNumber": "MAY26-1",
-  "source": "storefront",
-  "storeSlug": "my-shop"
-}
+```bash
+npm run build:apk
 ```
 
-The app deep-links to `/(store)/chats/[id]` or `/(store)/orders/[id]` when the user taps a notification.
+Install the new APK on your phone.
 
-## Real-time while app is open
+### Step 5 — Register on the device
 
-Socket.IO events (same store room):
+1. Open the app → **Settings → Notifications**
+2. Allow notification permission when prompted
+3. Toggle **Chats** / **POS orders** ON
 
-- `whatsapp:message:new`
-- `instagram:message:new`
-- `order:new`
+The app registers an Expo push token with your backend. Without FCM, you will see in logs:
 
-The app also schedules a **local notification** with the selected sound when these fire and the matching toggle is enabled.
+```
+[push] Expo push token unavailable (FCM not configured)
+```
+
+After setup, that warning should disappear.
+
+### Step 6 — Test
+
+1. Open app once (to register token)
+2. **Force-close** the app (swipe away from recents)
+3. Send a WhatsApp message to your store **or** create a storefront order
+4. You should see a notification: **WhatsApp** / **{store-slug}** with message or order details
+
+---
+
+## Notification toggles (Settings)
+
+| Toggle | Fires when |
+|--------|------------|
+| **Chats** | Inbound WhatsApp or Instagram DM |
+| **Online orders** | New order from storefront (`source: storefront`) |
+| **POS orders** | Walk-in order from app (`source: offline`) |
+
+Preferences are saved on the server so webhooks can send push when the app is closed.
+
+---
+
+## API (reference)
+
+| Method | Path |
+|--------|------|
+| GET/PATCH | `/api/stores/me/notification-preferences` |
+| PUT | `/api/stores/me/push-token` |
+
+---
 
 ## Troubleshooting
 
-| Issue | Check |
-|-------|--------|
-| No push when app closed | FCM/APNs configured? Token registered via PUT `/push-token`? |
-| No sound | Open Notifications settings once to create Android channels |
-| Toggle ignored when closed | PATCH preferences saved? Backend reads `notification_preferences` before send |
-| Works on Wi‑Fi only in dev | Release APK with cloud API URL in `.env` |
+| Problem | Fix |
+|---------|-----|
+| `FirebaseApp is not initialized` | Add `google-services.json` + rebuild native app |
+| `Expo push token unavailable` | Complete Step 3 (FCM key on Expo) + rebuild |
+| No alert when app open | Expected — toast only; not suppressed on chat **list**, only inside that chat thread |
+| No alert when app closed | Token not registered — open app once; check toggles; verify backend has row in `store_push_tokens` |
+| Toggle saved but no push | PATCH preferences on server; redeploy backend if needed |
+
+---
+
+## Database migrations
+
+Ensure these ran on Supabase:
+
+- `020_order_checkout_token.sql`
+- `021_notification_preferences.sql` (`notification_preferences` + `store_push_tokens`)

@@ -1,9 +1,7 @@
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import {
-  androidChannelForSound,
   parseStoredNotificationPreferences,
   shouldSendNotification,
-  soundFileForId,
 } from '../lib/notification-preferences.js'
 import * as pushTokenRepository from '../repositories/push-token.repository.js'
 import type { SendStoreNotificationInput } from '../types/notification.types.js'
@@ -57,8 +55,8 @@ export async function sendStoreNotification(input: SendStoreNotificationInput): 
   const tokens = await pushTokenRepository.findPushTokensByStoreId(input.storeId)
   if (tokens.length === 0) return
 
-  const sound = soundFileForId(prefs.sound_id)
-  const channelId = androidChannelForSound(prefs.sound_id)
+  const sound = 'default'
+  const channelId = 'aishopy-alerts'
 
   const messages: ExpoPushMessage[] = tokens.map((token) => ({
     to: token.expo_push_token,

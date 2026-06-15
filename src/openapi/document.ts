@@ -470,6 +470,7 @@ export function buildOpenApiDocument() {
                 name: { type: 'string' },
                 phone_number: { type: 'string' },
                 whatsapp_number: { type: 'string' },
+                address: { type: 'string', description: 'Street / house line' },
                 postcode: { type: 'string' },
                 city: { type: 'string' },
                 district: { type: 'string' },
@@ -479,6 +480,91 @@ export function buildOpenApiDocument() {
             },
             notes: { type: 'string', nullable: true },
             conversation_id: { type: 'string', format: 'uuid', nullable: true },
+          },
+        },
+        StorefrontCreateOrderBody: {
+          type: 'object',
+          required: ['items', 'payment_method', 'shipping_address'],
+          properties: {
+            whatsapp_number: {
+              type: 'string',
+              description: 'Optional if shipping_address.phone_number is set',
+            },
+            name: { type: 'string', nullable: true },
+            email: { type: 'string', format: 'email', nullable: true },
+            items: {
+              type: 'array',
+              minItems: 1,
+              items: {
+                type: 'object',
+                required: ['product_id', 'quantity'],
+                properties: {
+                  product_id: { type: 'string', format: 'uuid' },
+                  quantity: { type: 'integer', minimum: 1 },
+                  variant_id: { type: 'string', format: 'uuid' },
+                },
+              },
+            },
+            payment_method: { type: 'string', enum: ['razorpay', 'cod', 'upi'] },
+            shipping_address: {
+              type: 'object',
+              required: [
+                'name',
+                'phone_number',
+                'address',
+                'city',
+                'district',
+                'state',
+                'postcode',
+              ],
+              properties: {
+                name: { type: 'string' },
+                phone_number: { type: 'string' },
+                address: { type: 'string' },
+                city: { type: 'string' },
+                district: { type: 'string' },
+                state: { type: 'string' },
+                postcode: { type: 'string' },
+              },
+            },
+            notes: { type: 'string', nullable: true },
+          },
+        },
+        PublicCustomerByPhone: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            name: { type: 'string', nullable: true },
+            phone_number: { type: 'string' },
+            shipping_addresses: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  name: { type: 'string' },
+                  phone_number: { type: 'string' },
+                  address: { type: 'string' },
+                  city: { type: 'string' },
+                  district: { type: 'string' },
+                  state: { type: 'string' },
+                  postcode: { type: 'string' },
+                  created_at: { type: 'string', format: 'date-time' },
+                },
+              },
+            },
+            orders: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  order_number: { type: 'string' },
+                  total: { type: 'number' },
+                  created_at: { type: 'string', format: 'date-time' },
+                },
+              },
+            },
           },
         },
         WhatsAppSendTemplateBody: {
@@ -1476,17 +1562,58 @@ export function buildOpenApiDocument() {
           responses: { '200': { description: 'Products' } },
         },
       },
+      '/api/public/customers/by-phone': {
+        get: {
+          tags: ['Public'],
+          summary: 'Lookup returning customer by phone',
+          description:
+            'Returns saved shipping addresses and past order summaries for checkout prefill.',
+          parameters: [
+            { name: 'X-Store-Slug', in: 'header', schema: { type: 'string' } },
+            {
+              name: 'phone',
+              in: 'query',
+              required: true,
+              schema: { type: 'string' },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'Customer profile',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean' },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          customer: { $ref: '#/components/schemas/PublicCustomerByPhone' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            '404': { description: 'Customer not found' },
+          },
+        },
+      },
       '/api/public/orders': {
         post: {
           tags: ['Public'],
           summary: 'Create guest order',
           description:
-            'Checkout rejects sold-out lines (`INSUFFICIENT_STOCK`) even though the catalog lists them with `sold_out: true`.',
+            'Online checkout requires full shipping_address and payment_method. Creates or updates a customer by phone, deduplicates saved addresses, and links the order.',
           parameters: [{ name: 'X-Store-Slug', in: 'header', schema: { type: 'string' } }],
           requestBody: {
             required: true,
             content: {
-              'application/json': { schema: { $ref: '#/components/schemas/CreateOrderBody' } },
+              'application/json': {
+                schema: { $ref: '#/components/schemas/StorefrontCreateOrderBody' },
+              },
             },
           },
           responses: { '201': { description: 'Order created' } },

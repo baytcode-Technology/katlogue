@@ -1,7 +1,133 @@
 import { supabaseAdmin } from '../../../config/supabase.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import { normalizeWhatsAppNumber } from '../../../shared/utils/phone.js'
+import type { StorefrontShippingAddress } from '../../../shared/validations/shipping-address.validation.js'
+import {
+  mergeShippingAddressIfNew,
+  parseSavedShippingAddresses,
+  toSavedShippingAddress,
+} from '../lib/shipping-addresses.js'
 import type { Customer, UpsertCustomerInput } from '../types/customer.types.js'
+
+function mapCustomerRow(row: Record<string, unknown>): Customer {
+  return {
+    ...(row as Customer),
+    shipping_addresses: parseSavedShippingAddresses(row.shipping_addresses),
+    order_ids: Array.isArray(row.order_ids) ? (row.order_ids as string[]) : [],
+  }
+}
+
+export async function findCustomerByPhone(
+  storeId: string,
+  phone: string
+): Promise<Customer | null> {
+  const normalized = normalizeWhatsAppNumber(phone)
+
+  const { data, error } = await supabaseAdmin
+    .from('customers')
+    .select('*')
+    .eq('store_id', storeId)
+    .eq('whatsapp_number', normalized)
+    .maybeSingle()
+
+  if (error) {
+    throw new AppError(400, error.message, 'CUSTOMER_LOOKUP_FAILED')
+  }
+
+  return data ? mapCustomerRow(data as Record<string, unknown>) : null
+}
+
+export async function resolveStorefrontCustomer(input: {
+  storeId: string
+  phone: string
+  shippingAddress: StorefrontShippingAddress
+  email?: string
+  name?: string
+}): Promise<Customer> {
+  const normalizedPhone = normalizeWhatsAppNumber(input.phone)
+  const savedAddress = toSavedShippingAddress(input.shippingAddress, normalizedPhone)
+  const displayName = input.name?.trim() || input.shippingAddress.name.trim()
+
+  const existing = await findCustomerByPhone(input.storeId, normalizedPhone)
+
+  if (existing) {
+    const shipping_addresses = mergeShippingAddressIfNew(
+      existing.shipping_addresses,
+      savedAddress
+    )
+    const updates: Record<string, unknown> = {
+      last_seen_at: new Date().toISOString(),
+      shipping_addresses,
+    }
+    if (displayName) updates.name = displayName
+    if (input.email !== undefined) updates.email = input.email
+
+    const { data, error } = await supabaseAdmin
+      .from('customers')
+      .update(updates)
+      .eq('id', existing.id)
+      .select()
+      .single()
+
+    if (error) {
+      throw new AppError(400, error.message, 'CUSTOMER_UPDATE_FAILED')
+    }
+
+    return mapCustomerRow(data as Record<string, unknown>)
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('customers')
+    .insert({
+      store_id: input.storeId,
+      whatsapp_number: normalizedPhone,
+      name: displayName,
+      email: input.email ?? null,
+      address: {},
+      shipping_addresses: [savedAddress],
+      order_ids: [],
+      last_seen_at: new Date().toISOString(),
+    })
+    .select()
+    .single()
+
+  if (error) {
+    throw new AppError(400, error.message, 'CUSTOMER_CREATE_FAILED')
+  }
+
+  return mapCustomerRow(data as Record<string, unknown>)
+}
+
+export async function appendOrderToCustomer(
+  customerId: string,
+  storeId: string,
+  orderId: string,
+  orderTotal: number
+): Promise<void> {
+  const customer = await findCustomerById(customerId, storeId)
+  if (!customer) {
+    throw new AppError(404, 'Customer not found', 'CUSTOMER_NOT_FOUND')
+  }
+
+  const order_ids = customer.order_ids.includes(orderId)
+    ? customer.order_ids
+    : [...customer.order_ids, orderId]
+
+  const { error } = await supabaseAdmin
+    .from('customers')
+    .update({
+      order_ids,
+      total_orders: customer.total_orders + 1,
+      total_spent: Number(customer.total_spent) + Number(orderTotal),
+      last_seen_at: new Date().toISOString(),
+    })
+    .eq('id', customerId)
+    .eq('store_id', storeId)
+
+  if (error) {
+    throw new AppError(400, error.message, 'CUSTOMER_UPDATE_FAILED')
+  }
+}
 
 export async function findOrCreateByWhatsApp(
   storeId: string,
@@ -40,7 +166,7 @@ export async function findOrCreateByWhatsApp(
       if (updateError) {
         throw new AppError(400, updateError.message, 'CUSTOMER_UPDATE_FAILED')
       }
-      return updated as Customer
+      return mapCustomerRow(updated as Record<string, unknown>)
     }
 
     await supabaseAdmin
@@ -48,7 +174,7 @@ export async function findOrCreateByWhatsApp(
       .update({ last_seen_at: updates.last_seen_at })
       .eq('id', existing.id)
 
-    return existing as Customer
+    return mapCustomerRow(existing as Record<string, unknown>)
   }
 
   const { data: created, error: insertError } = await supabaseAdmin
@@ -59,6 +185,8 @@ export async function findOrCreateByWhatsApp(
       name: profile.name ?? null,
       email: profile.email ?? null,
       address: profile.address ?? {},
+      shipping_addresses: [],
+      order_ids: [],
       last_seen_at: new Date().toISOString(),
     })
     .select()
@@ -68,7 +196,7 @@ export async function findOrCreateByWhatsApp(
     throw new AppError(400, insertError.message, 'CUSTOMER_CREATE_FAILED')
   }
 
-  return created as Customer
+  return mapCustomerRow(created as Record<string, unknown>)
 }
 
 export async function findOrCreateByInstagram(
@@ -109,7 +237,7 @@ export async function findOrCreateByInstagram(
       if (updateError) {
         throw new AppError(400, updateError.message, 'CUSTOMER_UPDATE_FAILED')
       }
-      return updated as Customer
+      return mapCustomerRow(updated as Record<string, unknown>)
     }
 
     await supabaseAdmin
@@ -117,7 +245,7 @@ export async function findOrCreateByInstagram(
       .update({ last_seen_at: updates.last_seen_at })
       .eq('id', existing.id)
 
-    return existing as Customer
+    return mapCustomerRow(existing as Record<string, unknown>)
   }
 
   const displayName = profile.name ?? profile.username ?? null
@@ -128,6 +256,8 @@ export async function findOrCreateByInstagram(
       whatsapp_number: placeholder,
       name: displayName,
       address: {},
+      shipping_addresses: [],
+      order_ids: [],
       last_seen_at: new Date().toISOString(),
     })
     .select()
@@ -137,7 +267,7 @@ export async function findOrCreateByInstagram(
     throw new AppError(400, insertError.message, 'CUSTOMER_CREATE_FAILED')
   }
 
-  return created as Customer
+  return mapCustomerRow(created as Record<string, unknown>)
 }
 
 export async function findCustomersByStoreId(storeId: string): Promise<Customer[]> {
@@ -152,7 +282,7 @@ export async function findCustomersByStoreId(storeId: string): Promise<Customer[
     throw new AppError(400, error.message, 'CUSTOMER_LIST_FAILED')
   }
 
-  return (data ?? []) as Customer[]
+  return (data ?? []).map((row) => mapCustomerRow(row as Record<string, unknown>))
 }
 
 export async function findCustomerById(
@@ -170,7 +300,32 @@ export async function findCustomerById(
     throw new AppError(400, error.message, 'CUSTOMER_LOOKUP_FAILED')
   }
 
-  return data as Customer | null
+  return data ? mapCustomerRow(data as Record<string, unknown>) : null
+}
+
+export async function findOrderSummariesForCustomer(
+  storeId: string,
+  orderIds: string[]
+): Promise<Array<{ id: string; order_number: string; total: number; created_at: string }>> {
+  if (orderIds.length === 0) return []
+
+  const { data, error } = await supabaseAdmin
+    .from('orders')
+    .select('id, order_number, total, created_at')
+    .eq('store_id', storeId)
+    .in('id', orderIds)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new AppError(400, error.message, 'ORDER_LOOKUP_FAILED')
+  }
+
+  return (data ?? []) as Array<{
+    id: string
+    order_number: string
+    total: number
+    created_at: string
+  }>
 }
 
 export async function insertCustomer(input: {
@@ -187,6 +342,8 @@ export async function insertCustomer(input: {
       name: input.name ?? null,
       email: input.email ?? null,
       address: {},
+      shipping_addresses: [],
+      order_ids: [],
       last_seen_at: new Date().toISOString(),
     })
     .select()
@@ -196,5 +353,5 @@ export async function insertCustomer(input: {
     throw new AppError(400, error.message, 'CUSTOMER_CREATE_FAILED')
   }
 
-  return data as Customer
+  return mapCustomerRow(data as Record<string, unknown>)
 }

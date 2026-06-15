@@ -4,6 +4,7 @@ export const shippingAddressSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(200),
   phone_number: z.string().trim().min(8, 'Phone number is required').max(20),
   whatsapp_number: z.string().trim().min(8, 'WhatsApp number is required').max(20),
+  address: z.string().trim().min(1, 'Address is required').max(500),
   postcode: z.string().trim().min(1, 'Postcode is required').max(20),
   city: z.string().trim().min(1, 'City is required').max(100),
   district: z.string().trim().min(1, 'District is required').max(100),
@@ -13,11 +14,25 @@ export const shippingAddressSchema = z.object({
 
 export type ShippingAddress = z.infer<typeof shippingAddressSchema>
 
+/** Storefront online checkout — required shipping fields. */
+export const storefrontShippingAddressSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(200),
+  phone_number: z.string().trim().min(8, 'Phone number is required').max(20),
+  address: z.string().trim().min(1, 'Address is required').max(500),
+  city: z.string().trim().min(1, 'City is required').max(100),
+  district: z.string().trim().min(1, 'District is required').max(100),
+  state: z.string().trim().min(1, 'State is required').max(100),
+  postcode: z.string().trim().min(1, 'Postcode is required').max(20),
+})
+
+export type StorefrontShippingAddress = z.infer<typeof storefrontShippingAddressSchema>
+
 /** Partial address — all fields optional (offline / merchant orders). */
 export const optionalShippingAddressSchema = z.object({
   name: z.string().trim().max(200).optional(),
   phone_number: z.string().trim().max(20).optional(),
   whatsapp_number: z.string().trim().max(20).optional(),
+  address: z.string().trim().max(500).optional(),
   postcode: z.string().trim().max(20).optional(),
   city: z.string().trim().max(100).optional(),
   district: z.string().trim().max(100).optional(),

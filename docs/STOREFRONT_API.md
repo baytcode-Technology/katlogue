@@ -139,9 +139,53 @@ Lists raw active products (merchant product rows). Does **not** attach `sold_out
 
 ---
 
+## `GET /api/public/customers/by-phone?phone=...`
+
+Lookup a returning customer for checkout prefill. Requires `X-Store-Slug`.
+
+**Response 200:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "customer": {
+      "id": "uuid",
+      "name": "Customer name",
+      "phone_number": "919876543210",
+      "shipping_addresses": [
+        {
+          "id": "uuid",
+          "name": "Customer name",
+          "phone_number": "919876543210",
+          "address": "12 Main Street",
+          "city": "Kochi",
+          "district": "Ernakulam",
+          "state": "Kerala",
+          "postcode": "682001",
+          "created_at": "2026-06-13T10:00:00.000Z"
+        }
+      ],
+      "orders": [
+        {
+          "id": "uuid",
+          "order_number": "JUN26-1",
+          "total": 599,
+          "created_at": "2026-06-13T10:00:00.000Z"
+        }
+      ]
+    }
+  }
+}
+```
+
+**404** if the phone is not registered for this store.
+
+---
+
 ## `POST /api/public/orders`
 
-Guest checkout.
+Guest checkout (online). Creates or updates a customer by phone, saves unique shipping addresses, and links the order.
 
 ### Request body
 
@@ -157,17 +201,30 @@ Guest checkout.
   "shipping_address": {
     "name": "Customer name",
     "phone_number": "919876543210",
-    "line1": "Street",
-    "city": "City"
+    "address": "12 Main Street",
+    "city": "Kochi",
+    "district": "Ernakulam",
+    "state": "Kerala",
+    "postcode": "682001"
   }
 }
 ```
 
 | Field | Notes |
 |-------|-------|
-| `payment_method` | `cod` \| `razorpay` \| `upi` — must be enabled on the store |
+| `payment_method` | **Required** — `cod` \| `razorpay` \| `upi`; must be enabled on the store |
+| `items` | **Required** — at least one line |
+| `shipping_address` | **Required** — all of `name`, `phone_number`, `address`, `city`, `district`, `state`, `postcode` |
+| `whatsapp_number` | Optional if `shipping_address.phone_number` is set |
 | `items[].variant_id` | Required when the product has variants |
-| `whatsapp_number` | Used for customer record and notifications |
+
+Customer handling:
+
+- Phone is matched per store (`whatsapp_number` column).
+- If the customer exists, the address is saved only when it differs from saved addresses.
+- Order `id` is appended to `customers.order_ids`; `total_orders` and `total_spent` are updated.
+
+Merchant POS (`POST /api/orders` with `offline: true`) is unchanged — customer and address remain optional.
 
 ### Payment flows
 

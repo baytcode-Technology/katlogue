@@ -11,5 +11,10 @@ export const createCustomerSchema = z.object({
   phone: z.string().trim().min(8).max(20).optional().or(z.literal('')),
 })
 
+export const publicCustomerByPhoneQuerySchema = z.object({
+  phone: z.string().trim().min(8, 'Phone number is required').max(20),
+})
+
 export type ListCustomersQuery = z.infer<typeof listCustomersQuerySchema>
 export type CreateCustomerBody = z.infer<typeof createCustomerSchema>
+export type PublicCustomerByPhoneQuery = z.infer<typeof publicCustomerByPhoneQuerySchema>

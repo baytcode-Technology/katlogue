@@ -1,8 +1,11 @@
 import { randomBytes } from 'crypto'
 import {
+  appendOrderToCustomer,
   findCustomerById,
   findOrCreateByWhatsApp,
+  resolveStorefrontCustomer,
 } from '../../customers/repositories/customer.repository.js'
+import { toOrderShippingSnapshot } from '../../customers/lib/shipping-addresses.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import {
   assertPaymentMethodEnabled,
@@ -31,6 +34,7 @@ import { notifyNewOrder } from '../../notifications/services/send-store-notifica
 import { emitToStore } from '../../../websocket/index.js'
 import { SOCKET_EVENTS } from '../../../websocket/events.js'
 import type { OptionalShippingAddress } from '../../../shared/validations/shipping-address.validation.js'
+import type { StorefrontShippingAddress } from '../../../shared/validations/shipping-address.validation.js'
 import * as orderRepository from '../repositories/order.repository.js'
 import type {
   CreateOrderInput,
@@ -187,29 +191,54 @@ export async function createOrder(
   storeCurrency: string,
   input: CreateOrderInput
 ): Promise<CreateOrderResult> {
+  const isStorefront = input.source === 'storefront'
   const whatsapp = input.whatsapp_number?.trim()
-  const shippingAddress = normalizeShippingAddress(input.shipping_address, whatsapp)
-
+  let shippingAddress: Record<string, unknown>
   let customerId: string | null = null
-  if (input.customer_id) {
-    const customer = await findCustomerById(input.customer_id, storeId)
-    if (!customer) {
-      throw new AppError(404, 'Customer not found', 'CUSTOMER_NOT_FOUND')
+
+  if (isStorefront) {
+    const storefrontShipping = input.shipping_address as StorefrontShippingAddress
+    const phone =
+      whatsapp ||
+      storefrontShipping.phone_number?.trim() ||
+      ''
+
+    if (!phone) {
+      throw new AppError(400, 'Phone number is required', 'PHONE_REQUIRED')
     }
-    customerId = customer.id
-    if (!whatsapp && customer.whatsapp_number && !customer.whatsapp_number.startsWith('offline-')) {
-      shippingAddress.whatsapp_number = customer.whatsapp_number
-    }
-    if (!input.name && customer.name) {
-      shippingAddress.name = customer.name
-    }
-  } else if (whatsapp) {
-    const customer = await findOrCreateByWhatsApp(storeId, whatsapp, {
-      name: input.shipping_address?.name ?? input.name,
+
+    const customer = await resolveStorefrontCustomer({
+      storeId,
+      phone,
+      shippingAddress: storefrontShipping,
       email: input.email,
-      address: shippingAddress,
+      name: input.name ?? storefrontShipping.name,
     })
     customerId = customer.id
+    shippingAddress = toOrderShippingSnapshot(storefrontShipping, customer.whatsapp_number)
+  } else {
+    shippingAddress = normalizeShippingAddress(input.shipping_address, whatsapp)
+
+    if (input.customer_id) {
+      const customer = await findCustomerById(input.customer_id, storeId)
+      if (!customer) {
+        throw new AppError(404, 'Customer not found', 'CUSTOMER_NOT_FOUND')
+      }
+      customerId = customer.id
+      if (!whatsapp && customer.whatsapp_number && !customer.whatsapp_number.startsWith('offline-')) {
+        shippingAddress.whatsapp_number = customer.whatsapp_number
+      }
+      if (!input.name && customer.name) {
+        shippingAddress.name = customer.name
+      }
+    } else if (whatsapp) {
+      const customer = await findOrCreateByWhatsApp(storeId, whatsapp, {
+        name: input.shipping_address?.name ?? input.name,
+        email: input.email,
+        address: shippingAddress,
+      })
+      customerId = customer.id
+    }
   }
 
   const productIds = [...new Set(input.items.map((i) => i.product_id))]
@@ -374,6 +403,10 @@ export async function createOrder(
     }).catch((err) => {
       console.error('[notifications] order push failed', err)
     })
+
+    if (isStorefront && customerId) {
+      await appendOrderToCustomer(customerId, storeId, order.id, order.total)
+    }
 
     return result
   } catch (err) {

@@ -160,6 +160,10 @@ function normalizeShippingAddress(
 ): Record<string, unknown> {
   const address: Record<string, unknown> = { ...(raw ?? {}) }
 
+  if (!address.address && typeof address.region === 'string' && address.region.trim()) {
+    address.address = address.region
+  }
+
   if (whatsappNumber) {
     address.whatsapp_number = normalizeWhatsAppNumber(whatsappNumber)
   } else if (typeof address.whatsapp_number === 'string' && address.whatsapp_number.trim()) {

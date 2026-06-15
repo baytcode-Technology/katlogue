@@ -28,16 +28,48 @@ export const storefrontShippingAddressSchema = z.object({
 export type StorefrontShippingAddress = z.infer<typeof storefrontShippingAddressSchema>
 
 /** Partial address — all fields optional (offline / merchant orders). */
-export const optionalShippingAddressSchema = z.object({
-  name: z.string().trim().max(200).optional(),
-  phone_number: z.string().trim().max(20).optional(),
-  whatsapp_number: z.string().trim().max(20).optional(),
-  address: z.string().trim().max(500).optional(),
-  postcode: z.string().trim().max(20).optional(),
-  city: z.string().trim().max(100).optional(),
-  district: z.string().trim().max(100).optional(),
-  state: z.string().trim().max(100).optional(),
-  region: z.string().trim().max(100).optional(),
-})
+export const optionalShippingAddressSchema = z
+  .object({
+    name: z.preprocess(
+      (v) => (v === '' || v === null ? undefined : v),
+      z.string().trim().max(200).optional()
+    ),
+    phone_number: z.preprocess(
+      (v) => (v === '' || v === null ? undefined : v),
+      z.string().trim().max(20).optional()
+    ),
+    whatsapp_number: z.preprocess(
+      (v) => (v === '' || v === null ? undefined : v),
+      z.string().trim().max(20).optional()
+    ),
+    address: z.preprocess(
+      (v) => (v === '' || v === null ? undefined : v),
+      z.string().trim().max(500).optional()
+    ),
+    postcode: z.preprocess(
+      (v) => (v === '' || v === null ? undefined : v),
+      z.string().trim().max(20).optional()
+    ),
+    city: z.preprocess(
+      (v) => (v === '' || v === null ? undefined : v),
+      z.string().trim().max(100).optional()
+    ),
+    district: z.preprocess(
+      (v) => (v === '' || v === null ? undefined : v),
+      z.string().trim().max(100).optional()
+    ),
+    state: z.preprocess(
+      (v) => (v === '' || v === null ? undefined : v),
+      z.string().trim().max(100).optional()
+    ),
+    region: z.preprocess(
+      (v) => (v === '' || v === null ? undefined : v),
+      z.string().trim().max(100).optional()
+    ),
+  })
+  .transform((addr) => {
+    const street = addr.address?.trim() || addr.region?.trim()
+    return street ? { ...addr, address: street } : addr
+  })
 
 export type OptionalShippingAddress = z.infer<typeof optionalShippingAddressSchema>

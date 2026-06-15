@@ -1,25 +1,29 @@
 import { z } from 'zod'
+import {
+  emptyToUndefined,
+  optionalEmail,
+  optionalTrimmedString,
+  optionalUuid,
+  orderItemSchema,
+} from '../../../shared/validations/zod-helpers.js'
 import { storefrontShippingAddressSchema } from '../../../shared/validations/shipping-address.validation.js'
-
-const orderItemSchema = z.object({
-  product_id: z.uuid('Invalid product id'),
-  quantity: z.coerce.number().int().min(1, 'Quantity must be at least 1'),
-  variant_id: z.uuid('Invalid variant id').optional(),
-})
 
 export const storefrontCreateOrderSchema = z
   .object({
-    customer_id: z.uuid('Invalid customer id').optional(),
-    whatsapp_number: z.string().trim().min(8).max(20).optional(),
-    name: z.string().trim().max(200).optional(),
-    email: z.email('Invalid email').optional(),
+    customer_id: optionalUuid('Invalid customer id'),
+    whatsapp_number: z.preprocess(
+      emptyToUndefined,
+      z.string().trim().min(8).max(20).optional()
+    ),
+    name: optionalTrimmedString(200),
+    email: optionalEmail(),
     items: z.array(orderItemSchema).min(1, 'At least one item is required'),
     payment_method: z.enum(['razorpay', 'cod', 'upi'], {
       message: 'Payment method is required',
     }),
     shipping_address: storefrontShippingAddressSchema,
-    notes: z.string().trim().max(1000).optional(),
-    conversation_id: z.uuid('Invalid conversation id').optional(),
+    notes: optionalTrimmedString(1000),
+    conversation_id: optionalUuid('Invalid conversation id'),
     offline: z.literal(false).optional(),
   })
   .superRefine((data, ctx) => {

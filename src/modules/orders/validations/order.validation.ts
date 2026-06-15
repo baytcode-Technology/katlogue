@@ -1,22 +1,28 @@
 import { z } from 'zod'
+import {
+  emptyToUndefined,
+  optionalEmail,
+  optionalTrimmedString,
+  optionalUuid,
+  orderItemSchema,
+} from '../../../shared/validations/zod-helpers.js'
 import { optionalShippingAddressSchema } from '../../../shared/validations/shipping-address.validation.js'
 
-const orderItemSchema = z.object({
-  product_id: z.uuid('Invalid product id'),
-  quantity: z.coerce.number().int().min(1, 'Quantity must be at least 1'),
-  variant_id: z.uuid('Invalid variant id').optional(),
-})
+export { orderItemSchema }
 
 export const createOrderSchema = z.object({
-  customer_id: z.uuid('Invalid customer id').optional(),
-  whatsapp_number: z.string().trim().min(8).max(20).optional(),
-  name: z.string().trim().max(200).optional(),
-  email: z.email('Invalid email').optional(),
+  customer_id: optionalUuid('Invalid customer id'),
+  whatsapp_number: z.preprocess(
+    emptyToUndefined,
+    z.string().trim().min(8).max(20).optional()
+  ),
+  name: optionalTrimmedString(200),
+  email: optionalEmail(),
   items: z.array(orderItemSchema).min(1, 'At least one item is required'),
   payment_method: z.enum(['razorpay', 'cod', 'upi']).default('cod'),
   shipping_address: optionalShippingAddressSchema.optional(),
-  notes: z.string().trim().max(1000).optional(),
-  conversation_id: z.uuid('Invalid conversation id').optional(),
+  notes: optionalTrimmedString(1000),
+  conversation_id: optionalUuid('Invalid conversation id'),
   /** Merchant POS: allow oversell and negative stock. Storefront: reject insufficient stock. */
   offline: z.boolean().default(false),
 })

@@ -27,9 +27,22 @@ Returns public store metadata and enabled payment methods (no secrets).
 {
   "store": {
     "id": "uuid",
-    "name": "My Shop",
     "slug": "my-shop",
-    "currency": "USD",
+    "name": "My Shop",
+    "description": "Welcome to our store",
+    "logo_url": "https://cdn.example.com/logo.png",
+    "whatsapp_number": "+919876543210",
+    "currency": "INR",
+    "timezone": "Asia/Kolkata",
+    "is_active": true,
+    "industry": "Fashion",
+    "country": "IN",
+    "notification_preferences": {
+      "chats": true,
+      "online_orders": true,
+      "pos_orders": true,
+      "sound_id": "default"
+    },
     "payment_methods": {
       "cod": { "enabled": true },
       "razorpay": { "enabled": true, "key_id": "rzp_test_..." },
@@ -44,6 +57,8 @@ Returns public store metadata and enabled payment methods (no secrets).
   "subdomainUrl": "https://my-shop.example.com"
 }
 ```
+
+Only the fields above are returned. Internal fields (owner, tokens, AI config, timestamps, etc.) are not included.
 
 Use `payment_methods` to show checkout options. Only methods with `enabled: true` are accepted on order creation.
 
@@ -192,21 +207,23 @@ Guest checkout (online). Creates or updates a customer by phone, saves unique sh
 ```json
 {
   "items": [
-    { "product_id": "uuid", "quantity": 1 },
-    { "product_id": "uuid", "variant_id": "uuid", "quantity": 2 }
+    {
+      "product_id": "uuid",
+      "quantity": 1,
+      "variant_id": ""
+    }
   ],
   "payment_method": "cod",
-  "whatsapp_number": "919876543210",
-  "name": "Customer name",
   "shipping_address": {
-    "name": "Customer name",
-    "phone_number": "919876543210",
-    "address": "12 Main Street",
-    "city": "Kochi",
-    "district": "Ernakulam",
-    "state": "Kerala",
-    "postcode": "682001"
-  }
+    "name": "",
+    "phone_number": "",
+    "address": "",
+    "city": "",
+    "district": "",
+    "state": "",
+    "postcode": ""
+  },
+  "notes": ""
 }
 ```
 
@@ -214,13 +231,13 @@ Guest checkout (online). Creates or updates a customer by phone, saves unique sh
 |-------|-------|
 | `payment_method` | **Required** — `cod` \| `razorpay` \| `upi`; must be enabled on the store |
 | `items` | **Required** — at least one line |
-| `shipping_address` | **Required** — all of `name`, `phone_number`, `address`, `city`, `district`, `state`, `postcode` |
-| `whatsapp_number` | Optional if `shipping_address.phone_number` is set |
-| `items[].variant_id` | Required when the product has variants |
+| `shipping_address` | **Required** — all of `name`, `phone_number`, `address`, `city`, `district`, `state`, `postcode` (customer phone and name come from here) |
+| `items[].variant_id` | Optional; omit or send `""` when the product has no variant |
+| `notes` | Optional |
 
 Customer handling:
 
-- Phone is matched per store (`whatsapp_number` column).
+- Phone and name come from `shipping_address.phone_number` and `shipping_address.name`.
 - If the customer exists, the address is saved only when it differs from saved addresses.
 - Order `id` is appended to `customers.order_ids`; `total_orders` and `total_spent` are updated.
 

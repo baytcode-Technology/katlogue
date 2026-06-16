@@ -395,6 +395,63 @@ export function buildOpenApiDocument() {
             },
           },
         },
+        PublicPaymentMethods: {
+          type: 'object',
+          properties: {
+            cod: {
+              type: 'object',
+              properties: { enabled: { type: 'boolean', example: true } },
+            },
+            razorpay: {
+              type: 'object',
+              properties: {
+                enabled: { type: 'boolean', example: true },
+                key_id: { type: 'string', nullable: true, example: 'rzp_test_...' },
+              },
+            },
+            upi: {
+              type: 'object',
+              properties: {
+                enabled: { type: 'boolean', example: false },
+                vpa: { type: 'string', nullable: true },
+                display_name: { type: 'string', nullable: true },
+                qr_image_url: { type: 'string', format: 'uri', nullable: true },
+              },
+            },
+          },
+        },
+        PublicStoreResponse: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            slug: { type: 'string', example: 'my-shop' },
+            name: { type: 'string', example: 'My Shop' },
+            description: { type: 'string', nullable: true },
+            logo_url: { type: 'string', format: 'uri', nullable: true },
+            whatsapp_number: { type: 'string', example: '+919876543210' },
+            currency: { type: 'string', example: 'INR' },
+            timezone: { type: 'string', example: 'Asia/Kolkata' },
+            is_active: { type: 'boolean', example: true },
+            industry: { type: 'string', nullable: true, example: 'Fashion' },
+            country: { type: 'string', example: 'IN' },
+            notification_preferences: { $ref: '#/components/schemas/NotificationPreferences' },
+            payment_methods: { $ref: '#/components/schemas/PublicPaymentMethods' },
+          },
+        },
+        PublicStoreData: {
+          type: 'object',
+          properties: {
+            store: { $ref: '#/components/schemas/PublicStoreResponse' },
+            subdomainUrl: { type: 'string', format: 'uri', example: 'https://my-shop.example.com' },
+          },
+        },
+        PublicStoreSuccessResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: { $ref: '#/components/schemas/PublicStoreData' },
+          },
+        },
         UpdateNotificationPreferencesBody: {
           type: 'object',
           properties: {
@@ -486,12 +543,6 @@ export function buildOpenApiDocument() {
           type: 'object',
           required: ['items', 'payment_method', 'shipping_address'],
           properties: {
-            whatsapp_number: {
-              type: 'string',
-              description: 'Optional if shipping_address.phone_number is set',
-            },
-            name: { type: 'string', nullable: true },
-            email: { type: 'string', format: 'email', nullable: true },
             items: {
               type: 'array',
               minItems: 1,
@@ -501,7 +552,7 @@ export function buildOpenApiDocument() {
                 properties: {
                   product_id: { type: 'string', format: 'uuid' },
                   quantity: { type: 'integer', minimum: 1 },
-                  variant_id: { type: 'string', format: 'uuid' },
+                  variant_id: { type: 'string', format: 'uuid', nullable: true },
                 },
               },
             },
@@ -1323,7 +1374,17 @@ export function buildOpenApiDocument() {
               description: 'Store slug when not using subdomain',
             },
           ],
-          responses: { '200': { description: 'Public store' }, '404': { description: 'Store not found' } },
+          responses: {
+            '200': {
+              description: 'Public store metadata',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/PublicStoreSuccessResponse' },
+                },
+              },
+            },
+            '404': { description: 'Store not found' },
+          },
         },
       },
       '/api/public/catalog': {

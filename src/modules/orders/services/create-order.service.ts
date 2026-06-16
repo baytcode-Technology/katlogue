@@ -202,10 +202,7 @@ export async function createOrder(
 
   if (isStorefront) {
     const storefrontShipping = input.shipping_address as StorefrontShippingAddress
-    const phone =
-      whatsapp ||
-      storefrontShipping.phone_number?.trim() ||
-      ''
+    const phone = storefrontShipping.phone_number?.trim() || ''
 
     if (!phone) {
       throw new AppError(400, 'Phone number is required', 'PHONE_REQUIRED')
@@ -215,8 +212,7 @@ export async function createOrder(
       storeId,
       phone,
       shippingAddress: storefrontShipping,
-      email: input.email,
-      name: input.name ?? storefrontShipping.name,
+      name: storefrontShipping.name,
     })
     customerId = customer.id
     shippingAddress = toOrderShippingSnapshot(storefrontShipping, customer.whatsapp_number)

@@ -254,9 +254,6 @@ export async function markOrderViewedByMerchant(
     .single()
 
   if (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7642/ingest/403551e5-c17d-483b-8ef5-ce6768f0a7b2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6d4d2c'},body:JSON.stringify({sessionId:'6d4d2c',location:'order.repository.ts:markOrderViewedByMerchant',message:'PATCH viewed failed',data:{orderId,storeId,code:error.code,errorMessage:error.message},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     throw new AppError(400, error.message, 'ORDER_VIEWED_UPDATE_FAILED')
   }
 

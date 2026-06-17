@@ -256,6 +256,8 @@ export function buildOpenApiDocument() {
             total: { type: 'number' },
             shipping_address: { type: 'object', additionalProperties: true },
             notes: { type: 'string', nullable: true },
+            merchant_viewed_at: { type: 'string', format: 'date-time', nullable: true },
+            item_quantity: { type: 'integer', description: 'Sum of line item quantities (list response)' },
             created_at: { type: 'string', format: 'date-time' },
             updated_at: { type: 'string', format: 'date-time' },
           },
@@ -1241,6 +1243,19 @@ export function buildOpenApiDocument() {
           responses: { '200': { description: 'Order updated' } },
         },
       },
+      '/api/orders/{orderId}/viewed': {
+        patch: {
+          tags: ['Orders'],
+          summary: 'Mark order as viewed by merchant',
+          description: 'Sets `merchant_viewed_at` to clear unread badge for this order.',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+          ],
+          responses: { '200': { description: 'Order marked as viewed' } },
+        },
+      },
       '/api/customers': {
         get: {
           tags: ['Customers'],
@@ -1340,6 +1355,23 @@ export function buildOpenApiDocument() {
             { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
           ],
           responses: { '200': { description: 'Conversation list' } },
+        },
+      },
+      '/api/whatsapp/chats/{conversationId}/mark-read': {
+        post: {
+          tags: ['WhatsApp'],
+          summary: 'Mark WhatsApp conversation as read',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: 'conversationId',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+          ],
+          responses: { '200': { description: 'Unread count reset to 0' } },
         },
       },
       '/api/whatsapp/chats/{conversationId}/messages': {

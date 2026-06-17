@@ -454,4 +454,26 @@ export async function getLastInboundMessageAt(input: {
 
 }
 
+export async function resetUnreadCount(input: {
+  storeId: string
+  conversationId: string
+}): Promise<WhatsAppConversation> {
+  const { data, error } = await supabaseAdmin
+    .from('whatsapp_conversations')
+    .update({
+      unread_count: 0,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('store_id', input.storeId)
+    .eq('id', input.conversationId)
+    .select('*')
+    .single()
+
+  if (error) {
+    throw new AppError(400, error.message, 'WHATSAPP_CONVERSATION_READ_FAILED')
+  }
+
+  return data as WhatsAppConversation
+}
+
 

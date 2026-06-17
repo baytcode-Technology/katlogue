@@ -12,6 +12,7 @@ import { sendTemplate } from '../controllers/send-template.controller.js'
 import { sendMessage } from '../controllers/send-message.controller.js'
 import { listChats } from '../controllers/list-chats.controller.js'
 import { listChatMessages } from '../controllers/list-messages.controller.js'
+import { markChatRead } from '../controllers/mark-chat-read.controller.js'
 import { connectWhatsApp } from '../controllers/connect-whatsapp.controller.js'
 import { metaOAuthCallback } from '../controllers/oauth-callback.controller.js'
 import { connectionStatus } from '../controllers/connection-status.controller.js'
@@ -36,6 +37,13 @@ router.post('/sync', requireAuth, validateBody(triggerSyncSchema), triggerSync)
 router.post('/send', requireAuth, validateBody(sendMessageSchema), sendMessage)
 router.post('/send-template', requireAuth, validateBody(sendTemplateSchema), sendTemplate)
 router.get('/chats', requireAuth, validateQuery(listChatsQuerySchema), listChats)
+router.post(
+  '/chats/:conversationId/mark-read',
+  requireAuth,
+  validateParams(listMessagesParamsSchema),
+  validateQuery(listChatsQuerySchema),
+  markChatRead
+)
 router.get(
   '/chats/:conversationId/messages',
   requireAuth,

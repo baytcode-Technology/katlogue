@@ -238,6 +238,28 @@ export async function findOrderById(orderId: string): Promise<OrderWithCustomer 
 
 }
 
+export async function markOrderViewedByMerchant(
+  orderId: string,
+  storeId: string
+): Promise<OrderWithCustomer> {
+  const { data, error } = await supabaseAdmin
+    .from('orders')
+    .update({
+      merchant_viewed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', orderId)
+    .eq('store_id', storeId)
+    .select('*, customers(name, whatsapp_number)')
+    .single()
+
+  if (error) {
+    throw new AppError(400, error.message, 'ORDER_VIEWED_UPDATE_FAILED')
+  }
+
+  return data as OrderWithCustomer
+}
+
 
 
 export async function updateOrder(orderId: string, patch: UpdateOrderInput): Promise<Order> {

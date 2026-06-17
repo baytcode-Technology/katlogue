@@ -379,6 +379,8 @@ export async function createOrder(
       }
     }
 
+    const item_quantity = orderItems.reduce((sum, item) => sum + item.quantity, 0)
+
     const orderSource = input.source ?? 'storefront'
     emitToStore(storeId, SOCKET_EVENTS.ORDER_NEW, {
       storeId,
@@ -389,6 +391,7 @@ export async function createOrder(
         currency: storeCurrency,
         source: orderSource,
         store_slug: store.slug,
+        item_quantity,
       },
     })
 

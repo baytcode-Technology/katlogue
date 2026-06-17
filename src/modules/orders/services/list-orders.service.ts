@@ -5,6 +5,7 @@ import type { OrderWithCustomer } from '../repositories/order.repository.js'
 
 export type OrderListItem = OrderWithCustomer & {
   items: OrderItem[]
+  item_quantity: number
 }
 
 export async function listOrdersByStore(
@@ -24,8 +25,13 @@ export async function listOrdersByStore(
     itemsByOrder.set(item.order_id, list)
   }
 
-  return orders.map((order) => ({
-    ...order,
-    items: itemsByOrder.get(order.id) ?? [],
-  }))
+  return orders.map((order) => {
+    const items = itemsByOrder.get(order.id) ?? []
+    const item_quantity = items.reduce((sum, item) => sum + item.quantity, 0)
+    return {
+      ...order,
+      items,
+      item_quantity,
+    }
+  })
 }

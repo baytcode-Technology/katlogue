@@ -18,6 +18,8 @@ import { createMerchantOrder } from '../controllers/create-merchant-order.contro
 
 import { getOrder } from '../controllers/get-order.controller.js'
 
+import { markOrderViewed } from '../controllers/mark-order-viewed.controller.js'
+
 import { updateOrder } from '../controllers/update-order.controller.js'
 
 import {
@@ -59,6 +61,20 @@ router.get(
   requireAuth,
 
   getOrder
+
+)
+
+router.patch(
+
+  '/:orderId/viewed',
+
+  validateParams(orderIdParamSchema),
+
+  validateQuery(getOrderQuerySchema),
+
+  requireAuth,
+
+  markOrderViewed
 
 )
 

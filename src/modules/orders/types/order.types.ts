@@ -113,6 +113,8 @@ export type Order = {
 
   checkout_token: string | null
 
+  merchant_viewed_at: string | null
+
   created_at: string
 
   updated_at: string

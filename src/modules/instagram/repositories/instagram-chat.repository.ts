@@ -206,3 +206,25 @@ export async function getLastInboundMessageAt(input: {
 
   return (data?.timestamp as string | null) ?? null
 }
+
+export async function resetUnreadCount(input: {
+  storeId: string
+  conversationId: string
+}): Promise<InstagramConversation> {
+  const { data, error } = await supabaseAdmin
+    .from('instagram_conversations')
+    .update({
+      unread_count: 0,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('store_id', input.storeId)
+    .eq('id', input.conversationId)
+    .select('*')
+    .single()
+
+  if (error) {
+    throw new AppError(400, error.message, 'INSTAGRAM_CONVERSATION_READ_FAILED')
+  }
+
+  return data as InstagramConversation
+}

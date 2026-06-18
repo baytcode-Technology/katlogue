@@ -12,6 +12,36 @@ export type BusinessCheckoutAmount = {
   minorUnits: number
 }
 
+const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})/
+
+export function formatSubscriptionDateOnly(date: Date): string {
+  const year = date.getUTCFullYear()
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(date.getUTCDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export function normalizeSubscriptionDate(expiresAt: string): string {
+  const match = DATE_ONLY_RE.exec(expiresAt.trim())
+  if (match) {
+    return `${match[1]}-${match[2]}-${match[3]}`
+  }
+
+  return formatSubscriptionDateOnly(new Date(expiresAt))
+}
+
+export function getSubscriptionExpiryEndMs(expiresAt: string): number {
+  const [year, month, day] = normalizeSubscriptionDate(expiresAt).split('-').map(Number)
+  return Date.UTC(year, month - 1, day, 23, 59, 59, 999)
+}
+
+function addMonthsToSubscriptionDate(dateStr: string, months: number): string {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const next = new Date(Date.UTC(year, month - 1, day))
+  next.setUTCMonth(next.getUTCMonth() + months)
+  return formatSubscriptionDateOnly(next)
+}
+
 export function isIndiaStore(store: Pick<Store, 'country'>): boolean {
   return store.country === 'India'
 }
@@ -22,7 +52,7 @@ export function isPremiumPlan(plan: SubscriptionPlan): boolean {
 
 export function isSubscriptionExpired(expiresAt: string | null | undefined): boolean {
   if (!expiresAt) return false
-  return new Date(expiresAt).getTime() <= Date.now()
+  return Date.now() > getSubscriptionExpiryEndMs(expiresAt)
 }
 
 export function hasPremiumAccess(
@@ -40,14 +70,13 @@ export function getBusinessCheckoutAmount(store: Pick<Store, 'country'>): Busine
 }
 
 export function computeBusinessExpiry(currentExpiresAt: string | null): string {
-  const now = Date.now()
-  const baseMs =
-    currentExpiresAt && new Date(currentExpiresAt).getTime() > now
-      ? new Date(currentExpiresAt).getTime()
-      : now
-  const next = new Date(baseMs)
-  next.setMonth(next.getMonth() + 1)
-  return next.toISOString()
+  const today = formatSubscriptionDateOnly(new Date())
+  const baseDate =
+    currentExpiresAt && !isSubscriptionExpired(currentExpiresAt)
+      ? normalizeSubscriptionDate(currentExpiresAt)
+      : today
+
+  return addMonthsToSubscriptionDate(baseDate, 1)
 }
 
 export function assertPremiumAccess(

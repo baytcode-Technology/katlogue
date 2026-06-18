@@ -29,9 +29,9 @@ export function buildOpenApiDocument() {
     openapi: '3.1.0',
     info: {
       title: 'Katlogue API',
-      version: '1.2.0',
+      version: '1.3.0',
       description:
-        'Merchant and storefront API for Katlogue. Authenticated routes require `Authorization: Bearer <access_token>` from `/api/auth/verify` or Google sign-in. Public storefront routes resolve the store via subdomain host (e.g. ghu.yourdomain.com) or the `X-Store-Slug` header when calling the API host directly (e.g. Railway). Interactive docs: `/docs` · OpenAPI JSON: `/openapi.json`.',
+        'Merchant and storefront API for Katlogue (AiShopy). Authenticated routes require `Authorization: Bearer <access_token>` from `/api/auth/verify` or Google sign-in. Public storefront routes resolve the store via subdomain host (e.g. ghu.yourdomain.com) or the `X-Store-Slug` header when calling the API host directly (e.g. Railway). Interactive Scalar docs: `/docs` · OpenAPI JSON: `/openapi.json`.',
     },
     servers: [{ url: getServerUrl() }],
     tags: [
@@ -44,6 +44,11 @@ export function buildOpenApiDocument() {
       { name: 'Orders', description: 'Order management (merchant)' },
       { name: 'Customers', description: 'Customer records (merchant)' },
       { name: 'WhatsApp', description: 'WhatsApp Cloud API integration (merchant)' },
+      { name: 'Instagram', description: 'Instagram DM integration (merchant)' },
+      { name: 'Payments', description: 'Merchant payment method configuration (COD, Razorpay, UPI)' },
+      { name: 'Subscriptions', description: 'Platform subscription billing (Business plan)' },
+      { name: 'Industries', description: 'Store industry picker options' },
+      { name: 'Webhooks', description: 'Server-to-server webhooks (Razorpay, Meta)' },
       { name: 'Public', description: 'Storefront (guest) — no auth; requires store context' },
     ],
     components: {
@@ -633,6 +638,145 @@ export function buildOpenApiDocument() {
             languageCode: { type: 'string', example: 'en_US' },
           },
         },
+        MerchantStore: {
+          type: 'object',
+          description: 'Merchant store record returned from GET /api/stores/me',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            owner_id: { type: 'string', format: 'uuid' },
+            name: { type: 'string', example: 'My Shop' },
+            slug: { type: 'string', example: 'my-shop' },
+            whatsapp_number: { type: 'string', example: '+919876543210' },
+            currency: { type: 'string', example: 'INR' },
+            country: { type: 'string', example: 'India' },
+            timezone: { type: 'string', example: 'Asia/Kolkata' },
+            industry: { type: 'string', nullable: true, example: 'Fashion' },
+            is_active: { type: 'boolean', example: true },
+            subscription_plan: {
+              type: 'string',
+              enum: ['starter', 'business', 'enterprise'],
+              example: 'business',
+            },
+            subscription_expires_at: {
+              type: 'string',
+              format: 'date',
+              nullable: true,
+              description: 'Calendar date (YYYY-MM-DD). Valid through end of that day.',
+              example: '2026-09-18',
+            },
+            product_count: { type: 'integer', example: 12 },
+            order_count: { type: 'integer', example: 34 },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+          },
+        },
+        MerchantPaymentConfigView: {
+          type: 'object',
+          properties: {
+            cod: { type: 'object', properties: { enabled: { type: 'boolean', example: true } } },
+            razorpay: {
+              type: 'object',
+              properties: {
+                enabled: { type: 'boolean', example: false },
+                key_id: { type: 'string', nullable: true, example: 'rzp_test_...' },
+                key_secret_masked: { type: 'string', nullable: true, example: '****abcd' },
+                webhook_secret_masked: { type: 'string', nullable: true },
+                mode: { type: 'string', enum: ['test', 'live'], example: 'test' },
+                configured: { type: 'boolean', example: false },
+              },
+            },
+            upi: {
+              type: 'object',
+              properties: {
+                enabled: { type: 'boolean', example: false },
+                vpa: { type: 'string', nullable: true, example: 'merchant@upi' },
+                display_name: { type: 'string', nullable: true },
+                qr_image_url: { type: 'string', format: 'uri', nullable: true },
+              },
+            },
+          },
+        },
+        UpdatePaymentConfigBody: {
+          type: 'object',
+          properties: {
+            cod: { type: 'object', properties: { enabled: { type: 'boolean' } } },
+            razorpay: {
+              type: 'object',
+              properties: {
+                enabled: { type: 'boolean' },
+                key_id: { type: 'string' },
+                key_secret: { type: 'string', description: 'Plain secret — encrypted at rest' },
+                webhook_secret: { type: 'string' },
+                mode: { type: 'string', enum: ['test', 'live'] },
+              },
+            },
+            upi: {
+              type: 'object',
+              properties: {
+                enabled: { type: 'boolean' },
+                vpa: { type: 'string', example: 'merchant@upi' },
+                display_name: { type: 'string', nullable: true },
+                qr_image_url: { type: 'string', format: 'uri', nullable: true },
+              },
+            },
+          },
+        },
+        SubscriptionCheckoutData: {
+          type: 'object',
+          properties: {
+            checkout_id: { type: 'string', format: 'uuid' },
+            key_id: { type: 'string', description: 'Platform Razorpay key for WebView checkout' },
+            order_id: { type: 'string', example: 'order_...' },
+            amount: { type: 'integer', description: 'Amount in minor units (paise/cents)', example: 99900 },
+            currency: { type: 'string', enum: ['INR', 'USD'], example: 'INR' },
+            plan: { type: 'string', enum: ['business'], example: 'business' },
+            store_name: { type: 'string', example: 'My Shop' },
+          },
+        },
+        VerifySubscriptionPaymentBody: {
+          type: 'object',
+          required: [
+            'checkout_id',
+            'razorpay_order_id',
+            'razorpay_payment_id',
+            'razorpay_signature',
+          ],
+          properties: {
+            checkout_id: { type: 'string', format: 'uuid' },
+            razorpay_order_id: { type: 'string' },
+            razorpay_payment_id: { type: 'string' },
+            razorpay_signature: { type: 'string' },
+          },
+        },
+        IndustryGroup: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            name: { type: 'string', example: 'Fashion' },
+            slug: { type: 'string', example: 'fashion' },
+            children: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  name: { type: 'string' },
+                  slug: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        InstagramSendMessageBody: {
+          type: 'object',
+          required: ['to', 'message'],
+          properties: {
+            store_id: { type: 'string', format: 'uuid' },
+            conversation_id: { type: 'string', format: 'uuid' },
+            to: { type: 'string', description: 'Instagram-scoped user id' },
+            message: { type: 'string', maxLength: 4096 },
+          },
+        },
       },
     },
     paths: {
@@ -788,7 +932,26 @@ export function buildOpenApiDocument() {
           summary: 'Get current user store',
           security: [{ bearerAuth: [] }],
           responses: {
-            '200': { description: 'Store or hasStore: false' },
+            '200': {
+              description: 'Store or hasStore: false',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          hasStore: { type: 'boolean' },
+                          store: { $ref: '#/components/schemas/MerchantStore', nullable: true },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             '401': { description: 'Unauthorized' },
           },
         },
@@ -846,6 +1009,57 @@ export function buildOpenApiDocument() {
             },
           },
           responses: { '200': { description: 'Token registered' } },
+        },
+      },
+      '/api/stores/me/payment-config': {
+        get: {
+          tags: ['Payments'],
+          summary: 'Get merchant payment configuration',
+          description:
+            'Returns COD, Razorpay, and UPI settings for the current store. Razorpay secrets are masked.',
+          security: [{ bearerAuth: [] }],
+          responses: {
+            '200': {
+              description: 'Payment configuration',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      message: { type: 'string' },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          store_id: { type: 'string', format: 'uuid' },
+                          payment_config: { $ref: '#/components/schemas/MerchantPaymentConfigView' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            '404': { description: 'No store found' },
+          },
+        },
+        patch: {
+          tags: ['Payments'],
+          summary: 'Update merchant payment configuration',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/UpdatePaymentConfigBody' } },
+            },
+          },
+          responses: {
+            '200': { description: 'Payment configuration saved' },
+            '400': {
+              description: 'Validation error (e.g. UPI enabled without VPA)',
+              content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+            },
+          },
         },
       },
       '/api/stores': {
@@ -1391,6 +1605,265 @@ export function buildOpenApiDocument() {
             { name: 'cursor', in: 'query', schema: { type: 'string' } },
           ],
           responses: { '200': { description: 'Paginated messages' } },
+        },
+      },
+      '/api/instagram/connect': {
+        get: {
+          tags: ['Instagram'],
+          summary: 'Start Instagram OAuth connection',
+          security: [{ bearerAuth: [] }],
+          responses: { '200': { description: 'OAuth redirect URL or connection flow data' } },
+        },
+      },
+      '/api/instagram/connection-status': {
+        get: {
+          tags: ['Instagram'],
+          summary: 'Instagram connection status for store',
+          security: [{ bearerAuth: [] }],
+          responses: { '200': { description: 'Connected / not connected' } },
+        },
+      },
+      '/api/instagram/subscribe-webhooks': {
+        post: {
+          tags: ['Instagram'],
+          summary: 'Subscribe Instagram webhooks for connected account',
+          security: [{ bearerAuth: [] }],
+          responses: { '200': { description: 'Webhooks subscribed' } },
+        },
+      },
+      '/api/instagram/send': {
+        post: {
+          tags: ['Instagram'],
+          summary: 'Send Instagram DM',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/InstagramSendMessageBody' } },
+            },
+          },
+          responses: { '200': { description: 'Message sent' } },
+        },
+      },
+      '/api/instagram/chats': {
+        get: {
+          tags: ['Instagram'],
+          summary: 'List Instagram conversations',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+          ],
+          responses: { '200': { description: 'Conversation list' } },
+        },
+      },
+      '/api/instagram/chats/{conversationId}/mark-read': {
+        post: {
+          tags: ['Instagram'],
+          summary: 'Mark Instagram conversation as read',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'conversationId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+          ],
+          responses: { '200': { description: 'Unread count reset' } },
+        },
+      },
+      '/api/instagram/chats/{conversationId}/messages': {
+        get: {
+          tags: ['Instagram'],
+          summary: 'List messages in an Instagram conversation',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'conversationId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 30 } },
+            { name: 'cursor', in: 'query', schema: { type: 'string' } },
+          ],
+          responses: { '200': { description: 'Paginated messages' } },
+        },
+      },
+      '/api/industries': {
+        get: {
+          tags: ['Industries'],
+          summary: 'List industry groups for store setup',
+          security: [{ bearerAuth: [] }],
+          responses: {
+            '200': {
+              description: 'Industry groups with children',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          industries: {
+                            type: 'array',
+                            items: { $ref: '#/components/schemas/IndustryGroup' },
+                          },
+                          count: { type: 'integer' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/api/subscriptions/checkout': {
+        post: {
+          tags: ['Subscriptions'],
+          summary: 'Create Business plan checkout session',
+          description:
+            'Creates a Razorpay order using platform keys. India stores: ₹999/mo (99900 paise). Other countries: $20/mo (2000 cents). Returns data for mobile WebView checkout.',
+          security: [{ bearerAuth: [] }],
+          responses: {
+            '200': {
+              description: 'Checkout session created',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      message: { type: 'string', example: 'Subscription checkout created' },
+                      data: { $ref: '#/components/schemas/SubscriptionCheckoutData' },
+                    },
+                  },
+                },
+              },
+            },
+            '404': { description: 'Store not found' },
+            '503': { description: 'Platform Razorpay not configured' },
+          },
+        },
+      },
+      '/api/subscriptions/verify': {
+        post: {
+          tags: ['Subscriptions'],
+          summary: 'Verify Razorpay payment and activate subscription',
+          description:
+            'Called by the mobile app after successful Razorpay checkout. Extends `subscription_expires_at` by one month and sets `subscription_plan` to `business`.',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/VerifySubscriptionPaymentBody' },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description: 'Subscription activated',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      message: { type: 'string', example: 'Subscription activated' },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          store: { $ref: '#/components/schemas/MerchantStore' },
+                          subscription_plan: { type: 'string', enum: ['business'] },
+                          subscription_expires_at: { type: 'string', format: 'date', nullable: true },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            '400': { description: 'Invalid payment signature' },
+            '403': { description: 'Checkout does not belong to user' },
+          },
+        },
+      },
+      '/api/subscriptions/status': {
+        get: {
+          tags: ['Subscriptions'],
+          summary: 'Get subscription checkout status',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: 'checkout_id',
+              in: 'query',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'Checkout and store subscription state',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          status: { type: 'string', enum: ['pending', 'paid', 'failed'] },
+                          checkout_id: { type: 'string', format: 'uuid' },
+                          subscription_plan: { type: 'string', nullable: true },
+                          subscription_expires_at: { type: 'string', format: 'date', nullable: true },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/api/webhooks/razorpay': {
+        post: {
+          tags: ['Webhooks'],
+          summary: 'Merchant Razorpay webhook (storefront orders)',
+          description:
+            'Configure in each merchant Razorpay dashboard. Verifies `X-Razorpay-Signature` using the store webhook secret. Raw JSON body required.',
+          parameters: [
+            {
+              name: 'X-Razorpay-Signature',
+              in: 'header',
+              required: true,
+              schema: { type: 'string' },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object', additionalProperties: true } } },
+          },
+          responses: { '200': { description: 'Webhook processed' } },
+        },
+      },
+      '/api/webhooks/razorpay/platform': {
+        post: {
+          tags: ['Webhooks'],
+          summary: 'Platform Razorpay webhook (subscription billing)',
+          description:
+            'Configure in platform Razorpay dashboard. URL example: `https://your-api-host/api/webhooks/razorpay/platform`. Subscribe to `payment.captured`. Activates Business plan on successful payment.',
+          parameters: [
+            {
+              name: 'X-Razorpay-Signature',
+              in: 'header',
+              required: true,
+              schema: { type: 'string' },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object', additionalProperties: true } } },
+          },
+          responses: { '200': { description: 'Webhook processed' } },
         },
       },
       '/api/public/store': {

@@ -2,7 +2,7 @@
 
 Customer-facing HTTP API for building a store website or checkout flow. All routes live under `/api/public/*`.
 
-Interactive OpenAPI docs: `GET /api/docs` (when the backend is running).
+Interactive OpenAPI docs: `GET /docs` (when the backend is running).
 
 ## Store resolution
 

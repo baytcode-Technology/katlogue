@@ -65,6 +65,12 @@ export const env = {
   },
   /** 32+ char secret for encrypting per-store Razorpay credentials at rest. */
   PAYMENT_ENCRYPTION_KEY: optionalEnv('PAYMENT_ENCRYPTION_KEY'),
+  /** Platform Razorpay keys for merchant subscription billing. */
+  PLATFORM_RAZORPAY: {
+    KEY_ID: optionalEnv('PLATFORM_RAZORPAY_KEY_ID'),
+    KEY_SECRET: optionalEnv('PLATFORM_RAZORPAY_KEY_SECRET'),
+    WEBHOOK_SECRET: optionalEnv('PLATFORM_RAZORPAY_WEBHOOK_SECRET'),
+  },
 } as const
 
 export function isGoogleOAuthConfigured(): boolean {
@@ -79,4 +85,8 @@ export function isInstagramOAuthConfigured(): boolean {
   return Boolean(
     env.INSTAGRAM.APP_ID && env.INSTAGRAM.APP_SECRET && env.INSTAGRAM.OAUTH_REDIRECT_URI
   )
+}
+
+export function isPlatformRazorpayConfigured(): boolean {
+  return Boolean(env.PLATFORM_RAZORPAY.KEY_ID && env.PLATFORM_RAZORPAY.KEY_SECRET)
 }

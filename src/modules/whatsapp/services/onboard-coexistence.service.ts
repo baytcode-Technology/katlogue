@@ -10,6 +10,7 @@ import {
 import { runFullCoexistenceSync } from './coexistence-sync.service.js'
 import { resolveStoreWhatsAppCredentials } from './whatsapp.service.js'
 import { AppError } from '../../../shared/errors/app.error.js'
+import { assertPremiumAccess } from '../../../shared/lib/subscription.js'
 
 export type OnboardCoexistenceInput = {
   storeId: string
@@ -37,6 +38,12 @@ export async function onboardCoexistenceStore(
   }
 
   const phoneAsset = await fetchConnectedPhoneNumber(accessToken)
+
+  const existingStore = await storeRepository.findStoreById(input.storeId)
+  if (!existingStore) {
+    throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
+  }
+  assertPremiumAccess(existingStore)
 
   const store = await storeRepository.updateWhatsAppConnection({
     storeId: input.storeId,

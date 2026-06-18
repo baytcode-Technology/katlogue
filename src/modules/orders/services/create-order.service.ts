@@ -29,6 +29,10 @@ import {
   shouldValidateVariantStock,
 } from '../../products/utils/product-inventory.js'
 import { AppError } from '../../../shared/errors/app.error.js'
+import {
+  assertWithinMonthlyOrderLimit,
+  hasPremiumAccess,
+} from '../../../shared/lib/subscription.js'
 import { normalizeWhatsAppNumber } from '../../../shared/utils/phone.js'
 import { notifyNewOrder } from '../../notifications/services/send-store-notification.service.js'
 import { emitToStore } from '../../../websocket/index.js'
@@ -282,6 +286,11 @@ export async function createOrder(
     throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
   }
 
+  if (!hasPremiumAccess(store)) {
+    const monthlyOrders = await orderRepository.countOrdersInCurrentMonth(storeId)
+    assertWithinMonthlyOrderLimit(monthlyOrders)
+  }
+
   const storedPaymentConfig = parseStoredPaymentConfig(store.payment_config)
   if (input.source === 'storefront' || !input.offline) {
     assertPaymentMethodEnabled(storedPaymentConfig, input.payment_method)
@@ -410,6 +419,8 @@ export async function createOrder(
     if (isStorefront && customerId) {
       await appendOrderToCustomer(customerId, storeId, order.id, order.total)
     }
+
+    await storeRepository.incrementOrderCount(storeId)
 
     return result
   } catch (err) {

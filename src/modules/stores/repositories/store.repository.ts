@@ -313,3 +313,59 @@ export async function findActiveStoreBySlug(slug: string): Promise<Store | null>
 
   return data as Store | null
 }
+
+export async function incrementProductCount(storeId: string): Promise<void> {
+  const store = await findStoreById(storeId)
+  if (!store) return
+
+  const { error } = await supabaseAdmin
+    .from('stores')
+    .update({
+      product_count: (store.product_count ?? 0) + 1,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', storeId)
+
+  if (error) {
+    throw new AppError(400, error.message, 'STORE_UPDATE_FAILED')
+  }
+}
+
+export async function incrementOrderCount(storeId: string): Promise<void> {
+  const store = await findStoreById(storeId)
+  if (!store) return
+
+  const { error } = await supabaseAdmin
+    .from('stores')
+    .update({
+      order_count: (store.order_count ?? 0) + 1,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', storeId)
+
+  if (error) {
+    throw new AppError(400, error.message, 'STORE_UPDATE_FAILED')
+  }
+}
+
+export async function activateBusinessSubscription(
+  storeId: string,
+  expiresAt: string
+): Promise<Store> {
+  const { data, error } = await supabaseAdmin
+    .from('stores')
+    .update({
+      subscription_plan: 'business',
+      subscription_expires_at: expiresAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', storeId)
+    .select('*')
+    .single()
+
+  if (error) {
+    throw new AppError(400, error.message, 'SUBSCRIPTION_ACTIVATE_FAILED')
+  }
+
+  return data as Store
+}

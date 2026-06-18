@@ -1,4 +1,4 @@
--- subscription_plan: starter (free default) | business | enterprise
+-- Ensure subscription columns exist (safe if 024 was not applied yet)
 ALTER TABLE public.stores
   ADD COLUMN IF NOT EXISTS subscription_plan text,
   ADD COLUMN IF NOT EXISTS subscription_expires_at timestamptz,
@@ -33,3 +33,14 @@ BEGIN
 EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
+
+-- Backfill counts from existing products and orders
+UPDATE public.stores s
+SET product_count = (
+  SELECT COUNT(*)::integer FROM public.products p WHERE p.store_id = s.id
+);
+
+UPDATE public.stores s
+SET order_count = (
+  SELECT COUNT(*)::integer FROM public.orders o WHERE o.store_id = s.id
+);

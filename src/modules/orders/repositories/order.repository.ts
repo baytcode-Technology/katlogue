@@ -74,6 +74,23 @@ export async function allocateOrderNumber(storeId: string): Promise<string> {
   return formatMonthlyOrderNumber(numberPrefix, maxSeq + 1)
 }
 
+export async function countOrdersInCurrentMonth(storeId: string): Promise<number> {
+  const { start, end } = getCurrentMonthBounds()
+
+  const { count, error } = await supabaseAdmin
+    .from('orders')
+    .select('id', { count: 'exact', head: true })
+    .eq('store_id', storeId)
+    .gte('created_at', start)
+    .lt('created_at', end)
+
+  if (error) {
+    throw new AppError(400, error.message, 'ORDER_COUNT_FAILED')
+  }
+
+  return count ?? 0
+}
+
 export async function insertOrder(row: InsertOrderRow): Promise<Order> {
 
   const { data, error } = await supabaseAdmin

@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express'
 import { env } from '../../config/env.js'
 import { findActiveStoreBySlug } from '../../modules/stores/repositories/store.repository.js'
 import { toPublicStore } from '../../modules/storefront/types/public-store.types.js'
+import { hasPremiumAccess } from '../lib/subscription.js'
 import { AppError } from '../errors/app.error.js'
 import { extractStoreSlugFromRequest } from '../utils/storefront.js'
 
@@ -33,6 +34,12 @@ export async function resolveStoreFromHost(
 
     if (!store) {
       return next(new AppError(404, 'Store not found', 'STORE_NOT_FOUND'))
+    }
+
+    if (!hasPremiumAccess(store)) {
+      return next(
+        new AppError(404, 'This store is not available', 'STOREFRONT_UNAVAILABLE')
+      )
     }
 
     req.store = toPublicStore(store)

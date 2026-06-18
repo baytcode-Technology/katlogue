@@ -1,4 +1,5 @@
 import { AppError } from '../../../shared/errors/app.error.js'
+import { assertPremiumAccess } from '../../../shared/lib/subscription.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { ensureInstagramWebhookSubscription } from './instagram-api.service.js'
 import {
@@ -33,6 +34,8 @@ export async function onboardInstagramStore(input: {
   if (!store) {
     throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
   }
+
+  assertPremiumAccess(store)
 
   const accessToken = await resolveLongLivedToken(input.token)
   const profile = await fetchInstagramProfile(accessToken)

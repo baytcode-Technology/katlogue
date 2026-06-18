@@ -278,3 +278,16 @@ export async function syncCategoryMembership(
 
   return { assigned: productIds.length, removed: toRemove.length }
 }
+
+export async function countByStoreId(storeId: string): Promise<number> {
+  const { count, error } = await supabaseAdmin
+    .from('products')
+    .select('id', { count: 'exact', head: true })
+    .eq('store_id', storeId)
+
+  if (error) {
+    throw new AppError(400, error.message, 'PRODUCT_COUNT_FAILED')
+  }
+
+  return count ?? 0
+}

@@ -14,6 +14,10 @@ import { orderRoutes } from './modules/orders/index.js'
 import { paymentConfigRoutes } from './modules/payments/index.js'
 import { notificationRoutes } from './modules/notifications/index.js'
 import razorpayWebhookRoutes from './modules/payments/routes/razorpay-webhook.routes.js'
+import {
+  subscriptionRoutes,
+  platformRazorpayWebhookRoutes,
+} from './modules/subscriptions/index.js'
 import { customerRoutes } from './modules/customers/index.js'
 import { instagramRoutes } from './modules/instagram/index.js'
 import metaWebhookRoutes from './modules/meta/routes/meta-webhook.routes.js'
@@ -35,6 +39,7 @@ app.use('/api/webhooks/instagram', metaWebhookRoutes)
 app.use('/webhook', metaWebhookRoutes)
 
 app.use('/api/webhooks/razorpay', razorpayWebhookRoutes)
+app.use('/api/webhooks/razorpay/platform', platformRazorpayWebhookRoutes)
 
 app.use(express.json())
 
@@ -65,6 +70,7 @@ app.use('/api/orders', orderRoutes)
 app.use('/api/customers', customerRoutes)
 app.use('/api/whatsapp', whatsappRoutes)
 app.use('/api/instagram', instagramRoutes)
+app.use('/api/subscriptions', subscriptionRoutes)
 app.use('/api/public', publicRoutes)
 
 app.use(errorMiddleware)

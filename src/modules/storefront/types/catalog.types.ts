@@ -26,7 +26,11 @@ export type CatalogProduct = Product & {
   sold_out: boolean
 }
 
+export type CatalogCategory = Category & {
+  subcategories: CatalogCategory[]
+}
+
 export type CatalogResponse = {
-  categories: Category[]
+  categories: CatalogCategory[]
   products: CatalogProduct[]
 }

@@ -85,11 +85,33 @@ Primary endpoint for product listing pages. Returns categories and products in o
   "success": true,
   "message": "Catalog fetched successfully",
   "data": {
-    "categories": [ /* all active categories */ ],
+    "categories": [
+      {
+        "id": "uuid",
+        "store_id": "uuid",
+        "parent_id": null,
+        "name": "Electronics",
+        "image_url": null,
+        "sort_order": 0,
+        "is_active": true,
+        "description": null,
+        "created_at": "2026-01-01T00:00:00.000Z",
+        "subcategories": [
+          {
+            "id": "uuid",
+            "parent_id": "parent-uuid",
+            "name": "Phones",
+            "subcategories": []
+          }
+        ]
+      }
+    ],
     "products": [ /* all active products, including sold out */ ]
   }
 }
 ```
+
+**Categories** are returned as a **nested tree**: only root categories (`parent_id` null, or orphans whose parent is inactive) appear at the top level. Each node includes **`subcategories`** (array, recursive), sorted by `sort_order` then name. Products are unchanged and still reference a single `category_id`.
 
 ### Sold-out availability
 

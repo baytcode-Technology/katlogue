@@ -5,6 +5,10 @@ import * as variantRepository from '../../products/repositories/product-variant.
 import type { Product } from '../../products/types/product.types.js'
 import type { ProductVariant } from '../../products/types/product-variant.types.js'
 import {
+  buildCatalogCategoryTree,
+  collectCategoryIds,
+} from '../lib/build-category-tree.js'
+import {
   isCatalogProductSoldOut,
   isCatalogVariantSoldOut,
 } from '../lib/catalog-availability.js'
@@ -89,10 +93,12 @@ export async function getCatalog(
   storeId: string,
   query: CatalogQuery
 ): Promise<CatalogResponse> {
-  const [categories, allProducts] = await Promise.all([
+  const [flatCategories, allProducts] = await Promise.all([
     findActiveCategoriesByStoreId(storeId),
     findActiveProductsByStoreId(storeId),
   ])
+  const categories = buildCatalogCategoryTree(flatCategories)
+  const categoryIds = collectCategoryIds(categories)
 
   let products = filterByPrice(allProducts, query.min_price, query.max_price)
   products = sortProducts(products, query.sort)
@@ -110,7 +116,7 @@ export async function getCatalog(
   }
 
   if (query.category_id) {
-    const categoryExists = categories.some((c) => c.id === query.category_id)
+    const categoryExists = categoryIds.has(query.category_id)
     if (!categoryExists) {
       throw new AppError(404, 'Category not found', 'CATEGORY_NOT_FOUND')
     }

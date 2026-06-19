@@ -177,8 +177,26 @@ export function buildOpenApiDocument() {
             image_url: { type: 'string', format: 'uri', nullable: true },
             sort_order: { type: 'integer', example: 0 },
             is_active: { type: 'boolean', example: true },
+            description: { type: 'string', nullable: true },
             created_at: { type: 'string', format: 'date-time' },
           },
+        },
+        CatalogCategory: {
+          allOf: [
+            { $ref: '#/components/schemas/Category' },
+            {
+              type: 'object',
+              required: ['subcategories'],
+              properties: {
+                subcategories: {
+                  type: 'array',
+                  description:
+                    'Direct child categories, sorted by sort_order then name. Empty array when none.',
+                  items: { $ref: '#/components/schemas/CatalogCategory' },
+                },
+              },
+            },
+          ],
         },
         Product: {
           type: 'object',
@@ -369,11 +387,13 @@ export function buildOpenApiDocument() {
           type: 'object',
           required: ['categories', 'products'],
           description:
-            'Always returns all active categories. Products are filtered when category_id or product_id is provided. Each active product is included even when sold out; use sold_out on the product and variants to disable purchase in the storefront UI.',
+            'Returns active categories as a nested tree (root categories with subcategories). Products are filtered when category_id or product_id is provided. Each active product is included even when sold out; use sold_out on the product and variants to disable purchase in the storefront UI.',
           properties: {
             categories: {
               type: 'array',
-              items: { $ref: '#/components/schemas/Category' },
+              description:
+                'Root active categories only. Each node includes a subcategories array (recursive) built from parent_id.',
+              items: { $ref: '#/components/schemas/CatalogCategory' },
             },
             products: {
               type: 'array',
@@ -1946,7 +1966,7 @@ export function buildOpenApiDocument() {
           description: [
             'Returns a single catalog shape:',
             '',
-            '- **categories**: always all active categories for the store (empty array if none).',
+            '- **categories**: active categories as a nested tree (root nodes only). Each category has **subcategories** (array, recursive) built from `parent_id`. Sorted by `sort_order` then name at each level.',
             '- **products**: all active products, including sold-out items. Each product has **sold_out** (boolean) and a **variants** array (all active variants, each with **sold_out**). Sold out when `mark_as_sold` is true or tracked inventory has `stock_qty` &lt; 1 (zero or negative). Non-inventory items are never sold out.',
             '',
             '**Filters (products only):**',
@@ -2009,7 +2029,22 @@ export function buildOpenApiDocument() {
                               image_url: null,
                               sort_order: 0,
                               is_active: true,
+                              description: null,
                               created_at: '2026-05-19T10:00:00.000Z',
+                              subcategories: [
+                                {
+                                  id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+                                  store_id: '22222222-2222-2222-2222-222222222222',
+                                  parent_id: '11111111-1111-1111-1111-111111111111',
+                                  name: 'Phones',
+                                  image_url: null,
+                                  sort_order: 0,
+                                  is_active: true,
+                                  description: null,
+                                  created_at: '2026-05-19T10:00:00.000Z',
+                                  subcategories: [],
+                                },
+                              ],
                             },
                           ],
                           products: [
@@ -2095,7 +2130,22 @@ export function buildOpenApiDocument() {
                               image_url: null,
                               sort_order: 0,
                               is_active: true,
+                              description: null,
                               created_at: '2026-05-19T10:00:00.000Z',
+                              subcategories: [
+                                {
+                                  id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+                                  store_id: '22222222-2222-2222-2222-222222222222',
+                                  parent_id: '11111111-1111-1111-1111-111111111111',
+                                  name: 'Phones',
+                                  image_url: null,
+                                  sort_order: 0,
+                                  is_active: true,
+                                  description: null,
+                                  created_at: '2026-05-19T10:00:00.000Z',
+                                  subcategories: [],
+                                },
+                              ],
                             },
                           ],
                           products: [
@@ -2141,7 +2191,22 @@ export function buildOpenApiDocument() {
                               image_url: null,
                               sort_order: 0,
                               is_active: true,
+                              description: null,
                               created_at: '2026-05-19T10:00:00.000Z',
+                              subcategories: [
+                                {
+                                  id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+                                  store_id: '22222222-2222-2222-2222-222222222222',
+                                  parent_id: '11111111-1111-1111-1111-111111111111',
+                                  name: 'Phones',
+                                  image_url: null,
+                                  sort_order: 0,
+                                  is_active: true,
+                                  description: null,
+                                  created_at: '2026-05-19T10:00:00.000Z',
+                                  subcategories: [],
+                                },
+                              ],
                             },
                           ],
                           products: [],

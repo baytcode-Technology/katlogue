@@ -29,7 +29,7 @@ export function buildOpenApiDocument() {
     openapi: '3.1.0',
     info: {
       title: 'Katlogue API',
-      version: '1.3.0',
+      version: '1.3.1',
       description:
         'Merchant and storefront API for Katlogue (AiShopy). Authenticated routes require `Authorization: Bearer <access_token>` from `/api/auth/verify` or Google sign-in. Public storefront routes resolve the store via subdomain host (e.g. ghu.yourdomain.com) or the `X-Store-Slug` header when calling the API host directly (e.g. Railway). Interactive Scalar docs: `/docs` · OpenAPI JSON: `/openapi.json`.',
     },
@@ -49,7 +49,7 @@ export function buildOpenApiDocument() {
       { name: 'Subscriptions', description: 'Platform subscription billing (Business plan)' },
       { name: 'Industries', description: 'Store industry picker options' },
       { name: 'Webhooks', description: 'Server-to-server webhooks (Razorpay, Meta)' },
-      { name: 'Public', description: 'Storefront (guest) — no auth; requires store context' },
+      { name: 'Public', description: 'Storefront (guest) — no auth; requires store context via subdomain or `X-Store-Slug`. Active Business/Enterprise stores are always available. Starter and expired premium stores remain available until **both** free limits are reached (20 products and 50 orders in the current calendar month), then all public routes return `403` with code `STOREFRONT_LIMIT_REACHED`.' },
     ],
     components: {
       securitySchemes: {
@@ -1870,7 +1870,8 @@ export function buildOpenApiDocument() {
         get: {
           tags: ['Public'],
           summary: 'Get public store info',
-          description: 'Requires store subdomain host or `X-Store-Slug` header.',
+          description:
+            'Requires store subdomain host or `X-Store-Slug` header. Blocked with `403 STOREFRONT_LIMIT_REACHED` when a Starter store has both 20+ products and 50+ orders this month.',
           parameters: [
             {
               name: 'X-Store-Slug',
@@ -1887,6 +1888,10 @@ export function buildOpenApiDocument() {
                   schema: { $ref: '#/components/schemas/PublicStoreSuccessResponse' },
                 },
               },
+            },
+            '403': {
+              description: 'Free plan storefront limit reached (20 products and 50 monthly orders)',
+              content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
             },
             '404': { description: 'Store not found' },
           },
@@ -2109,6 +2114,10 @@ export function buildOpenApiDocument() {
               description: 'Store, category, or product not found',
               content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
             },
+            '403': {
+              description: 'Free plan storefront limit reached (20 products and 50 monthly orders)',
+              content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+            },
           },
         },
       },
@@ -2182,7 +2191,13 @@ export function buildOpenApiDocument() {
               },
             },
           },
-          responses: { '201': { description: 'Order created' } },
+          responses: {
+            '201': { description: 'Order created' },
+            '403': {
+              description: 'Free plan storefront or order limit reached',
+              content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+            },
+          },
         },
       },
       '/api/public/orders/{orderId}/status': {

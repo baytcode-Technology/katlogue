@@ -102,3 +102,26 @@ export function assertWithinMonthlyOrderLimit(monthlyCount: number): void {
     throw new AppError(403, 'You have exceeded your store limit', 'SUBSCRIPTION_LIMIT_REACHED')
   }
 }
+
+export function hasExceededFreeStorefrontLimits(
+  productCount: number,
+  monthlyOrderCount: number
+): boolean {
+  return productCount >= FREE_PRODUCT_LIMIT && monthlyOrderCount >= FREE_ORDER_LIMIT
+}
+
+export function assertStorefrontAvailable(
+  store: Pick<Store, 'subscription_plan' | 'subscription_expires_at' | 'product_count'>,
+  counts: { monthlyOrderCount: number }
+): void {
+  if (hasPremiumAccess(store)) return
+
+  const productCount = store.product_count ?? 0
+  if (hasExceededFreeStorefrontLimits(productCount, counts.monthlyOrderCount)) {
+    throw new AppError(
+      403,
+      'This store has reached the free plan limit. Upgrade to Business to continue.',
+      'STOREFRONT_LIMIT_REACHED'
+    )
+  }
+}

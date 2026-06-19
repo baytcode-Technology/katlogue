@@ -29,7 +29,7 @@ export function buildOpenApiDocument() {
     openapi: '3.1.0',
     info: {
       title: 'Katlogue API',
-      version: '1.3.1',
+      version: '1.3.2',
       description:
         'Merchant and storefront API for Katlogue (AiShopy). Authenticated routes require `Authorization: Bearer <access_token>` from `/api/auth/verify` or Google sign-in. Public storefront routes resolve the store via subdomain host (e.g. ghu.yourdomain.com) or the `X-Store-Slug` header when calling the API host directly (e.g. Railway). Interactive Scalar docs: `/docs` · OpenAPI JSON: `/openapi.json`.',
     },
@@ -127,7 +127,7 @@ export function buildOpenApiDocument() {
             ai_system_prompt: { type: 'string', nullable: true },
             is_active: { type: 'boolean' },
           },
-        },
+        }, 
         CreateProductBody: {
           type: 'object',
           required: ['store_id', 'name', 'base_price', 'images', 'thumbnail_url'],
@@ -727,10 +727,26 @@ export function buildOpenApiDocument() {
             checkout_id: { type: 'string', format: 'uuid' },
             key_id: { type: 'string', description: 'Platform Razorpay key for WebView checkout' },
             order_id: { type: 'string', example: 'order_...' },
-            amount: { type: 'integer', description: 'Amount in minor units (paise/cents)', example: 99900 },
+            amount: { type: 'integer', description: 'Amount in minor units (paise/cents)', example: 9900 },
             currency: { type: 'string', enum: ['INR', 'USD'], example: 'INR' },
             plan: { type: 'string', enum: ['business'], example: 'business' },
             store_name: { type: 'string', example: 'My Shop' },
+            is_trial: { type: 'boolean', example: true },
+            regular_amount: { type: 'number', example: 999, description: 'Full monthly price in major units' },
+          },
+        },
+        SubscriptionPricingData: {
+          type: 'object',
+          properties: {
+            trial_eligible: { type: 'boolean', example: true },
+            currency: { type: 'string', enum: ['INR', 'USD'], example: 'INR' },
+            charge_amount: { type: 'number', example: 99 },
+            charge_minor_units: { type: 'integer', example: 9900 },
+            regular_amount: { type: 'number', example: 999 },
+            regular_minor_units: { type: 'integer', example: 99900 },
+            is_trial: { type: 'boolean', example: true },
+            price_label: { type: 'string', example: '₹99 / 1st month' },
+            compare_at_label: { type: 'string', example: '₹999 / month' },
           },
         },
         VerifySubscriptionPaymentBody: {
@@ -1714,12 +1730,38 @@ export function buildOpenApiDocument() {
           },
         },
       },
+      '/api/subscriptions/pricing': {
+        get: {
+          tags: ['Subscriptions'],
+          summary: 'Get Business plan pricing for current store',
+          description:
+            'Returns trial eligibility and display labels. First paid checkout per store uses trial pricing (India ₹99 / global $1). Renewals use ₹999 / $20.',
+          security: [{ bearerAuth: [] }],
+          responses: {
+            '200': {
+              description: 'Pricing quote',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      data: { $ref: '#/components/schemas/SubscriptionPricingData' },
+                    },
+                  },
+                },
+              },
+            },
+            '404': { description: 'Store not found' },
+          },
+        },
+      },
       '/api/subscriptions/checkout': {
         post: {
           tags: ['Subscriptions'],
           summary: 'Create Business plan checkout session',
           description:
-            'Creates a Razorpay order using platform keys. India stores: ₹999/mo (99900 paise). Other countries: $20/mo (2000 cents). Returns data for mobile WebView checkout.',
+            'Creates a Razorpay order using platform keys. Trial-eligible stores (no prior paid checkout): India ₹99 (9900 paise), global $1 (100 cents). Otherwise ₹999 / $20. Returns data for mobile WebView checkout.',
           security: [{ bearerAuth: [] }],
           responses: {
             '200': {

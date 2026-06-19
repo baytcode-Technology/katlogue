@@ -11,7 +11,10 @@ export async function createSubscriptionCheckout(ownerId: string) {
     throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
   }
 
-  const pricing = getBusinessCheckoutAmount(store)
+  const hasPaidBefore = await checkoutRepository.hasPaidCheckoutForStore(store.id)
+  const trialEligible = !hasPaidBefore
+  const pricing = getBusinessCheckoutAmount(store, { trialEligible })
+  const regular = getBusinessCheckoutAmount(store, { trialEligible: false })
   const receipt = `sub_${randomBytes(8).toString('hex')}`
 
   const razorpayOrder = await createPlatformOrder({
@@ -22,6 +25,7 @@ export async function createSubscriptionCheckout(ownerId: string) {
       store_id: store.id,
       owner_id: ownerId,
       plan: 'business',
+      trial: pricing.isTrial ? 'true' : 'false',
     },
   })
 
@@ -42,6 +46,8 @@ export async function createSubscriptionCheckout(ownerId: string) {
     currency: razorpayOrder.currency,
     plan: 'business' as const,
     store_name: store.name,
+    is_trial: pricing.isTrial,
+    regular_amount: regular.amount,
   }
 }
 

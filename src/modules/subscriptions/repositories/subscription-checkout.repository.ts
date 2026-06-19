@@ -81,3 +81,17 @@ export async function updateCheckout(
 
   return data as SubscriptionCheckout
 }
+
+export async function hasPaidCheckoutForStore(storeId: string): Promise<boolean> {
+  const { count, error } = await supabaseAdmin
+    .from('subscription_checkouts')
+    .select('id', { count: 'exact', head: true })
+    .eq('store_id', storeId)
+    .eq('status', 'paid')
+
+  if (error) {
+    throw new AppError(400, error.message, 'SUBSCRIPTION_CHECKOUT_LOOKUP_FAILED')
+  }
+
+  return (count ?? 0) > 0
+}

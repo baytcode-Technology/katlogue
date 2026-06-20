@@ -142,7 +142,6 @@ function buildItemSnapshot(product: Product, variant: ProductVariant | null): Re
       base_price: product.base_price,
       compare_at_price: product.compare_at_price,
       thumbnail_url: product.thumbnail_url,
-      images: product.images,
     },
     variant: variant
       ? {

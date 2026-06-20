@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { parseEntityId } from '../lib/parse-entity-id.js'
 
 /** Treat `""` and `null` as missing for optional API fields. */
 export function emptyToUndefined(value: unknown): unknown {
@@ -7,7 +8,19 @@ export function emptyToUndefined(value: unknown): unknown {
 }
 
 export function entityId(message: string) {
-  return z.coerce.number().int().positive(message)
+  return z
+    .union([z.number(), z.string()])
+    .superRefine((val, ctx) => {
+      try {
+        parseEntityId(val, message)
+      } catch (e) {
+        ctx.addIssue({
+          code: 'custom',
+          message: e instanceof Error ? e.message : message,
+        })
+      }
+    })
+    .transform((val) => parseEntityId(val, message))
 }
 
 export function optionalEntityId(message: string) {

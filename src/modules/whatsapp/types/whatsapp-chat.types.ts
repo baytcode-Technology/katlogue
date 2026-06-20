@@ -16,11 +16,11 @@ export type WhatsAppMessageStatus =
 
 export type WhatsAppConversation = {
 
-  id: string
+  id: number
 
-  store_id: string
+  store_id: number
 
-  customer_id: string | null
+  customer_id: number | null
 
   wa_phone_number_id: string
 
@@ -42,11 +42,11 @@ export type WhatsAppConversation = {
 
 export type WhatsAppMessage = {
 
-  id: string
+  id: number
 
-  conversation_id: string
+  conversation_id: number
 
-  store_id: string
+  store_id: number
 
   meta_message_id: string
 

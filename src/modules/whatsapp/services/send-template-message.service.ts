@@ -22,7 +22,7 @@ import {
 
 export type SendWhatsAppTemplateInput = {
 
-  storeId?: string
+  storeId?: number
 
   ownerId?: string
 

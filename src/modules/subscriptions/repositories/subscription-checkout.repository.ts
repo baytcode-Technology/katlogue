@@ -29,7 +29,7 @@ export async function insertCheckout(row: InsertSubscriptionCheckoutRow): Promis
   return data as SubscriptionCheckout
 }
 
-export async function findCheckoutById(checkoutId: string): Promise<SubscriptionCheckout | null> {
+export async function findCheckoutById(checkoutId: number): Promise<SubscriptionCheckout | null> {
   const { data, error } = await supabaseAdmin
     .from('subscription_checkouts')
     .select('*')
@@ -60,7 +60,7 @@ export async function findCheckoutByProviderOrderId(
 }
 
 export async function updateCheckout(
-  checkoutId: string,
+  checkoutId: number,
   patch: {
     status?: SubscriptionCheckoutStatus
     provider_payment_id?: string | null
@@ -82,7 +82,7 @@ export async function updateCheckout(
   return data as SubscriptionCheckout
 }
 
-export async function hasPaidCheckoutForStore(storeId: string): Promise<boolean> {
+export async function hasPaidCheckoutForStore(storeId: number): Promise<boolean> {
   const { count, error } = await supabaseAdmin
     .from('subscription_checkouts')
     .select('id', { count: 'exact', head: true })

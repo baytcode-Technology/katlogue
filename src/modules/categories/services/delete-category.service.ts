@@ -6,7 +6,7 @@ import * as categoryRepository from '../repositories/category.repository.js'
  * Deletes a category. Products in this category keep their records;
  * `category_id` is cleared automatically (ON DELETE SET NULL).
  */
-export async function deleteCategory(ownerId: string, categoryId: string): Promise<void> {
+export async function deleteCategory(ownerId: string, categoryId: number): Promise<void> {
   const existing = await categoryRepository.findCategoryById(categoryId)
 
   if (!existing) {

@@ -7,10 +7,10 @@ import type {
 } from '../types/instagram-chat.types.js'
 
 export async function upsertConversation(input: {
-  storeId: string
+  storeId: number
   customerIgId: string
   customerIgUsername?: string | null
-  customerId?: string | null
+  customerId?: number | null
   lastMessageAt: string | null
   lastMessagePreview: string | null
   incrementUnread?: boolean
@@ -55,8 +55,8 @@ export async function upsertConversation(input: {
 }
 
 export async function insertMessage(input: {
-  storeId: string
-  conversationId: string
+  storeId: number
+  conversationId: number
   metaMessageId: string
   direction: 'inbound' | 'outbound'
   fromIgId: string
@@ -105,7 +105,7 @@ export async function claimWebhookEvent(eventKey: string): Promise<boolean> {
   throw new AppError(400, error.message, 'INSTAGRAM_WEBHOOK_EVENT_CLAIM_FAILED')
 }
 
-export async function listConversations(storeId: string): Promise<InstagramConversation[]> {
+export async function listConversations(storeId: number): Promise<InstagramConversation[]> {
   const { data, error } = await supabaseAdmin
     .from('instagram_conversations')
     .select('*')
@@ -121,8 +121,8 @@ export async function listConversations(storeId: string): Promise<InstagramConve
 }
 
 export async function listMessages(input: {
-  storeId: string
-  conversationId: string
+  storeId: number
+  conversationId: number
   limit: number
   cursor?: string | null
 }): Promise<InstagramMessage[]> {
@@ -148,8 +148,8 @@ export async function listMessages(input: {
 }
 
 export async function findConversationById(input: {
-  storeId: string
-  conversationId: string
+  storeId: number
+  conversationId: number
 }): Promise<InstagramConversation | null> {
   const { data, error } = await supabaseAdmin
     .from('instagram_conversations')
@@ -166,7 +166,7 @@ export async function findConversationById(input: {
 }
 
 export async function findConversationByCustomer(input: {
-  storeId: string
+  storeId: number
   customerIgId: string
 }): Promise<InstagramConversation | null> {
   const { data, error } = await supabaseAdmin
@@ -184,7 +184,7 @@ export async function findConversationByCustomer(input: {
 }
 
 export async function getLastInboundMessageAt(input: {
-  storeId: string
+  storeId: number
   customerIgId: string
 }): Promise<string | null> {
   const conversation = await findConversationByCustomer(input)
@@ -208,8 +208,8 @@ export async function getLastInboundMessageAt(input: {
 }
 
 export async function resetUnreadCount(input: {
-  storeId: string
-  conversationId: string
+  storeId: number
+  conversationId: number
 }): Promise<InstagramConversation> {
   const { data, error } = await supabaseAdmin
     .from('instagram_conversations')

@@ -6,8 +6,8 @@ import * as createCheckoutService from '../services/create-checkout.service.js'
 export const getSubscriptionCheckoutStatus = asyncHandler(async (req: Request, res: Response) => {
   if (!req.authUser) throw new AppError(401, 'Unauthorized', 'UNAUTHORIZED')
 
-  const checkoutId = String(req.query.checkout_id ?? '').trim()
-  if (!checkoutId) {
+  const checkoutId = Number(String(req.query.checkout_id ?? '').trim())
+  if (!Number.isFinite(checkoutId) || checkoutId <= 0) {
     throw new AppError(400, 'checkout_id is required', 'VALIDATION_ERROR')
   }
 

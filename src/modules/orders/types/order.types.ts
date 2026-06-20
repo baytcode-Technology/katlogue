@@ -25,11 +25,11 @@ export type PaymentMethod = 'razorpay' | 'cod' | 'upi'
 
 export type OrderItemInput = {
 
-  product_id: string
+  product_id: number
 
   quantity: number
 
-  variant_id?: string
+  variant_id?: number
 
 }
 
@@ -37,7 +37,7 @@ export type OrderItemInput = {
 
 export type CreateOrderInput = {
 
-  customer_id?: string
+  customer_id?: number
 
   whatsapp_number?: string
 
@@ -53,7 +53,7 @@ export type CreateOrderInput = {
 
   notes?: string
 
-  conversation_id?: string
+  conversation_id?: number
 
   /** e.g. storefront, whatsapp, offline */
 
@@ -69,13 +69,13 @@ export type CreateOrderInput = {
 
 export type Order = {
 
-  id: string
+  id: number
 
-  store_id: string
+  store_id: number
 
-  customer_id: string | null
+  customer_id: number | null
 
-  conversation_id: string | null
+  conversation_id: number | null
 
   order_number: string
 
@@ -97,7 +97,7 @@ export type Order = {
 
   total: number
 
-  coupon_id: string | null
+  coupon_id: number | null
 
   coupon_code: string | null
 
@@ -125,13 +125,13 @@ export type Order = {
 
 export type OrderItem = {
 
-  id: string
+  id: number
 
-  order_id: string
+  order_id: number
 
-  product_id: string
+  product_id: number
 
-  variant_id: string | null
+  variant_id: number | null
 
   quantity: number
 
@@ -147,15 +147,15 @@ export type OrderItem = {
 
 export type Payment = {
 
-  id: string
+  id: number
 
-  order_id: string
+  order_id: number
 
-  store_id: string
+  store_id: number
 
   provider: string
 
-  provider_order_id: string | null
+  provider_order_id: number | null
 
   provider_payment_id: string | null
 
@@ -193,7 +193,7 @@ export type CreateOrderResult = {
 
   payment: Payment
 
-  customer_id: string | null
+  customer_id: number | null
 
   payment_method: PaymentMethod
 

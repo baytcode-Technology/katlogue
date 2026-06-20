@@ -6,7 +6,7 @@ import { SOCKET_EVENTS } from './events.js'
 
 let io: Server | null = null
 
-function storeRoom(storeId: string): string {
+function storeRoom(storeId: number): string {
   return `store:${storeId}`
 }
 
@@ -44,10 +44,11 @@ export function initSocketServer(httpServer: HttpServer): Server {
 
       socket.data.userId = auth.userId
 
-      socket.on(SOCKET_EVENTS.JOIN_STORE, async (payload: { storeId?: string }) => {
+      socket.on(SOCKET_EVENTS.JOIN_STORE, async (payload: { storeId?: number | string }) => {
         try {
-          const storeId = payload?.storeId?.trim()
-          if (!storeId) return
+          const raw = payload?.storeId
+          const storeId = typeof raw === 'number' ? raw : Number(String(raw ?? '').trim())
+          if (!Number.isFinite(storeId) || storeId <= 0) return
 
           await storeRepository.assertStoreOwner(storeId, auth.userId)
           await socket.join(storeRoom(storeId))
@@ -66,7 +67,7 @@ export function getSocketServer(): Server | null {
   return io
 }
 
-export function emitToStore<T>(storeId: string, event: string, payload: T): void {
+export function emitToStore<T>(storeId: number, event: string, payload: T): void {
   if (!io) return
   io.to(storeRoom(storeId)).emit(event, payload)
 }

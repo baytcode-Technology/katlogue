@@ -5,8 +5,8 @@ import type { Order, UpdateOrderInput } from '../types/order.types.js'
 
 export async function updateOrderStatuses(
   ownerId: string,
-  storeId: string,
-  orderId: string,
+  storeId: number,
+  orderId: number,
   input: UpdateOrderInput
 ): Promise<Order> {
   await storeRepository.assertStoreOwner(storeId, ownerId)

@@ -4,7 +4,7 @@ import type { Product, UpdateProductInput } from '../types/product.types.js'
 
 export async function updateProduct(
   ownerId: string,
-  productId: string,
+  productId: number,
   input: UpdateProductInput
 ): Promise<Product> {
   const existing = await productRepository.findProductById(productId)

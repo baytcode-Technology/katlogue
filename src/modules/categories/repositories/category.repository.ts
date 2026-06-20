@@ -3,8 +3,8 @@ import { AppError } from '../../../shared/errors/app.error.js'
 import type { Category, CreateCategoryInput, UpdateCategoryInput } from '../types/category.types.js'
 
 export async function assertParentCategory(
-  parentId: string,
-  storeId: string
+  parentId: number,
+  storeId: number
 ): Promise<void> {
   const { data, error } = await supabaseAdmin
     .from('categories')
@@ -54,7 +54,7 @@ export async function insertCategory(input: CreateCategoryInput): Promise<Catego
   return data as Category
 }
 
-export async function findCategoriesByStoreId(storeId: string): Promise<Category[]> {
+export async function findCategoriesByStoreId(storeId: number): Promise<Category[]> {
   const { data, error } = await supabaseAdmin
     .from('categories')
     .select('*')
@@ -69,7 +69,7 @@ export async function findCategoriesByStoreId(storeId: string): Promise<Category
   return (data ?? []) as Category[]
 }
 
-export async function findCategoryById(categoryId: string): Promise<Category | null> {
+export async function findCategoryById(categoryId: number): Promise<Category | null> {
   const { data, error } = await supabaseAdmin
     .from('categories')
     .select('*')
@@ -84,7 +84,7 @@ export async function findCategoryById(categoryId: string): Promise<Category | n
 }
 
 export async function updateCategory(
-  categoryId: string,
+  categoryId: number,
   patch: UpdateCategoryInput
 ): Promise<Category> {
   const row: Record<string, unknown> = {}
@@ -112,7 +112,7 @@ export async function updateCategory(
   return data as Category
 }
 
-export async function deleteCategory(categoryId: string): Promise<void> {
+export async function deleteCategory(categoryId: number): Promise<void> {
   const { error } = await supabaseAdmin.from('categories').delete().eq('id', categoryId)
 
   if (error) {
@@ -120,7 +120,7 @@ export async function deleteCategory(categoryId: string): Promise<void> {
   }
 }
 
-export async function findActiveCategoriesByStoreId(storeId: string): Promise<Category[]> {
+export async function findActiveCategoriesByStoreId(storeId: number): Promise<Category[]> {
   const { data, error } = await supabaseAdmin
     .from('categories')
     .select('*')

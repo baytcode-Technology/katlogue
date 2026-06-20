@@ -11,7 +11,7 @@ export type PublicStore = Omit<Store, 'wa_access_token' | 'payment_config'> & {
 
 /** Whitelisted fields returned by GET /api/public/store. */
 export type PublicStoreResponse = {
-  id: string
+  id: number
   slug: string
   name: string
   description: string | null

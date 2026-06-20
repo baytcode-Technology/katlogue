@@ -1,19 +1,20 @@
 import { z } from 'zod'
+import { entityId } from '../../../shared/validations/zod-helpers.js'
 
 export const listChatsQuerySchema = z.object({
-  store_id: z.uuid('Invalid store id'),
+  store_id: entityId('Invalid store id'),
 })
 
 export type ListChatsQuery = z.infer<typeof listChatsQuerySchema>
 
 export const listMessagesParamsSchema = z.object({
-  conversationId: z.uuid('Invalid conversation id'),
+  conversationId: entityId('Invalid conversation id'),
 })
 
 export type ListMessagesParams = z.infer<typeof listMessagesParamsSchema>
 
 export const listMessagesQuerySchema = z.object({
-  store_id: z.uuid('Invalid store id'),
+  store_id: entityId('Invalid store id'),
   limit: z
     .string()
     .optional()

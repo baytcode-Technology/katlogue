@@ -3,13 +3,13 @@ import { asyncHandler } from '../../../shared/helpers/async-handler.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { runFullCoexistenceSync } from '../services/coexistence-sync.service.js'
+import { parseStoreIdFromBody } from '../../../shared/utils/parse-store-id.js'
 import { resolveStoreWhatsAppCredentials } from '../services/whatsapp.service.js'
 
 export const triggerSync = asyncHandler(async (req: Request, res: Response) => {
   if (!req.authUser) throw new AppError(401, 'Unauthorized', 'UNAUTHORIZED')
 
-  const storeId = String(req.body?.storeId ?? req.body?.store_id ?? '').trim()
-  if (!storeId) throw new AppError(400, 'storeId is required', 'VALIDATION_ERROR')
+  const storeId = parseStoreIdFromBody(req.body?.storeId ?? req.body?.store_id)
 
   await storeRepository.assertStoreOwner(storeId, req.authUser.id)
 

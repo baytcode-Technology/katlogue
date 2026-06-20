@@ -1,9 +1,17 @@
-import { randomUUID } from 'crypto'
 import type { StorefrontShippingAddress } from '../../../shared/validations/shipping-address.validation.js'
 import type { SavedShippingAddress } from '../types/customer.types.js'
 
 function normalizePart(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function parseAddressId(raw: unknown): number | null {
+  if (typeof raw === 'number' && Number.isInteger(raw) && raw > 0) return raw
+  if (typeof raw === 'string' && /^\d+$/.test(raw)) {
+    const parsed = Number(raw)
+    if (Number.isInteger(parsed) && parsed > 0) return parsed
+  }
+  return null
 }
 
 export function addressesMatch(
@@ -31,8 +39,9 @@ export function parseSavedShippingAddresses(raw: unknown): SavedShippingAddress[
   for (const item of raw) {
     if (!item || typeof item !== 'object') continue
     const row = item as Record<string, unknown>
+    const id = parseAddressId(row.id)
     if (
-      typeof row.id !== 'string' ||
+      id === null ||
       typeof row.name !== 'string' ||
       typeof row.phone_number !== 'string' ||
       typeof row.address !== 'string' ||
@@ -44,7 +53,7 @@ export function parseSavedShippingAddresses(raw: unknown): SavedShippingAddress[
       continue
     }
     result.push({
-      id: row.id,
+      id,
       name: row.name,
       phone_number: row.phone_number,
       address: row.address,
@@ -64,7 +73,7 @@ export function toSavedShippingAddress(
   phoneNumber: string
 ): SavedShippingAddress {
   return {
-    id: randomUUID(),
+    id: Date.now(),
     name: input.name.trim(),
     phone_number: phoneNumber,
     address: input.address.trim(),

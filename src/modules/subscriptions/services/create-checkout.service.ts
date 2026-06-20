@@ -22,7 +22,7 @@ export async function createSubscriptionCheckout(ownerId: string) {
     currency: pricing.currency,
     receipt,
     notes: {
-      store_id: store.id,
+      store_id: String(store.id),
       owner_id: ownerId,
       plan: 'business',
       trial: pricing.isTrial ? 'true' : 'false',
@@ -51,7 +51,7 @@ export async function createSubscriptionCheckout(ownerId: string) {
   }
 }
 
-export async function getSubscriptionCheckoutStatus(ownerId: string, checkoutId: string) {
+export async function getSubscriptionCheckoutStatus(ownerId: string, checkoutId: number) {
   const checkout = await checkoutRepository.findCheckoutById(checkoutId)
   if (!checkout) {
     throw new AppError(404, 'Subscription checkout not found', 'CHECKOUT_NOT_FOUND')

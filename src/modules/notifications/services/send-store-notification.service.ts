@@ -72,9 +72,9 @@ export async function sendStoreNotification(input: SendStoreNotificationInput): 
 }
 
 export async function notifyWhatsAppChat(input: {
-  storeId: string
+  storeId: number
   storeSlug: string
-  conversationId: string
+  conversationId: number
   preview: string
   fromNumber: string
 }): Promise<void> {
@@ -87,16 +87,16 @@ export async function notifyWhatsAppChat(input: {
     data: {
       type: 'chat',
       channel: 'whatsapp',
-      conversationId: input.conversationId,
+      conversationId: String(input.conversationId),
       storeSlug: input.storeSlug,
     },
   })
 }
 
 export async function notifyInstagramChat(input: {
-  storeId: string
+  storeId: number
   storeSlug: string
-  conversationId: string
+  conversationId: number
   preview: string
   username?: string | null
 }): Promise<void> {
@@ -110,16 +110,16 @@ export async function notifyInstagramChat(input: {
     data: {
       type: 'chat',
       channel: 'instagram',
-      conversationId: input.conversationId,
+      conversationId: String(input.conversationId),
       storeSlug: input.storeSlug,
     },
   })
 }
 
 export async function notifyNewOrder(input: {
-  storeId: string
+  storeId: number
   storeSlug: string
-  orderId: string
+  orderId: number
   orderNumber: string
   total: number
   currency: string
@@ -141,7 +141,7 @@ export async function notifyNewOrder(input: {
     body: `${label} · ${input.orderNumber} · ${formattedTotal}`,
     data: {
       type: 'order',
-      orderId: input.orderId,
+      orderId: String(input.orderId),
       orderNumber: input.orderNumber,
       source: input.source,
       storeSlug: input.storeSlug,

@@ -34,7 +34,7 @@ function filterByPrice(
 
 function toCatalogProduct(
   product: Product,
-  variantMap: Map<string, ProductVariant[]>
+  variantMap: Map<number, ProductVariant[]>
 ): CatalogProduct {
   const allVariants = variantMap.get(product.id) ?? []
 
@@ -56,7 +56,7 @@ function toCatalogProduct(
 
 function buildCatalogProducts(
   products: Product[],
-  variantMap: Map<string, ProductVariant[]>
+  variantMap: Map<number, ProductVariant[]>
 ): CatalogProduct[] {
   return products.map((product) => toCatalogProduct(product, variantMap))
 }
@@ -90,7 +90,7 @@ function sortProducts(products: Product[], sort: CatalogSort): Product[] {
 }
 
 export async function getCatalog(
-  storeId: string,
+  storeId: number,
   query: CatalogQuery
 ): Promise<CatalogResponse> {
   const [flatCategories, allProducts] = await Promise.all([

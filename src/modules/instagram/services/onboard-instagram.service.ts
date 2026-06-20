@@ -27,7 +27,7 @@ async function resolveLongLivedToken(
 }
 
 export async function onboardInstagramStore(input: {
-  storeId: string
+  storeId: number
   token: InstagramTokenExchangeResult
 }) {
   const store = await storeRepository.findStoreById(input.storeId)
@@ -59,7 +59,7 @@ export async function onboardInstagramStore(input: {
 }
 
 export async function onboardInstagramFromCode(input: {
-  storeId: string
+  storeId: number
   code: string
 }) {
   const token = await exchangeCodeForAccessToken(input.code)
@@ -67,7 +67,7 @@ export async function onboardInstagramFromCode(input: {
 }
 
 export async function getInstagramConnectionStatus(
-  storeId: string
+  storeId: number
 ): Promise<InstagramConnectionStatus> {
   const store = await storeRepository.findStoreById(storeId)
   if (!store) {

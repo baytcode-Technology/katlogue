@@ -6,7 +6,7 @@ import type { Category, CategoryWithProductCount } from '../types/category.types
 
 export async function listCategoriesByStore(
   ownerId: string,
-  storeId: string
+  storeId: number
 ): Promise<CategoryWithProductCount[]> {
   await assertStoreOwner(storeId, ownerId)
   const categories = await categoryRepository.findCategoriesByStoreId(storeId)
@@ -20,9 +20,9 @@ export async function listCategoriesByStore(
     throw new AppError(400, error.message, 'PRODUCT_COUNT_FAILED')
   }
 
-  const counts = new Map<string, number>()
+  const counts = new Map<number, number>()
   for (const row of products ?? []) {
-    const cid = row.category_id as string | null
+    const cid = row.category_id as number | null
     if (cid) {
       counts.set(cid, (counts.get(cid) ?? 0) + 1)
     }

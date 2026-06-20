@@ -12,7 +12,10 @@ export const getPublicOrderStatus = asyncHandler(async (req: Request, res: Respo
     throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
   }
 
-  const orderId = String(req.params.orderId)
+  const orderId = Number(req.params.orderId)
+  if (!Number.isFinite(orderId) || orderId <= 0) {
+    throw new AppError(400, 'Invalid order id', 'VALIDATION_ERROR')
+  }
   const { token } = req.validatedQuery as PublicOrderStatusQuery
 
   const order = await orderRepository.findOrderByIdAndCheckoutToken(orderId, token)

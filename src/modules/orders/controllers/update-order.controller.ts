@@ -13,7 +13,7 @@ export const updateOrder = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const body = req.body as UpdateOrderBody
-  const { orderId } = req.params as OrderIdParam
+  const { orderId } = req.params as unknown as OrderIdParam
   const { store_id: storeId, ...patch } = body
 
   const order = await updateOrderService.updateOrderStatuses(

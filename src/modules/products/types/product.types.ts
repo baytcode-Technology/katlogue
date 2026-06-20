@@ -1,9 +1,9 @@
 export type ProductStatus = 'active' | 'draft' | 'unlisted'
 
 export type Product = {
-  id: string
-  store_id: string
-  category_id: string | null
+  id: number
+  store_id: number
+  category_id: number | null
   name: string
   description: string | null
   sku: string | null
@@ -26,10 +26,10 @@ export type Product = {
 import type { CreateProductVariantInput, ProductVariant } from './product-variant.types.js'
 
 export type CreateProductInput = {
-  store_id: string
+  store_id: number
   name: string
   base_price: number
-  category_id?: string
+  category_id?: number
   description?: string
   sku?: string
   compare_at_price?: number | null
@@ -55,7 +55,7 @@ export type CreateProductResult = {
 export type UpdateProductInput = {
   name?: string
   base_price?: number
-  category_id?: string | null
+  category_id?: number | null
   description?: string | null
   sku?: string | null
   compare_at_price?: number | null

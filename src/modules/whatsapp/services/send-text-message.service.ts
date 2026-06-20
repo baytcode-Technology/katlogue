@@ -30,7 +30,7 @@ const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000
 
 async function assertWithinSessionWindow(input: {
 
-  storeId: string
+  storeId: number
 
   customerWaNumber: string
 
@@ -72,7 +72,7 @@ async function assertWithinSessionWindow(input: {
 
 export type SendWhatsAppTextInput = {
 
-  storeId: string
+  storeId: number
 
   ownerId: string
 
@@ -80,7 +80,7 @@ export type SendWhatsAppTextInput = {
 
   message: string
 
-  conversationId?: string | null
+  conversationId?: number | null
 
 }
 

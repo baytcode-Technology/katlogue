@@ -3,13 +3,13 @@ import { asyncHandler } from '../../../shared/helpers/async-handler.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import { onboardInstagramFromCode } from '../services/onboard-instagram.service.js'
 
-function parseState(state: string | undefined): { storeId: string } | null {
+function parseState(state: string | undefined): { storeId: number } | null {
   if (!state) return null
   try {
     const json = Buffer.from(state, 'base64url').toString('utf8')
     const data = JSON.parse(json) as { storeId?: string }
     if (!data.storeId) return null
-    return { storeId: String(data.storeId) }
+    return { storeId: Number(data.storeId) }
   } catch {
     return null
   }

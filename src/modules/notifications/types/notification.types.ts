@@ -27,8 +27,8 @@ export type UpdateNotificationPreferencesInput = {
 export type PushTokenPlatform = 'ios' | 'android' | 'web'
 
 export type StorePushToken = {
-  id: string
-  store_id: string
+  id: number
+  store_id: number
   user_id: string
   expo_push_token: string
   platform: PushTokenPlatform
@@ -50,7 +50,7 @@ export type StoreNotificationKind =
   | 'order_pos'
 
 export type SendStoreNotificationInput = {
-  storeId: string
+  storeId: number
   kind: StoreNotificationKind
   title: string
   body: string

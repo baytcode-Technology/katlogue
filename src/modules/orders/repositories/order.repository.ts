@@ -11,9 +11,9 @@ import type { Order, OrderItem, Payment, UpdateOrderInput } from '../types/order
 
 
 export type InsertOrderRow = {
-  store_id: string
-  customer_id: string | null
-  conversation_id?: string | null
+  store_id: number
+  customer_id: number | null
+  conversation_id?: number | null
   order_number: string
   order_status: string
   payment_status: string
@@ -33,11 +33,11 @@ export type InsertOrderRow = {
 
 export type InsertOrderItemRow = {
 
-  order_id: string
+  order_id: number
 
-  product_id: string
+  product_id: number
 
-  variant_id?: string | null
+  variant_id?: number | null
 
   quantity: number
 
@@ -50,7 +50,7 @@ export type InsertOrderItemRow = {
 
 
 /** Next order number for this store in the current UTC month, e.g. FEB26-1, FEB27-1. */
-export async function allocateOrderNumber(storeId: string): Promise<string> {
+export async function allocateOrderNumber(storeId: number): Promise<string> {
   const { numberPrefix, start, end } = getCurrentMonthBounds()
 
   const { data, error } = await supabaseAdmin
@@ -74,7 +74,7 @@ export async function allocateOrderNumber(storeId: string): Promise<string> {
   return formatMonthlyOrderNumber(numberPrefix, maxSeq + 1)
 }
 
-export async function countOrdersInCurrentMonth(storeId: string): Promise<number> {
+export async function countOrdersInCurrentMonth(storeId: number): Promise<number> {
   const { start, end } = getCurrentMonthBounds()
 
   const { count, error } = await supabaseAdmin
@@ -150,8 +150,8 @@ export async function insertOrderItems(rows: InsertOrderItemRow[]): Promise<Orde
 
 
 export async function insertPayment(row: {
-  order_id: string
-  store_id: string
+  order_id: number
+  store_id: number
   provider: string
   amount: number
   currency: string
@@ -185,7 +185,7 @@ export async function insertPayment(row: {
 
 
 
-export async function deleteOrder(orderId: string): Promise<void> {
+export async function deleteOrder(orderId: number): Promise<void> {
 
   await supabaseAdmin.from('orders').delete().eq('id', orderId)
 
@@ -201,7 +201,7 @@ export type OrderWithCustomer = Order & {
 
 
 
-export async function findOrdersByStoreId(storeId: string): Promise<OrderWithCustomer[]> {
+export async function findOrdersByStoreId(storeId: number): Promise<OrderWithCustomer[]> {
 
   const { data, error } = await supabaseAdmin
 
@@ -229,7 +229,7 @@ export async function findOrdersByStoreId(storeId: string): Promise<OrderWithCus
 
 
 
-export async function findOrderById(orderId: string): Promise<OrderWithCustomer | null> {
+export async function findOrderById(orderId: number): Promise<OrderWithCustomer | null> {
 
   const { data, error } = await supabaseAdmin
 
@@ -256,8 +256,8 @@ export async function findOrderById(orderId: string): Promise<OrderWithCustomer 
 }
 
 export async function markOrderViewedByMerchant(
-  orderId: string,
-  storeId: string
+  orderId: number,
+  storeId: number
 ): Promise<OrderWithCustomer> {
   const { data, error } = await supabaseAdmin
     .from('orders')
@@ -282,7 +282,7 @@ export async function markOrderViewedByMerchant(
 
 
 
-export async function updateOrder(orderId: string, patch: UpdateOrderInput): Promise<Order> {
+export async function updateOrder(orderId: number, patch: UpdateOrderInput): Promise<Order> {
 
   const row: Record<string, unknown> = { updated_at: new Date().toISOString() }
 
@@ -322,7 +322,7 @@ export async function updateOrder(orderId: string, patch: UpdateOrderInput): Pro
 
 
 
-export async function findOrderItemsByOrderIds(orderIds: string[]): Promise<OrderItem[]> {
+export async function findOrderItemsByOrderIds(orderIds: number[]): Promise<OrderItem[]> {
 
   if (orderIds.length === 0) return []
 
@@ -350,7 +350,7 @@ export async function findOrderItemsByOrderIds(orderIds: string[]): Promise<Orde
 
 }
 
-export async function findPaymentByOrderId(orderId: string): Promise<Payment | null> {
+export async function findPaymentByOrderId(orderId: number): Promise<Payment | null> {
   const { data, error } = await supabaseAdmin
     .from('payments')
     .select('*')
@@ -383,7 +383,7 @@ export async function findPaymentByProviderOrderId(
 }
 
 export async function updatePayment(
-  paymentId: string,
+  paymentId: number,
   patch: Partial<{
     status: string
     provider_order_id: string | null
@@ -412,7 +412,7 @@ export async function updatePayment(
 }
 
 export async function findOrderByIdAndCheckoutToken(
-  orderId: string,
+  orderId: number,
   checkoutToken: string
 ): Promise<Order | null> {
   const { data, error } = await supabaseAdmin

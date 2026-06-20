@@ -11,7 +11,7 @@ export const markInstagramChatRead = asyncHandler(async (req: Request, res: Resp
   }
 
   const { store_id } = req.validatedQuery as ListChatsQuery
-  const { conversationId } = req.params as ListMessagesParams
+  const { conversationId } = req.params as unknown as ListMessagesParams
   const conversation = await markChatReadService.markInstagramChatRead(
     req.authUser.id,
     store_id,

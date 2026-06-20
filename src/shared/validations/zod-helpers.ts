@@ -6,6 +6,23 @@ export function emptyToUndefined(value: unknown): unknown {
   return value
 }
 
+export function entityId(message: string) {
+  return z.coerce.number().int().positive(message)
+}
+
+export function optionalEntityId(message: string) {
+  return z.preprocess(emptyToUndefined, entityId(message).optional())
+}
+
+/** Auth user IDs (Supabase auth.users) remain UUIDs. */
+export function authUserId(message = 'Invalid user id') {
+  return z.uuid(message)
+}
+
+export function optionalAuthUserId(message = 'Invalid user id') {
+  return z.preprocess(emptyToUndefined, z.uuid(message).optional())
+}
+
 export function optionalUuid(message: string) {
   return z.preprocess(emptyToUndefined, z.uuid(message).optional())
 }
@@ -19,10 +36,7 @@ export function optionalTrimmedString(max: number) {
 }
 
 export const orderItemSchema = z.object({
-  product_id: z.uuid('Invalid product id'),
+  product_id: entityId('Invalid product id'),
   quantity: z.coerce.number().int().min(1, 'Quantity must be at least 1'),
-  variant_id: z.preprocess(
-    emptyToUndefined,
-    z.uuid('Invalid variant id').optional()
-  ),
+  variant_id: optionalEntityId('Invalid variant id'),
 })

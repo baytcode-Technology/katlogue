@@ -9,7 +9,7 @@ export const getProduct = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError(401, 'Unauthorized', 'UNAUTHORIZED')
   }
 
-  const { productId } = req.params as ProductIdParam
+  const { productId } = req.params as unknown as ProductIdParam
   const data = await getProductService.getProductById(req.authUser.id, productId)
 
   res.status(200).json({

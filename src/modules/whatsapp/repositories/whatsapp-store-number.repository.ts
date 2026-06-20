@@ -2,7 +2,7 @@ import { supabaseAdmin } from '../../../config/supabase.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 
 export async function upsertStoreNumber(input: {
-  storeId: string
+  storeId: number
   waPhoneNumberId: string
   waBusinessAccountId: string | null
 }): Promise<void> {

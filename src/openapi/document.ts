@@ -61,6 +61,8 @@ export function buildOpenApiDocument() {
         },
       },
       schemas: {
+        EntityId: { type: 'integer', format: 'int64', example: 1 },
+        AuthUserId: { type: 'string', format: 'uuid' },
         ErrorResponse: errorResponse,
         SignInBody: {
           type: 'object',
@@ -132,10 +134,10 @@ export function buildOpenApiDocument() {
           type: 'object',
           required: ['store_id', 'name', 'base_price', 'images', 'thumbnail_url'],
           properties: {
-            store_id: { type: 'string', format: 'uuid' },
+            store_id: { $ref: '#/components/schemas/EntityId' },
             name: { type: 'string' },
             base_price: { type: 'number', minimum: 0 },
-            category_id: { type: 'string', format: 'uuid' },
+            category_id: { $ref: '#/components/schemas/EntityId' },
             description: { type: 'string' },
             sku: { type: 'string' },
             track_inventory: { type: 'boolean' },
@@ -159,9 +161,9 @@ export function buildOpenApiDocument() {
           type: 'object',
           required: ['store_id', 'name'],
           properties: {
-            store_id: { type: 'string', format: 'uuid' },
+            store_id: { $ref: '#/components/schemas/EntityId' },
             name: { type: 'string' },
-            parent_id: { type: 'string', format: 'uuid' },
+            parent_id: { $ref: '#/components/schemas/EntityId' },
             image_url: { type: 'string', format: 'uri', nullable: true },
             sort_order: { type: 'integer' },
             is_active: { type: 'boolean' },
@@ -170,9 +172,9 @@ export function buildOpenApiDocument() {
         Category: {
           type: 'object',
           properties: {
-            id: { type: 'string', format: 'uuid' },
-            store_id: { type: 'string', format: 'uuid' },
-            parent_id: { type: 'string', format: 'uuid', nullable: true },
+            id: { $ref: '#/components/schemas/EntityId' },
+            store_id: { $ref: '#/components/schemas/EntityId' },
+            parent_id: { allOf: [{ $ref: '#/components/schemas/EntityId' }], nullable: true },
             name: { type: 'string', example: 'Electronics' },
             image_url: { type: 'string', format: 'uri', nullable: true },
             sort_order: { type: 'integer', example: 0 },
@@ -201,9 +203,9 @@ export function buildOpenApiDocument() {
         Product: {
           type: 'object',
           properties: {
-            id: { type: 'string', format: 'uuid' },
-            store_id: { type: 'string', format: 'uuid' },
-            category_id: { type: 'string', format: 'uuid', nullable: true },
+            id: { $ref: '#/components/schemas/EntityId' },
+            store_id: { $ref: '#/components/schemas/EntityId' },
+            category_id: { allOf: [{ $ref: '#/components/schemas/EntityId' }], nullable: true },
             name: { type: 'string', example: 'Premium Headphones' },
             description: { type: 'string', nullable: true },
             sku: { type: 'string', nullable: true },
@@ -230,8 +232,8 @@ export function buildOpenApiDocument() {
         ProductVariant: {
           type: 'object',
           properties: {
-            id: { type: 'string', format: 'uuid' },
-            product_id: { type: 'string', format: 'uuid' },
+            id: { $ref: '#/components/schemas/EntityId' },
+            product_id: { $ref: '#/components/schemas/EntityId' },
             name: { type: 'string', example: 'Large / Red' },
             options: { type: 'object', additionalProperties: true },
             price_delta: { type: 'number', example: 50 },
@@ -250,10 +252,10 @@ export function buildOpenApiDocument() {
         Order: {
           type: 'object',
           properties: {
-            id: { type: 'string', format: 'uuid' },
-            store_id: { type: 'string', format: 'uuid' },
-            customer_id: { type: 'string', format: 'uuid', nullable: true },
-            conversation_id: { type: 'string', format: 'uuid', nullable: true },
+            id: { $ref: '#/components/schemas/EntityId' },
+            store_id: { $ref: '#/components/schemas/EntityId' },
+            customer_id: { allOf: [{ $ref: '#/components/schemas/EntityId' }], nullable: true },
+            conversation_id: { allOf: [{ $ref: '#/components/schemas/EntityId' }], nullable: true },
             order_number: {
               type: 'string',
               example: 'JUN26-1',
@@ -289,7 +291,7 @@ export function buildOpenApiDocument() {
           type: 'object',
           required: ['store_id'],
           properties: {
-            store_id: { type: 'string', format: 'uuid' },
+            store_id: { $ref: '#/components/schemas/EntityId' },
             order_status: {
               type: 'string',
               enum: ['pending', 'confirmed', 'completed', 'cancelled'],
@@ -308,8 +310,8 @@ export function buildOpenApiDocument() {
         Customer: {
           type: 'object',
           properties: {
-            id: { type: 'string', format: 'uuid' },
-            store_id: { type: 'string', format: 'uuid' },
+            id: { $ref: '#/components/schemas/EntityId' },
+            store_id: { $ref: '#/components/schemas/EntityId' },
             name: { type: 'string' },
             email: { type: 'string', format: 'email', nullable: true },
             phone: { type: 'string', nullable: true },
@@ -321,7 +323,7 @@ export function buildOpenApiDocument() {
           type: 'object',
           required: ['store_id', 'name'],
           properties: {
-            store_id: { type: 'string', format: 'uuid' },
+            store_id: { $ref: '#/components/schemas/EntityId' },
             name: { type: 'string', maxLength: 200 },
             email: { type: 'string', format: 'email' },
             phone: { type: 'string' },
@@ -331,8 +333,8 @@ export function buildOpenApiDocument() {
           type: 'object',
           required: ['message'],
           properties: {
-            store_id: { type: 'string', format: 'uuid' },
-            conversation_id: { type: 'string', format: 'uuid' },
+            store_id: { $ref: '#/components/schemas/EntityId' },
+            conversation_id: { $ref: '#/components/schemas/EntityId' },
             to: { type: 'string', example: '919876543210' },
             message: { type: 'string', maxLength: 4096 },
           },
@@ -340,7 +342,7 @@ export function buildOpenApiDocument() {
         WhatsAppSyncBody: {
           type: 'object',
           properties: {
-            store_id: { type: 'string', format: 'uuid' },
+            store_id: { $ref: '#/components/schemas/EntityId' },
           },
         },
         CatalogVariant: {
@@ -450,7 +452,7 @@ export function buildOpenApiDocument() {
         PublicStoreResponse: {
           type: 'object',
           properties: {
-            id: { type: 'string', format: 'uuid' },
+            id: { $ref: '#/components/schemas/EntityId' },
             slug: { type: 'string', example: 'my-shop' },
             name: { type: 'string', example: 'My Shop' },
             description: { type: 'string', nullable: true },
@@ -507,13 +509,11 @@ export function buildOpenApiDocument() {
             'Guest checkout (POST /api/public/orders): `items` required. Merchant POS (POST /api/orders): `store_id` + `items` required; set `offline: true` for walk-in orders.',
           properties: {
             store_id: {
-              type: 'string',
-              format: 'uuid',
+              $ref: '#/components/schemas/EntityId',
               description: 'Required for merchant POST /api/orders',
             },
             customer_id: {
-              type: 'string',
-              format: 'uuid',
+              $ref: '#/components/schemas/EntityId',
               description: 'Optional linked customer (merchant orders)',
             },
             whatsapp_number: { type: 'string', nullable: true },
@@ -526,11 +526,10 @@ export function buildOpenApiDocument() {
                 type: 'object',
                 required: ['product_id', 'quantity'],
                 properties: {
-                  product_id: { type: 'string', format: 'uuid' },
+                  product_id: { $ref: '#/components/schemas/EntityId' },
                   quantity: { type: 'integer', minimum: 1 },
                   variant_id: {
-                    type: 'string',
-                    format: 'uuid',
+                    $ref: '#/components/schemas/EntityId',
                     description: 'Required when the product has variants',
                   },
                 },
@@ -563,7 +562,7 @@ export function buildOpenApiDocument() {
               },
             },
             notes: { type: 'string', nullable: true },
-            conversation_id: { type: 'string', format: 'uuid', nullable: true },
+            conversation_id: { allOf: [{ $ref: '#/components/schemas/EntityId' }], nullable: true },
           },
         },
         StorefrontCreateOrderBody: {
@@ -577,9 +576,9 @@ export function buildOpenApiDocument() {
                 type: 'object',
                 required: ['product_id', 'quantity'],
                 properties: {
-                  product_id: { type: 'string', format: 'uuid' },
+                  product_id: { $ref: '#/components/schemas/EntityId' },
                   quantity: { type: 'integer', minimum: 1 },
-                  variant_id: { type: 'string', format: 'uuid', nullable: true },
+                  variant_id: { allOf: [{ $ref: '#/components/schemas/EntityId' }], nullable: true },
                 },
               },
             },
@@ -611,7 +610,7 @@ export function buildOpenApiDocument() {
         PublicCustomerByPhone: {
           type: 'object',
           properties: {
-            id: { type: 'string', format: 'uuid' },
+            id: { $ref: '#/components/schemas/EntityId' },
             name: { type: 'string', nullable: true },
             phone_number: { type: 'string' },
             shipping_addresses: {
@@ -619,7 +618,7 @@ export function buildOpenApiDocument() {
               items: {
                 type: 'object',
                 properties: {
-                  id: { type: 'string', format: 'uuid' },
+                  id: { $ref: '#/components/schemas/EntityId' },
                   name: { type: 'string' },
                   phone_number: { type: 'string' },
                   address: { type: 'string' },
@@ -636,7 +635,7 @@ export function buildOpenApiDocument() {
               items: {
                 type: 'object',
                 properties: {
-                  id: { type: 'string', format: 'uuid' },
+                  id: { $ref: '#/components/schemas/EntityId' },
                   order_number: { type: 'string' },
                   total: { type: 'number' },
                   created_at: { type: 'string', format: 'date-time' },
@@ -662,8 +661,8 @@ export function buildOpenApiDocument() {
           type: 'object',
           description: 'Merchant store record returned from GET /api/stores/me',
           properties: {
-            id: { type: 'string', format: 'uuid' },
-            owner_id: { type: 'string', format: 'uuid' },
+            id: { $ref: '#/components/schemas/EntityId' },
+            owner_id: { $ref: '#/components/schemas/AuthUserId' },
             name: { type: 'string', example: 'My Shop' },
             slug: { type: 'string', example: 'my-shop' },
             whatsapp_number: { type: 'string', example: '+919876543210' },
@@ -744,7 +743,7 @@ export function buildOpenApiDocument() {
         SubscriptionCheckoutData: {
           type: 'object',
           properties: {
-            checkout_id: { type: 'string', format: 'uuid' },
+            checkout_id: { $ref: '#/components/schemas/EntityId' },
             key_id: { type: 'string', description: 'Platform Razorpay key for WebView checkout' },
             order_id: { type: 'string', example: 'order_...' },
             amount: { type: 'integer', description: 'Amount in minor units (paise/cents)', example: 9900 },
@@ -778,7 +777,7 @@ export function buildOpenApiDocument() {
             'razorpay_signature',
           ],
           properties: {
-            checkout_id: { type: 'string', format: 'uuid' },
+            checkout_id: { $ref: '#/components/schemas/EntityId' },
             razorpay_order_id: { type: 'string' },
             razorpay_payment_id: { type: 'string' },
             razorpay_signature: { type: 'string' },
@@ -787,7 +786,7 @@ export function buildOpenApiDocument() {
         IndustryGroup: {
           type: 'object',
           properties: {
-            id: { type: 'string', format: 'uuid' },
+            id: { $ref: '#/components/schemas/EntityId' },
             name: { type: 'string', example: 'Fashion' },
             slug: { type: 'string', example: 'fashion' },
             children: {
@@ -795,7 +794,7 @@ export function buildOpenApiDocument() {
               items: {
                 type: 'object',
                 properties: {
-                  id: { type: 'string', format: 'uuid' },
+                  id: { $ref: '#/components/schemas/EntityId' },
                   name: { type: 'string' },
                   slug: { type: 'string' },
                 },
@@ -807,8 +806,8 @@ export function buildOpenApiDocument() {
           type: 'object',
           required: ['to', 'message'],
           properties: {
-            store_id: { type: 'string', format: 'uuid' },
-            conversation_id: { type: 'string', format: 'uuid' },
+            store_id: { $ref: '#/components/schemas/EntityId' },
+            conversation_id: { $ref: '#/components/schemas/EntityId' },
             to: { type: 'string', description: 'Instagram-scoped user id' },
             message: { type: 'string', maxLength: 4096 },
           },
@@ -1067,7 +1066,7 @@ export function buildOpenApiDocument() {
                       data: {
                         type: 'object',
                         properties: {
-                          store_id: { type: 'string', format: 'uuid' },
+                          store_id: { $ref: '#/components/schemas/EntityId' },
                           payment_config: { $ref: '#/components/schemas/MerchantPaymentConfigView' },
                         },
                       },
@@ -1126,7 +1125,7 @@ export function buildOpenApiDocument() {
               name: 'store_id',
               in: 'query',
               required: true,
-              schema: { type: 'string', format: 'uuid' },
+              schema: { $ref: '#/components/schemas/EntityId' },
             },
           ],
           responses: {
@@ -1142,7 +1141,7 @@ export function buildOpenApiDocument() {
                       data: {
                         type: 'object',
                         properties: {
-                          store_id: { type: 'string', format: 'uuid' },
+                          store_id: { $ref: '#/components/schemas/EntityId' },
                           products: {
                             type: 'array',
                             items: { $ref: '#/components/schemas/Product' },
@@ -1189,7 +1188,7 @@ export function buildOpenApiDocument() {
                   type: 'object',
                   required: ['store_id', 'images'],
                   properties: {
-                    store_id: { type: 'string', format: 'uuid' },
+                    store_id: { $ref: '#/components/schemas/EntityId' },
                     images: {
                       type: 'array',
                       items: { type: 'string', format: 'binary' },
@@ -1245,7 +1244,7 @@ export function buildOpenApiDocument() {
               name: 'productId',
               in: 'path',
               required: true,
-              schema: { type: 'string', format: 'uuid' },
+              schema: { $ref: '#/components/schemas/EntityId' },
             },
           ],
           responses: {
@@ -1264,7 +1263,7 @@ export function buildOpenApiDocument() {
               name: 'productId',
               in: 'path',
               required: true,
-              schema: { type: 'string', format: 'uuid' },
+              schema: { $ref: '#/components/schemas/EntityId' },
             },
           ],
           requestBody: {
@@ -1284,7 +1283,7 @@ export function buildOpenApiDocument() {
               name: 'productId',
               in: 'path',
               required: true,
-              schema: { type: 'string', format: 'uuid' },
+              schema: { $ref: '#/components/schemas/EntityId' },
             },
           ],
           requestBody: {
@@ -1302,8 +1301,8 @@ export function buildOpenApiDocument() {
           summary: 'Update product variant',
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: 'productId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-            { name: 'variantId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'productId', in: 'path', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
+            { name: 'variantId', in: 'path', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
           ],
           requestBody: {
             required: true,
@@ -1316,8 +1315,8 @@ export function buildOpenApiDocument() {
           summary: 'Delete product variant',
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: 'productId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-            { name: 'variantId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'productId', in: 'path', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
+            { name: 'variantId', in: 'path', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
           ],
           responses: { '200': { description: 'Variant deleted' } },
         },
@@ -1332,7 +1331,7 @@ export function buildOpenApiDocument() {
               name: 'store_id',
               in: 'query',
               required: true,
-              schema: { type: 'string', format: 'uuid' },
+              schema: { $ref: '#/components/schemas/EntityId' },
             },
           ],
           responses: { '200': { description: 'Category list' } },
@@ -1356,7 +1355,7 @@ export function buildOpenApiDocument() {
           summary: 'Update category',
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: 'categoryId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'categoryId', in: 'path', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
           ],
           requestBody: {
             required: true,
@@ -1369,7 +1368,7 @@ export function buildOpenApiDocument() {
           summary: 'Delete category',
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: 'categoryId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'categoryId', in: 'path', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
           ],
           responses: { '200': { description: 'Category deleted' } },
         },
@@ -1380,7 +1379,7 @@ export function buildOpenApiDocument() {
           summary: 'Sync products assigned to category',
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: 'categoryId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'categoryId', in: 'path', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
           ],
           requestBody: {
             required: true,
@@ -1392,7 +1391,7 @@ export function buildOpenApiDocument() {
                   properties: {
                     product_ids: {
                       type: 'array',
-                      items: { type: 'string', format: 'uuid' },
+                      items: { $ref: '#/components/schemas/EntityId' },
                     },
                   },
                 },
@@ -1408,7 +1407,7 @@ export function buildOpenApiDocument() {
           summary: 'List orders for store',
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'store_id', in: 'query', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
           ],
           responses: {
             '200': {
@@ -1456,8 +1455,8 @@ export function buildOpenApiDocument() {
           summary: 'Get order detail',
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'orderId', in: 'path', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
+            { name: 'store_id', in: 'query', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
           ],
           responses: {
             '200': {
@@ -1482,7 +1481,7 @@ export function buildOpenApiDocument() {
           description: 'Update `order_status`, `payment_status`, and/or `fulfillment_status`.',
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'orderId', in: 'path', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
           ],
           requestBody: {
             required: true,
@@ -1500,8 +1499,8 @@ export function buildOpenApiDocument() {
           description: 'Sets `merchant_viewed_at` to clear unread badge for this order.',
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'orderId', in: 'path', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
+            { name: 'store_id', in: 'query', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
           ],
           responses: { '200': { description: 'Order marked as viewed' } },
         },
@@ -1512,7 +1511,7 @@ export function buildOpenApiDocument() {
           summary: 'List customers for store',
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'store_id', in: 'query', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
           ],
           responses: {
             '200': {
@@ -1602,7 +1601,7 @@ export function buildOpenApiDocument() {
           summary: 'List WhatsApp conversations',
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'store_id', in: 'query', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
           ],
           responses: { '200': { description: 'Conversation list' } },
         },
@@ -1617,9 +1616,9 @@ export function buildOpenApiDocument() {
               name: 'conversationId',
               in: 'path',
               required: true,
-              schema: { type: 'string', format: 'uuid' },
+              schema: { $ref: '#/components/schemas/EntityId' },
             },
-            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'store_id', in: 'query', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
           ],
           responses: { '200': { description: 'Unread count reset to 0' } },
         },
@@ -1634,9 +1633,9 @@ export function buildOpenApiDocument() {
               name: 'conversationId',
               in: 'path',
               required: true,
-              schema: { type: 'string', format: 'uuid' },
+              schema: { $ref: '#/components/schemas/EntityId' },
             },
-            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'store_id', in: 'query', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
             { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 30 } },
             { name: 'cursor', in: 'query', schema: { type: 'string' } },
           ],
@@ -1687,7 +1686,7 @@ export function buildOpenApiDocument() {
           summary: 'List Instagram conversations',
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'store_id', in: 'query', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
           ],
           responses: { '200': { description: 'Conversation list' } },
         },
@@ -1698,8 +1697,8 @@ export function buildOpenApiDocument() {
           summary: 'Mark Instagram conversation as read',
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: 'conversationId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'conversationId', in: 'path', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
+            { name: 'store_id', in: 'query', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
           ],
           responses: { '200': { description: 'Unread count reset' } },
         },
@@ -1710,8 +1709,8 @@ export function buildOpenApiDocument() {
           summary: 'List messages in an Instagram conversation',
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: 'conversationId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-            { name: 'store_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'conversationId', in: 'path', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
+            { name: 'store_id', in: 'query', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
             { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 30 } },
             { name: 'cursor', in: 'query', schema: { type: 'string' } },
           ],
@@ -1857,7 +1856,7 @@ export function buildOpenApiDocument() {
               name: 'checkout_id',
               in: 'query',
               required: true,
-              schema: { type: 'string', format: 'uuid' },
+              schema: { $ref: '#/components/schemas/EntityId' },
             },
           ],
           responses: {
@@ -1873,7 +1872,7 @@ export function buildOpenApiDocument() {
                         type: 'object',
                         properties: {
                           status: { type: 'string', enum: ['pending', 'paid', 'failed'] },
-                          checkout_id: { type: 'string', format: 'uuid' },
+                          checkout_id: { $ref: '#/components/schemas/EntityId' },
                           subscription_plan: { type: 'string', nullable: true },
                           subscription_expires_at: { type: 'string', format: 'date', nullable: true },
                         },
@@ -1986,13 +1985,13 @@ export function buildOpenApiDocument() {
             {
               name: 'category_id',
               in: 'query',
-              schema: { type: 'string', format: 'uuid' },
+              schema: { $ref: '#/components/schemas/EntityId' },
               description: 'Filter products to this category only',
             },
             {
               name: 'product_id',
               in: 'query',
-              schema: { type: 'string', format: 'uuid' },
+              schema: { $ref: '#/components/schemas/EntityId' },
               description: 'Return only this product in the products array',
             },
             {
@@ -2022,8 +2021,8 @@ export function buildOpenApiDocument() {
                         data: {
                           categories: [
                             {
-                              id: '11111111-1111-1111-1111-111111111111',
-                              store_id: '22222222-2222-2222-2222-222222222222',
+                              id: 1,
+                              store_id: 2,
                               parent_id: null,
                               name: 'Electronics',
                               image_url: null,
@@ -2033,9 +2032,9 @@ export function buildOpenApiDocument() {
                               created_at: '2026-05-19T10:00:00.000Z',
                               subcategories: [
                                 {
-                                  id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-                                  store_id: '22222222-2222-2222-2222-222222222222',
-                                  parent_id: '11111111-1111-1111-1111-111111111111',
+                                  id: 3,
+                                  store_id: 2,
+                                  parent_id: 1,
                                   name: 'Phones',
                                   image_url: null,
                                   sort_order: 0,
@@ -2049,9 +2048,9 @@ export function buildOpenApiDocument() {
                           ],
                           products: [
                             {
-                              id: '33333333-3333-3333-3333-333333333333',
-                              store_id: '22222222-2222-2222-2222-222222222222',
-                              category_id: '11111111-1111-1111-1111-111111111111',
+                              id: 4,
+                              store_id: 2,
+                              category_id: 1,
                               name: 'Premium Headphones',
                               description: 'Wireless noise cancelling',
                               sku: 'SKU-001',
@@ -2071,8 +2070,8 @@ export function buildOpenApiDocument() {
                               sold_out: false,
                               variants: [
                                 {
-                                  id: '44444444-4444-4444-4444-444444444444',
-                                  product_id: '33333333-3333-3333-3333-333333333333',
+                                  id: 5,
+                                  product_id: 4,
                                   name: 'Black',
                                   options: { Color: 'Black' },
                                   price_delta: 0,
@@ -2089,9 +2088,9 @@ export function buildOpenApiDocument() {
                               ],
                             },
                             {
-                              id: '55555555-5555-5555-5555-555555555555',
-                              store_id: '22222222-2222-2222-2222-222222222222',
-                              category_id: '11111111-1111-1111-1111-111111111111',
+                              id: 6,
+                              store_id: 2,
+                              category_id: 1,
                               name: 'Vintage Camera',
                               description: 'Limited edition — no longer available',
                               sku: 'SKU-002',
@@ -2123,8 +2122,8 @@ export function buildOpenApiDocument() {
                         data: {
                           categories: [
                             {
-                              id: '11111111-1111-1111-1111-111111111111',
-                              store_id: '22222222-2222-2222-2222-222222222222',
+                              id: 1,
+                              store_id: 2,
                               parent_id: null,
                               name: 'Electronics',
                               image_url: null,
@@ -2134,9 +2133,9 @@ export function buildOpenApiDocument() {
                               created_at: '2026-05-19T10:00:00.000Z',
                               subcategories: [
                                 {
-                                  id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-                                  store_id: '22222222-2222-2222-2222-222222222222',
-                                  parent_id: '11111111-1111-1111-1111-111111111111',
+                                  id: 3,
+                                  store_id: 2,
+                                  parent_id: 1,
                                   name: 'Phones',
                                   image_url: null,
                                   sort_order: 0,
@@ -2150,9 +2149,9 @@ export function buildOpenApiDocument() {
                           ],
                           products: [
                             {
-                              id: '33333333-3333-3333-3333-333333333333',
-                              store_id: '22222222-2222-2222-2222-222222222222',
-                              category_id: '11111111-1111-1111-1111-111111111111',
+                              id: 4,
+                              store_id: 2,
+                              category_id: 1,
                               name: 'Premium Headphones',
                               description: null,
                               sku: null,
@@ -2184,8 +2183,8 @@ export function buildOpenApiDocument() {
                         data: {
                           categories: [
                             {
-                              id: '11111111-1111-1111-1111-111111111111',
-                              store_id: '22222222-2222-2222-2222-222222222222',
+                              id: 1,
+                              store_id: 2,
                               parent_id: null,
                               name: 'Electronics',
                               image_url: null,
@@ -2195,9 +2194,9 @@ export function buildOpenApiDocument() {
                               created_at: '2026-05-19T10:00:00.000Z',
                               subcategories: [
                                 {
-                                  id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-                                  store_id: '22222222-2222-2222-2222-222222222222',
-                                  parent_id: '11111111-1111-1111-1111-111111111111',
+                                  id: 3,
+                                  store_id: 2,
+                                  parent_id: 1,
                                   name: 'Phones',
                                   image_url: null,
                                   sort_order: 0,
@@ -2315,7 +2314,7 @@ export function buildOpenApiDocument() {
             'Requires the `checkout_token` returned from POST /api/public/orders. Used after Razorpay checkout.',
           parameters: [
             { name: 'X-Store-Slug', in: 'header', schema: { type: 'string' } },
-            { name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+            { name: 'orderId', in: 'path', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
             {
               name: 'token',
               in: 'query',

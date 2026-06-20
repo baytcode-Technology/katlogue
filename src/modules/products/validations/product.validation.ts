@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { entityId, optionalEntityId } from '../../../shared/validations/zod-helpers.js'
 
 export const productStatusSchema = z.enum(['active', 'draft', 'unlisted'])
 
@@ -21,10 +22,10 @@ export const createProductVariantSchema = z.object({
 })
 
 export const createProductSchema = z.object({
-  store_id: z.uuid('Invalid store id'),
+  store_id: entityId('Invalid store id'),
   name: z.string().trim().min(1, 'Product name is required').max(500),
   base_price: z.coerce.number().min(0, 'Base price must be 0 or greater'),
-  category_id: z.uuid('Invalid category id').optional(),
+  category_id: optionalEntityId('Invalid category id'),
   description: z.string().trim().max(5000).optional(),
   sku: z.string().trim().max(100).optional(),
   compare_at_price: z
@@ -55,17 +56,17 @@ export const createProductSchema = z.object({
 export type CreateProductBody = z.infer<typeof createProductSchema>
 
 export const productIdParamSchema = z.object({
-  productId: z.uuid('Invalid product id'),
+  productId: entityId('Invalid product id'),
 })
 
 const optionalUrl = z.union([z.string().url('Must be a valid URL'), z.null()])
-const optionalUuid = z.union([z.uuid('Invalid category id'), z.null()])
+const optionalCategoryId = z.union([entityId('Invalid category id'), z.null()])
 
 export const updateProductSchema = z
   .object({
     name: z.string().trim().min(1, 'Product name cannot be empty').max(500).optional(),
     base_price: z.coerce.number().min(0, 'Base price must be 0 or greater').optional(),
-    category_id: optionalUuid.optional(),
+    category_id: optionalCategoryId.optional(),
     description: z.union([z.string().trim().max(5000), z.null()]).optional(),
     sku: z.union([z.string().trim().max(100), z.null()]).optional(),
     compare_at_price: z.union([
@@ -91,8 +92,8 @@ export type UpdateProductBody = z.infer<typeof updateProductSchema>
 export type ProductIdParam = z.infer<typeof productIdParamSchema>
 
 export const productVariantParamsSchema = z.object({
-  productId: z.uuid('Invalid product id'),
-  variantId: z.uuid('Invalid variant id'),
+  productId: entityId('Invalid product id'),
+  variantId: entityId('Invalid variant id'),
 })
 
 export const updateProductVariantSchema = z

@@ -1,6 +1,6 @@
 export type IndustryRow = {
-  id: string
-  parent_id: string | null
+  id: number
+  parent_id: number | null
   name: string
   slug: string
   sort_order: number
@@ -9,13 +9,13 @@ export type IndustryRow = {
 }
 
 export type IndustryChild = {
-  id: string
+  id: number
   name: string
   slug: string
 }
 
 export type IndustryGroup = {
-  id: string
+  id: number
   name: string
   slug: string
   children: IndustryChild[]

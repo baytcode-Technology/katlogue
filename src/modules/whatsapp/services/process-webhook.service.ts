@@ -15,7 +15,7 @@ import { markAsRead, resolveStoreWhatsAppCredentials } from './whatsapp.service.
 import type { ParsedWebhookMessage } from './whatsapp.service.js'
 
 async function persistMessage(input: {
-  storeId: string
+  storeId: number
   store: Awaited<ReturnType<typeof storeRepository.findStoreByWhatsAppWebhookTarget>>
   event: WebhookFieldEvent
   msg: ParsedWebhookMessage
@@ -59,8 +59,8 @@ async function persistMessage(input: {
 }
 
 function emitNewMessage(
-  storeId: string,
-  conversationId: string,
+  storeId: number,
+  conversationId: number,
   message: NonNullable<Awaited<ReturnType<typeof chatRepository.insertMessage>>>
 ) {
   emitToStore(storeId, SOCKET_EVENTS.MESSAGE_NEW, {

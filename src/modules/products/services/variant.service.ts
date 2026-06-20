@@ -3,7 +3,7 @@ import * as variantRepository from '../repositories/product-variant.repository.j
 import { AppError } from '../../../shared/errors/app.error.js'
 import type { CreateProductVariantInput, ProductVariant, UpdateProductVariantInput } from '../types/product-variant.types.js'
 
-async function assertProductAccess(ownerId: string, productId: string) {
+async function assertProductAccess(ownerId: string, productId: number) {
   const product = await productRepository.findProductById(productId)
   if (!product) {
     throw new AppError(404, 'Product not found', 'PRODUCT_NOT_FOUND')
@@ -14,7 +14,7 @@ async function assertProductAccess(ownerId: string, productId: string) {
 
 export async function createVariant(
   ownerId: string,
-  productId: string,
+  productId: number,
   input: CreateProductVariantInput
 ): Promise<ProductVariant> {
   const product = await assertProductAccess(ownerId, productId)
@@ -32,8 +32,8 @@ export async function createVariant(
 
 export async function updateVariant(
   ownerId: string,
-  productId: string,
-  variantId: string,
+  productId: number,
+  variantId: number,
   input: UpdateProductVariantInput
 ): Promise<ProductVariant> {
   await assertProductAccess(ownerId, productId)
@@ -43,8 +43,8 @@ export async function updateVariant(
 
 export async function deleteVariant(
   ownerId: string,
-  productId: string,
-  variantId: string
+  productId: number,
+  variantId: number
 ): Promise<void> {
   await assertProductAccess(ownerId, productId)
   await variantRepository.assertVariantBelongsToProduct(variantId, productId)

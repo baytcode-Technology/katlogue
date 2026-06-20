@@ -5,7 +5,7 @@ import { AppError } from '../../../shared/errors/app.error.js'
 import { verifyPlatformPaymentSignature } from './platform-razorpay.service.js'
 
 export async function activateSubscriptionFromCheckout(input: {
-  checkoutId: string
+  checkoutId: number
   providerPaymentId: string
   paidAt?: string
 }): Promise<{ store: Awaited<ReturnType<typeof storeRepository.activateBusinessSubscription>> }> {
@@ -68,7 +68,7 @@ export async function activateSubscriptionByProviderOrderId(input: {
 
 export async function verifyAndActivateSubscription(input: {
   ownerId: string
-  checkoutId: string
+  checkoutId: number
   razorpayOrderId: string
   razorpayPaymentId: string
   razorpaySignature: string

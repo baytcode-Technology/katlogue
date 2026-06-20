@@ -7,8 +7,8 @@ import type { InstagramConversation } from '../types/instagram-chat.types.js'
 
 export async function markInstagramChatRead(
   ownerId: string,
-  storeId: string,
-  conversationId: string
+  storeId: number,
+  conversationId: number
 ): Promise<InstagramConversation> {
   await storeRepository.assertStoreOwner(storeId, ownerId)
 

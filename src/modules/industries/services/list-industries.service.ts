@@ -4,7 +4,7 @@ import type { IndustryGroup } from '../types/industry.types.js'
 export async function listIndustryGroups(): Promise<IndustryGroup[]> {
   const rows = await industryRepository.listActiveIndustries()
   const parents = rows.filter((row) => row.parent_id === null)
-  const childrenByParent = new Map<string, IndustryGroup['children']>()
+  const childrenByParent = new Map<number, IndustryGroup['children']>()
 
   for (const row of rows) {
     if (!row.parent_id) continue

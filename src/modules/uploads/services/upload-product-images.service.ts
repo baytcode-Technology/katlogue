@@ -48,7 +48,7 @@ function extensionFromMime(mime: string): string {
 
 export async function uploadProductImages(
   ownerId: string,
-  storeId: string,
+  storeId: number,
   files: { buffer: Buffer; mimetype: string }[]
 ): Promise<string[]> {
   if (!files.length) {

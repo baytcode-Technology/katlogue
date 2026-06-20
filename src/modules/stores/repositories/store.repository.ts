@@ -5,7 +5,7 @@ import type { StoredNotificationPreferences } from '../../notifications/types/no
 import type { CreateStoreInput, Store, UpdateStoreInput } from '../types/store.types.js'
 
 export async function assertStoreOwner(
-  storeId: string,
+  storeId: number,
   ownerId: string
 ): Promise<void> {
   const { data, error } = await supabaseAdmin
@@ -69,7 +69,7 @@ export async function insertStore(
   return data as Store
 }
 
-export async function updateStore(storeId: string, patch: UpdateStoreInput): Promise<Store> {
+export async function updateStore(storeId: number, patch: UpdateStoreInput): Promise<Store> {
   const row: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   }
@@ -121,7 +121,7 @@ export async function findStoreByOwnerId(ownerId: string): Promise<Store | null>
   return data as Store | null
 }
 
-export async function findStoreById(storeId: string): Promise<Store | null> {
+export async function findStoreById(storeId: number): Promise<Store | null> {
   const { data, error } = await supabaseAdmin
     .from('stores')
     .select('*')
@@ -136,7 +136,7 @@ export async function findStoreById(storeId: string): Promise<Store | null> {
 }
 
 export async function updateWhatsAppConnection(input: {
-  storeId: string
+  storeId: number
   waPhoneNumberId: string | null
   waWabaId: string | null
   waAccessToken: string | null
@@ -163,7 +163,7 @@ export async function updateWhatsAppConnection(input: {
 }
 
 export async function updateInstagramConnection(input: {
-  storeId: string
+  storeId: number
   igUserId: string | null
   igUsername: string | null
   igAccessToken: string | null
@@ -258,7 +258,7 @@ export async function findStoreByWhatsAppWebhookTarget(input: {
 }
 
 export async function updatePaymentConfig(
-  storeId: string,
+  storeId: number,
   paymentConfig: StoredPaymentConfig
 ): Promise<Store> {
   const { data, error } = await supabaseAdmin
@@ -279,7 +279,7 @@ export async function updatePaymentConfig(
 }
 
 export async function updateNotificationPreferences(
-  storeId: string,
+  storeId: number,
   preferences: StoredNotificationPreferences
 ): Promise<Store> {
   const { data, error } = await supabaseAdmin
@@ -314,7 +314,7 @@ export async function findActiveStoreBySlug(slug: string): Promise<Store | null>
   return data as Store | null
 }
 
-export async function incrementProductCount(storeId: string): Promise<void> {
+export async function incrementProductCount(storeId: number): Promise<void> {
   const store = await findStoreById(storeId)
   if (!store) return
 
@@ -331,7 +331,7 @@ export async function incrementProductCount(storeId: string): Promise<void> {
   }
 }
 
-export async function incrementOrderCount(storeId: string): Promise<void> {
+export async function incrementOrderCount(storeId: number): Promise<void> {
   const store = await findStoreById(storeId)
   if (!store) return
 
@@ -349,7 +349,7 @@ export async function incrementOrderCount(storeId: string): Promise<void> {
 }
 
 export async function activateBusinessSubscription(
-  storeId: string,
+  storeId: number,
   expiresAt: string
 ): Promise<Store> {
   const { data, error } = await supabaseAdmin

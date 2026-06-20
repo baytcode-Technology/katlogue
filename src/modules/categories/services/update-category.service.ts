@@ -5,7 +5,7 @@ import type { Category, UpdateCategoryInput } from '../types/category.types.js'
 
 export async function updateCategory(
   ownerId: string,
-  categoryId: string,
+  categoryId: number,
   input: UpdateCategoryInput
 ): Promise<Category> {
   const existing = await categoryRepository.findCategoryById(categoryId)

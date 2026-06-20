@@ -12,8 +12,8 @@ export const getOrder = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError(401, 'Unauthorized', 'UNAUTHORIZED')
   }
 
-  const { store_id: storeId } = req.query as GetOrderQuery
-  const { orderId } = req.params as OrderIdParam
+  const { store_id: storeId } = req.validatedQuery as GetOrderQuery
+  const { orderId } = req.params as unknown as OrderIdParam
 
   const order = await getOrderService.getOrderById(req.authUser.id, storeId, orderId)
 

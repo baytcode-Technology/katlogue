@@ -9,10 +9,10 @@ export const SOCKET_EVENTS = {
 } as const
 
 export type SocketMessagePayload = {
-  storeId: string
-  conversationId: string
+  storeId: number
+  conversationId: number
   message: {
-    id: string
+    id: number
     meta_message_id: string
     direction: string
     type: string
@@ -25,16 +25,16 @@ export type SocketMessagePayload = {
 }
 
 export type SocketStatusPayload = {
-  storeId: string
-  conversationId: string
+  storeId: number
+  conversationId: number
   metaMessageId: string
   status: string
 }
 
 export type SocketConversationPayload = {
-  storeId: string
+  storeId: number
   conversation: {
-    id: string
+    id: number
     customer_wa_number: string
     last_message_at: string | null
     last_message_preview: string | null
@@ -43,10 +43,10 @@ export type SocketConversationPayload = {
 }
 
 export type SocketInstagramMessagePayload = {
-  storeId: string
-  conversationId: string
+  storeId: number
+  conversationId: number
   message: {
-    id: string
+    id: number
     meta_message_id: string
     direction: string
     type: string
@@ -59,9 +59,9 @@ export type SocketInstagramMessagePayload = {
 }
 
 export type SocketInstagramConversationPayload = {
-  storeId: string
+  storeId: number
   conversation: {
-    id: string
+    id: number
     customer_ig_id: string
     customer_ig_username: string | null
     last_message_at: string | null
@@ -71,9 +71,9 @@ export type SocketInstagramConversationPayload = {
 }
 
 export type SocketOrderNewPayload = {
-  storeId: string
+  storeId: number
   order: {
-    id: string
+    id: number
     order_number: string
     total: number
     currency: string

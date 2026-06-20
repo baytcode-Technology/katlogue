@@ -1,11 +1,12 @@
 import { z } from 'zod'
+import { entityId } from '../../../shared/validations/zod-helpers.js'
 
 export const listCustomersQuerySchema = z.object({
-  store_id: z.uuid('Invalid store id'),
+  store_id: entityId('Invalid store id'),
 })
 
 export const createCustomerSchema = z.object({
-  store_id: z.uuid('Invalid store id'),
+  store_id: entityId('Invalid store id'),
   name: z.string().trim().min(1, 'Customer name is required').max(200),
   email: z.email('Invalid email').optional().or(z.literal('')),
   phone: z.string().trim().min(8).max(20).optional().or(z.literal('')),

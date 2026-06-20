@@ -10,7 +10,7 @@ export type OrderListItem = OrderWithCustomer & {
 
 export async function listOrdersByStore(
   ownerId: string,
-  storeId: string
+  storeId: number
 ): Promise<OrderListItem[]> {
   await storeRepository.assertStoreOwner(storeId, ownerId)
 
@@ -18,7 +18,7 @@ export async function listOrdersByStore(
   const orderIds = orders.map((o) => o.id)
   const allItems = await orderRepository.findOrderItemsByOrderIds(orderIds)
 
-  const itemsByOrder = new Map<string, OrderItem[]>()
+  const itemsByOrder = new Map<number, OrderItem[]>()
   for (const item of allItems) {
     const list = itemsByOrder.get(item.order_id) ?? []
     list.push(item)

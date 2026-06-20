@@ -4,8 +4,10 @@ import { AppError } from '../../../shared/errors/app.error.js'
 import { z } from 'zod'
 import * as uploadService from '../services/upload-product-images.service.js'
 
+import { entityId } from '../../../shared/validations/zod-helpers.js'
+
 const bodySchema = z.object({
-  store_id: z.uuid('Invalid store id'),
+  store_id: entityId('Invalid store id'),
 })
 
 export const uploadProductImages = asyncHandler(async (req: Request, res: Response) => {

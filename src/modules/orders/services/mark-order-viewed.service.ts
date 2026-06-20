@@ -5,8 +5,8 @@ import type { OrderWithCustomer } from '../repositories/order.repository.js'
 
 export async function markOrderViewedByMerchant(
   ownerId: string,
-  storeId: string,
-  orderId: string
+  storeId: number,
+  orderId: number
 ): Promise<OrderWithCustomer> {
   await storeRepository.assertStoreOwner(storeId, ownerId)
 

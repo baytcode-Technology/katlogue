@@ -1,6 +1,6 @@
 export type ProductVariant = {
-  id: string
-  product_id: string
+  id: number
+  product_id: number
   name: string
   options: Record<string, unknown>
   price_delta: number

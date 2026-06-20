@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { entityId } from '../../../shared/validations/zod-helpers.js'
 
 export const orderLifecycleStatusSchema = z.enum([
   'pending',
@@ -22,7 +23,7 @@ export const orderFulfillmentStatusSchema = z.enum([
 
 export const updateOrderSchema = z
   .object({
-    store_id: z.uuid('Invalid store id'),
+    store_id: entityId('Invalid store id'),
     order_status: orderLifecycleStatusSchema.optional(),
     payment_status: orderPaymentStatusSchema.optional(),
     fulfillment_status: orderFulfillmentStatusSchema.optional(),
@@ -36,14 +37,13 @@ export const updateOrderSchema = z
   )
 
 export const getOrderQuerySchema = z.object({
-  store_id: z.uuid('Invalid store id'),
+  store_id: entityId('Invalid store id'),
 })
 
 export const orderIdParamSchema = z.object({
-  orderId: z.uuid('Invalid order id'),
+  orderId: entityId('Invalid order id'),
 })
 
 export type UpdateOrderBody = z.infer<typeof updateOrderSchema>
 export type GetOrderQuery = z.infer<typeof getOrderQuerySchema>
 export type OrderIdParam = z.infer<typeof orderIdParamSchema>
-

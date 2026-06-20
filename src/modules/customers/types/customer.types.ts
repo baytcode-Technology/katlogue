@@ -1,5 +1,5 @@
 export type SavedShippingAddress = {
-  id: string
+  id: number
   name: string
   phone_number: string
   address: string
@@ -11,15 +11,15 @@ export type SavedShippingAddress = {
 }
 
 export type Customer = {
-  id: string
-  store_id: string
+  id: number
+  store_id: number
   whatsapp_number: string
   name: string | null
   email: string | null
   /** @deprecated Use shipping_addresses */
   address: Record<string, unknown>
   shipping_addresses: SavedShippingAddress[]
-  order_ids: string[]
+  order_ids: number[]
   tags: string[]
   notes: string | null
   total_orders: number
@@ -35,14 +35,14 @@ export type UpsertCustomerInput = {
 }
 
 export type StorefrontCustomerOrderSummary = {
-  id: string
+  id: number
   order_number: string
   total: number
   created_at: string
 }
 
 export type PublicCustomerByPhone = {
-  id: string
+  id: number
   name: string | null
   phone_number: string
   shipping_addresses: SavedShippingAddress[]

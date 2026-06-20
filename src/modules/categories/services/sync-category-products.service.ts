@@ -3,9 +3,9 @@ import { AppError } from '../../../shared/errors/app.error.js'
 
 export async function syncCategoryProducts(
   ownerId: string,
-  categoryId: string,
-  storeId: string,
-  productIds: string[]
+  categoryId: number,
+  storeId: number,
+  productIds: number[]
 ): Promise<{ assigned: number; removed: number }> {
   await productRepository.assertStoreOwner(storeId, ownerId)
   await productRepository.assertCategoryBelongsToStore(categoryId, storeId)

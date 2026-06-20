@@ -1,10 +1,10 @@
 export type Category = {
 
-  id: string
+  id: number
 
-  store_id: string
+  store_id: number
 
-  parent_id: string | null
+  parent_id: number | null
 
   name: string
 
@@ -32,7 +32,7 @@ export type UpdateCategoryInput = Partial<{
 
   description: string | null
 
-  parent_id: string | null
+  parent_id: number | null
 
   sort_order: number
 
@@ -50,11 +50,11 @@ export type CategoryWithProductCount = Category & {
 
 export type CreateCategoryInput = {
 
-  store_id: string
+  store_id: number
 
   name: string
 
-  parent_id?: string
+  parent_id?: number
 
   image_url?: string | null
 

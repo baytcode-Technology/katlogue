@@ -13,12 +13,12 @@ import { AppError } from '../../../shared/errors/app.error.js'
 import { assertPremiumAccess } from '../../../shared/lib/subscription.js'
 
 export type OnboardCoexistenceInput = {
-  storeId: string
+  storeId: number
   token: MetaTokenExchangeResult
 }
 
 export type OnboardCoexistenceResult = {
-  storeId: string
+  storeId: number
   phoneNumberId: string | null
   wabaId: string | null
   whatsappNumber: string | null
@@ -82,7 +82,7 @@ export async function onboardCoexistenceStore(
   }
 }
 
-export async function getConnectionStatus(storeId: string) {
+export async function getConnectionStatus(storeId: number) {
   const store = await storeRepository.findStoreById(storeId)
   if (!store) throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
 

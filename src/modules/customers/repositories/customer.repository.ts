@@ -13,12 +13,14 @@ function mapCustomerRow(row: Record<string, unknown>): Customer {
   return {
     ...(row as Customer),
     shipping_addresses: parseSavedShippingAddresses(row.shipping_addresses),
-    order_ids: Array.isArray(row.order_ids) ? (row.order_ids as string[]) : [],
+    order_ids: Array.isArray(row.order_ids)
+      ? (row.order_ids as unknown[]).map((id) => Number(id)).filter((id) => !Number.isNaN(id))
+      : [],
   }
 }
 
 export async function findCustomerByPhone(
-  storeId: string,
+  storeId: number,
   phone: string
 ): Promise<Customer | null> {
   const normalized = normalizeWhatsAppNumber(phone)
@@ -38,7 +40,7 @@ export async function findCustomerByPhone(
 }
 
 export async function resolveStorefrontCustomer(input: {
-  storeId: string
+  storeId: number
   phone: string
   shippingAddress: StorefrontShippingAddress
   email?: string
@@ -99,9 +101,9 @@ export async function resolveStorefrontCustomer(input: {
 }
 
 export async function appendOrderToCustomer(
-  customerId: string,
-  storeId: string,
-  orderId: string,
+  customerId: number,
+  storeId: number,
+  orderId: number,
   orderTotal: number
 ): Promise<void> {
   const customer = await findCustomerById(customerId, storeId)
@@ -130,7 +132,7 @@ export async function appendOrderToCustomer(
 }
 
 export async function findOrCreateByWhatsApp(
-  storeId: string,
+  storeId: number,
   whatsappNumber: string,
   profile: UpsertCustomerInput = {}
 ): Promise<Customer> {
@@ -200,7 +202,7 @@ export async function findOrCreateByWhatsApp(
 }
 
 export async function findOrCreateByInstagram(
-  storeId: string,
+  storeId: number,
   igUserId: string,
   profile: { username?: string | null; name?: string | null } = {}
 ): Promise<Customer> {
@@ -270,7 +272,7 @@ export async function findOrCreateByInstagram(
   return mapCustomerRow(created as Record<string, unknown>)
 }
 
-export async function findCustomersByStoreId(storeId: string): Promise<Customer[]> {
+export async function findCustomersByStoreId(storeId: number): Promise<Customer[]> {
   const { data, error } = await supabaseAdmin
     .from('customers')
     .select('*')
@@ -286,8 +288,8 @@ export async function findCustomersByStoreId(storeId: string): Promise<Customer[
 }
 
 export async function findCustomerById(
-  customerId: string,
-  storeId: string
+  customerId: number,
+  storeId: number
 ): Promise<Customer | null> {
   const { data, error } = await supabaseAdmin
     .from('customers')
@@ -304,9 +306,9 @@ export async function findCustomerById(
 }
 
 export async function findOrderSummariesForCustomer(
-  storeId: string,
-  orderIds: string[]
-): Promise<Array<{ id: string; order_number: string; total: number; created_at: string }>> {
+  storeId: number,
+  orderIds: number[]
+): Promise<Array<{ id: number; order_number: string; total: number; created_at: string }>> {
   if (orderIds.length === 0) return []
 
   const { data, error } = await supabaseAdmin
@@ -321,7 +323,7 @@ export async function findOrderSummariesForCustomer(
   }
 
   return (data ?? []) as Array<{
-    id: string
+    id: number
     order_number: string
     total: number
     created_at: string
@@ -329,7 +331,7 @@ export async function findOrderSummariesForCustomer(
 }
 
 export async function insertCustomer(input: {
-  store_id: string
+  store_id: number
   whatsapp_number: string
   name?: string | null
   email?: string | null

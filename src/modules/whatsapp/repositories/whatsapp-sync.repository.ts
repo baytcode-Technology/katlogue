@@ -6,7 +6,7 @@ export type SyncJobStatus = 'pending' | 'in_progress' | 'completed' | 'failed' |
 
 export type WhatsAppSyncJob = {
   id: string
-  store_id: string
+  store_id: number
   sync_type: SyncJobType
   request_id: string | null
   status: SyncJobStatus
@@ -16,7 +16,7 @@ export type WhatsAppSyncJob = {
 }
 
 export async function createSyncJob(input: {
-  storeId: string
+  storeId: number
   syncType: SyncJobType
   requestId: string | null
 }): Promise<WhatsAppSyncJob> {
@@ -62,7 +62,7 @@ export async function updateSyncJob(input: {
   }
 }
 
-export async function listSyncJobs(storeId: string): Promise<WhatsAppSyncJob[]> {
+export async function listSyncJobs(storeId: number): Promise<WhatsAppSyncJob[]> {
   const { data, error } = await supabaseAdmin
     .from('whatsapp_sync_jobs')
     .select('*')
@@ -78,7 +78,7 @@ export async function listSyncJobs(storeId: string): Promise<WhatsAppSyncJob[]> 
 }
 
 export async function findActiveSyncJob(
-  storeId: string,
+  storeId: number,
   syncType: SyncJobType
 ): Promise<WhatsAppSyncJob | null> {
   const { data, error } = await supabaseAdmin

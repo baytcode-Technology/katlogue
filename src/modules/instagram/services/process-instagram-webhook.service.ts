@@ -91,8 +91,8 @@ function parseMessagingEvents(body: unknown): Array<{
 }
 
 function emitNewMessage(
-  storeId: string,
-  conversationId: string,
+  storeId: number,
+  conversationId: number,
   message: NonNullable<Awaited<ReturnType<typeof chatRepository.insertMessage>>>
 ) {
   emitToStore(storeId, SOCKET_EVENTS.INSTAGRAM_MESSAGE_NEW, {
@@ -113,7 +113,7 @@ function emitNewMessage(
 }
 
 function emitConversationUpdated(
-  storeId: string,
+  storeId: number,
   conversation: NonNullable<Awaited<ReturnType<typeof chatRepository.upsertConversation>>>
 ) {
   emitToStore(storeId, SOCKET_EVENTS.INSTAGRAM_CONVERSATION_UPDATED, {

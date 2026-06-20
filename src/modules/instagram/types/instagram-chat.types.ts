@@ -7,9 +7,9 @@ export type InstagramMessageStatus =
   | 'received'
 
 export type InstagramConversation = {
-  id: string
-  store_id: string
-  customer_id: string | null
+  id: number
+  store_id: number
+  customer_id: number | null
   customer_ig_id: string
   customer_ig_username: string | null
   last_message_at: string | null
@@ -20,9 +20,9 @@ export type InstagramConversation = {
 }
 
 export type InstagramMessage = {
-  id: string
-  store_id: string
-  conversation_id: string
+  id: number
+  store_id: number
+  conversation_id: number
   meta_message_id: string
   direction: 'inbound' | 'outbound'
   from_ig_id: string

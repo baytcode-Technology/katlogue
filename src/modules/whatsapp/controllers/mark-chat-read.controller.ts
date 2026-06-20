@@ -11,7 +11,7 @@ export const markChatRead = asyncHandler(async (req: Request, res: Response) => 
   }
 
   const { store_id } = req.validatedQuery as ListChatsQuery
-  const { conversationId } = req.params as ListMessagesParams
+  const { conversationId } = req.params as unknown as ListMessagesParams
   const conversation = await markChatReadService.markWhatsAppChatRead(
     req.authUser.id,
     store_id,

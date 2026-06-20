@@ -13,8 +13,8 @@ export type OrderDetail = OrderWithCustomer & {
 
 export async function getOrderById(
   ownerId: string,
-  storeId: string,
-  orderId: string
+  storeId: number,
+  orderId: number
 ): Promise<OrderDetail> {
   await storeRepository.assertStoreOwner(storeId, ownerId)
 

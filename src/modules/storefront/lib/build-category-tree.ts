@@ -11,7 +11,7 @@ function sortCatalogCategories(nodes: CatalogCategory[]): void {
 }
 
 export function buildCatalogCategoryTree(categories: Category[]): CatalogCategory[] {
-  const map = new Map<string, CatalogCategory>()
+  const map = new Map<number, CatalogCategory>()
   const roots: CatalogCategory[] = []
 
   for (const category of categories) {
@@ -33,8 +33,8 @@ export function buildCatalogCategoryTree(categories: Category[]): CatalogCategor
   return roots
 }
 
-export function collectCategoryIds(tree: CatalogCategory[]): Set<string> {
-  const ids = new Set<string>()
+export function collectCategoryIds(tree: CatalogCategory[]): Set<number> {
+  const ids = new Set<number>()
 
   const walk = (nodes: CatalogCategory[]) => {
     for (const node of nodes) {

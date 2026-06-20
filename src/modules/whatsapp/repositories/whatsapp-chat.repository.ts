@@ -16,13 +16,13 @@ import type {
 
 export async function upsertConversation(input: {
 
-  storeId: string
+  storeId: number
 
   waPhoneNumberId: string
 
   customerWaNumber: string
 
-  customerId?: string | null
+  customerId?: number | null
 
   lastMessageAt: string | null
 
@@ -112,9 +112,9 @@ export async function upsertConversation(input: {
 
 export async function insertMessage(input: {
 
-  storeId: string
+  storeId: number
 
-  conversationId: string
+  conversationId: number
 
   metaMessageId: string
 
@@ -252,7 +252,7 @@ export async function claimWebhookEvent(eventKey: string): Promise<boolean> {
 
 
 
-export async function listConversations(storeId: string): Promise<WhatsAppConversation[]> {
+export async function listConversations(storeId: number): Promise<WhatsAppConversation[]> {
 
   const { data, error } = await supabaseAdmin
 
@@ -284,9 +284,9 @@ export async function listConversations(storeId: string): Promise<WhatsAppConver
 
 export async function listMessages(input: {
 
-  storeId: string
+  storeId: number
 
-  conversationId: string
+  conversationId: number
 
   limit: number
 
@@ -338,9 +338,9 @@ export async function listMessages(input: {
 
 export async function findConversationById(input: {
 
-  storeId: string
+  storeId: number
 
-  conversationId: string
+  conversationId: number
 
 }): Promise<WhatsAppConversation | null> {
 
@@ -374,7 +374,7 @@ export async function findConversationById(input: {
 
 export async function findConversationByCustomer(input: {
 
-  storeId: string
+  storeId: number
 
   customerWaNumber: string
 
@@ -410,7 +410,7 @@ export async function findConversationByCustomer(input: {
 
 export async function getLastInboundMessageAt(input: {
 
-  storeId: string
+  storeId: number
 
   customerWaNumber: string
 
@@ -455,8 +455,8 @@ export async function getLastInboundMessageAt(input: {
 }
 
 export async function resetUnreadCount(input: {
-  storeId: string
-  conversationId: string
+  storeId: number
+  conversationId: number
 }): Promise<WhatsAppConversation> {
   const { data, error } = await supabaseAdmin
     .from('whatsapp_conversations')

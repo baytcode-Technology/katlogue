@@ -1,8 +1,9 @@
 import { z } from 'zod'
+import { optionalEntityId } from '../../../shared/validations/zod-helpers.js'
 
 export const sendTemplateSchema = z.object({
-  storeId: z.string().uuid().optional(),
-  store_id: z.string().uuid().optional(),
+  storeId: optionalEntityId('Invalid store id'),
+  store_id: optionalEntityId('Invalid store id'),
   to: z
     .string()
     .trim()
@@ -13,4 +14,3 @@ export const sendTemplateSchema = z.object({
 })
 
 export type SendTemplateBody = z.infer<typeof sendTemplateSchema>
-

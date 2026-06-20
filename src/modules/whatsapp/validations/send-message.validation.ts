@@ -1,35 +1,18 @@
 import { z } from 'zod'
-
-
+import { entityId, optionalEntityId } from '../../../shared/validations/zod-helpers.js'
 
 export const sendMessageSchema = z
-
   .object({
-
-    storeId: z.string().uuid().optional(),
-
-    store_id: z.string().uuid().optional(),
-
-    conversationId: z.string().uuid().optional(),
-
-    conversation_id: z.string().uuid().optional(),
-
+    storeId: optionalEntityId('Invalid store id'),
+    store_id: optionalEntityId('Invalid store id'),
+    conversationId: optionalEntityId('Invalid conversation id'),
+    conversation_id: optionalEntityId('Invalid conversation id'),
     to: z.string().min(8).max(20),
-
     message: z.string().min(1).max(4096),
-
   })
-
   .refine((v) => Boolean(v.storeId || v.store_id), {
-
     message: 'storeId is required',
-
     path: ['storeId'],
-
   })
-
-
 
 export type SendMessageBody = z.infer<typeof sendMessageSchema>
-
-

@@ -10,8 +10,8 @@ export type CatalogSort =
   | 'price_desc'
 
 export type CatalogQuery = {
-  category_id?: string
-  product_id?: string
+  category_id?: number
+  product_id?: number
   sort: CatalogSort
   min_price?: number
   max_price?: number

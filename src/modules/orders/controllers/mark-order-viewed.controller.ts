@@ -11,7 +11,7 @@ export const markOrderViewed = asyncHandler(async (req: Request, res: Response) 
   }
 
   const { store_id } = req.validatedQuery as GetOrderQuery
-  const { orderId } = req.params as OrderIdParam
+  const { orderId } = req.params as unknown as OrderIdParam
   const order = await markOrderViewedService.markOrderViewedByMerchant(
     req.authUser.id,
     store_id,

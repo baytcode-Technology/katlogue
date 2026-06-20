@@ -1,8 +1,8 @@
 export type SubscriptionCheckoutStatus = 'pending' | 'paid' | 'failed'
 
 export type SubscriptionCheckout = {
-  id: string
-  store_id: string
+  id: number
+  store_id: number
   owner_id: string
   provider: string
   provider_order_id: string
@@ -17,7 +17,7 @@ export type SubscriptionCheckout = {
 }
 
 export type InsertSubscriptionCheckoutRow = {
-  store_id: string
+  store_id: number
   owner_id: string
   provider_order_id: string
   amount: number

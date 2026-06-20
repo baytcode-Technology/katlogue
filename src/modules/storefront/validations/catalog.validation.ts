@@ -1,9 +1,10 @@
 import { z } from 'zod'
+import { optionalEntityId } from '../../../shared/validations/zod-helpers.js'
 
 export const catalogQuerySchema = z
   .object({
-    category_id: z.uuid('Invalid category id').optional(),
-    product_id: z.uuid('Invalid product id').optional(),
+    category_id: optionalEntityId('Invalid category id'),
+    product_id: optionalEntityId('Invalid product id'),
     sort: z
       .enum(['default', 'name_asc', 'name_desc', 'price_asc', 'price_desc'])
       .optional()

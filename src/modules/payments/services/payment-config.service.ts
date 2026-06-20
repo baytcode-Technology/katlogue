@@ -10,7 +10,7 @@ import type { MerchantPaymentConfigView, UpdatePaymentConfigInput } from '../typ
 
 export async function getPaymentConfigForOwner(
   ownerId: string
-): Promise<{ store_id: string; payment_config: MerchantPaymentConfigView }> {
+): Promise<{ store_id: number; payment_config: MerchantPaymentConfigView }> {
   const store = await storeRepository.findStoreByOwnerId(ownerId)
   if (!store) {
     throw new AppError(404, 'No store found', 'STORE_NOT_FOUND')
@@ -31,7 +31,7 @@ export async function getPaymentConfigForOwner(
 export async function updatePaymentConfigForOwner(
   ownerId: string,
   input: UpdatePaymentConfigInput
-): Promise<{ store_id: string; payment_config: MerchantPaymentConfigView }> {
+): Promise<{ store_id: number; payment_config: MerchantPaymentConfigView }> {
   const store = await storeRepository.findStoreByOwnerId(ownerId)
   if (!store) {
     throw new AppError(404, 'No store found', 'STORE_NOT_FOUND')

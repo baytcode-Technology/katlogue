@@ -4,7 +4,7 @@ import { AppError } from '../../../shared/errors/app.error.js'
 import * as activateSubscriptionService from '../services/activate-subscription.service.js'
 
 type VerifyBody = {
-  checkout_id: string
+  checkout_id: number
   razorpay_order_id: string
   razorpay_payment_id: string
   razorpay_signature: string

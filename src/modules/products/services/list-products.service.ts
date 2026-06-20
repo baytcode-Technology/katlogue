@@ -3,7 +3,7 @@ import type { Product } from '../types/product.types.js'
 
 export async function listProductsByStore(
   ownerId: string,
-  storeId: string
+  storeId: number
 ): Promise<Product[]> {
   await productRepository.assertStoreOwner(storeId, ownerId)
   return productRepository.findProductsByStoreId(storeId)

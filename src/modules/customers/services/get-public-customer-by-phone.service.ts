@@ -5,7 +5,7 @@ import {
 import type { PublicCustomerByPhone } from '../types/customer.types.js'
 
 export async function getPublicCustomerByPhoneService(
-  storeId: string,
+  storeId: number,
   phone: string
 ): Promise<PublicCustomerByPhone | null> {
   const customer = await findCustomerByPhone(storeId, phone)

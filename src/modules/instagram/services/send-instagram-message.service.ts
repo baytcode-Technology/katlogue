@@ -13,7 +13,7 @@ import {
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000
 
 async function assertWithinSessionWindow(input: {
-  storeId: string
+  storeId: number
   customerIgId: string
 }) {
   const lastInbound = await chatRepository.getLastInboundMessageAt({
@@ -34,11 +34,11 @@ async function assertWithinSessionWindow(input: {
 }
 
 export type SendInstagramTextInput = {
-  storeId: string
+  storeId: number
   ownerId: string
   to: string
   message: string
-  conversationId?: string | null
+  conversationId?: number | null
 }
 
 export async function sendInstagramTextMessageService(input: SendInstagramTextInput) {

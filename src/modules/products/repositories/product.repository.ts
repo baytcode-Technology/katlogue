@@ -23,7 +23,7 @@ function resolveStatus(input: {
 }
 
 export async function assertStoreOwner(
-  storeId: string,
+  storeId: number,
   ownerId: string
 ): Promise<void> {
   const { data, error } = await supabaseAdmin
@@ -43,8 +43,8 @@ export async function assertStoreOwner(
 }
 
 export async function assertCategoryBelongsToStore(
-  categoryId: string,
-  storeId: string
+  categoryId: number,
+  storeId: number
 ): Promise<void> {
   const { data, error } = await supabaseAdmin
     .from('categories')
@@ -101,7 +101,7 @@ export async function insertProduct(input: CreateProductInput): Promise<Product>
   return data as Product
 }
 
-export async function findProductsByStoreId(storeId: string): Promise<Product[]> {
+export async function findProductsByStoreId(storeId: number): Promise<Product[]> {
   const { data, error } = await supabaseAdmin
     .from('products')
     .select('*')
@@ -116,7 +116,7 @@ export async function findProductsByStoreId(storeId: string): Promise<Product[]>
   return (data ?? []) as Product[]
 }
 
-export async function findActiveProductsByStoreId(storeId: string): Promise<Product[]> {
+export async function findActiveProductsByStoreId(storeId: number): Promise<Product[]> {
   const { data, error } = await supabaseAdmin
     .from('products')
     .select('*')
@@ -133,8 +133,8 @@ export async function findActiveProductsByStoreId(storeId: string): Promise<Prod
 }
 
 export async function findProductsByIds(
-  storeId: string,
-  productIds: string[]
+  storeId: number,
+  productIds: number[]
 ): Promise<Product[]> {
   if (productIds.length === 0) return []
 
@@ -151,7 +151,7 @@ export async function findProductsByIds(
   return (data ?? []) as Product[]
 }
 
-export async function findProductById(productId: string): Promise<Product | null> {
+export async function findProductById(productId: number): Promise<Product | null> {
   const { data, error } = await supabaseAdmin
     .from('products')
     .select('*')
@@ -166,7 +166,7 @@ export async function findProductById(productId: string): Promise<Product | null
 }
 
 export async function updateProduct(
-  productId: string,
+  productId: number,
   patch: UpdateProductInput
 ): Promise<Product> {
   const row: Record<string, unknown> = {
@@ -212,7 +212,7 @@ export async function updateProduct(
   return data as Product
 }
 
-export async function adjustProductStock(productId: string, delta: number): Promise<void> {
+export async function adjustProductStock(productId: number, delta: number): Promise<void> {
   const product = await findProductById(productId)
   if (!product) {
     throw new AppError(404, 'Product not found', 'PRODUCT_NOT_FOUND')
@@ -232,9 +232,9 @@ export async function adjustProductStock(productId: string, delta: number): Prom
 }
 
 export async function syncCategoryMembership(
-  storeId: string,
-  categoryId: string,
-  productIds: string[]
+  storeId: number,
+  categoryId: number,
+  productIds: number[]
 ): Promise<{ assigned: number; removed: number }> {
   const now = new Date().toISOString()
 
@@ -261,7 +261,7 @@ export async function syncCategoryMembership(
   }
 
   const toRemove = (inCategory ?? [])
-    .map((r) => r.id as string)
+    .map((r) => r.id as number)
     .filter((id) => !productIds.includes(id))
 
   if (toRemove.length > 0) {
@@ -279,7 +279,7 @@ export async function syncCategoryMembership(
   return { assigned: productIds.length, removed: toRemove.length }
 }
 
-export async function countByStoreId(storeId: string): Promise<number> {
+export async function countByStoreId(storeId: number): Promise<number> {
   const { count, error } = await supabaseAdmin
     .from('products')
     .select('id', { count: 'exact', head: true })

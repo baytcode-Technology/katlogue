@@ -11,7 +11,7 @@ export type GetProductResult = {
 
 export async function getProductById(
   ownerId: string,
-  productId: string
+  productId: number
 ): Promise<GetProductResult> {
   const product = await productRepository.findProductById(productId)
   if (!product) {

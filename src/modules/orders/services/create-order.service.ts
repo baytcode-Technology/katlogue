@@ -57,8 +57,8 @@ type LineItem = {
 function buildLineItems(
   items: OrderItemInput[],
   products: Product[],
-  variantsByProduct: Map<string, ProductVariant[]>,
-  variantById: Map<string, ProductVariant>,
+  variantsByProduct: Map<number, ProductVariant[]>,
+  variantById: Map<number, ProductVariant>,
   offline: boolean
 ): LineItem[] {
   const byId = new Map(products.map((p) => [p.id, p]))
@@ -195,14 +195,14 @@ async function decrementInventory(lines: LineItem[]): Promise<void> {
 }
 
 export async function createOrder(
-  storeId: string,
+  storeId: number,
   storeCurrency: string,
   input: CreateOrderInput
 ): Promise<CreateOrderResult> {
   const isStorefront = input.source === 'storefront'
   const whatsapp = input.whatsapp_number?.trim()
   let shippingAddress: Record<string, unknown>
-  let customerId: string | null = null
+  let customerId: number | null = null
 
   if (isStorefront) {
     const storefrontShipping = input.shipping_address as StorefrontShippingAddress
@@ -255,9 +255,9 @@ export async function createOrder(
   const variantsByProduct = await variantRepository.findVariantsByProductIds(productIds)
   const variantIds = input.items
     .map((i) => i.variant_id)
-    .filter((id): id is string => Boolean(id))
+    .filter((id): id is number => id !== undefined)
 
-  const variantById = new Map<string, ProductVariant>()
+  const variantById = new Map<number, ProductVariant>()
   for (const id of variantIds) {
     const variant = await variantRepository.findVariantById(id)
     if (!variant) {
@@ -364,9 +364,9 @@ export async function createOrder(
         currency: storeCurrency,
         receipt: order.order_number,
         notes: {
-          store_id: storeId,
-          order_id: order.id,
-          payment_id: payment.id,
+          store_id: String(storeId),
+          order_id: String(order.id),
+          payment_id: String(payment.id),
         },
       })
       payment = await orderRepository.updatePayment(payment.id, {

@@ -7,7 +7,7 @@ import * as syncRepository from '../repositories/whatsapp-sync.repository.js'
 export type SmbAppDataSyncType = 'smb_app_state_sync' | 'history'
 
 export async function triggerSmbAppDataSync(input: {
-  storeId: string
+  storeId: number
   syncType: SmbAppDataSyncType
   credentials: WhatsAppCredentials
 }): Promise<{ requestId: string; jobId: string }> {
@@ -53,7 +53,7 @@ export async function triggerSmbAppDataSync(input: {
 }
 
 export async function runFullCoexistenceSync(input: {
-  storeId: string
+  storeId: number
   credentials: WhatsAppCredentials
 }): Promise<{ contacts: string; history: string }> {
   const contacts = await triggerSmbAppDataSync({
@@ -71,7 +71,7 @@ export async function runFullCoexistenceSync(input: {
   return { contacts: contacts.requestId, history: history.requestId }
 }
 
-export async function markHistorySyncDeclined(storeId: string): Promise<void> {
+export async function markHistorySyncDeclined(storeId: number): Promise<void> {
   const jobs = await syncRepository.listSyncJobs(storeId)
   const historyJob = jobs.find((j) => j.sync_type === 'history' && j.status === 'in_progress')
   if (historyJob) {

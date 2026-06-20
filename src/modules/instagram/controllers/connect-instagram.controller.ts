@@ -5,6 +5,7 @@ import { AppError } from '../../../shared/errors/app.error.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { assertPremiumAccess } from '../../../shared/lib/subscription.js'
 import { buildInstagramOAuthUrl } from '../services/instagram-oauth.service.js'
+import { parseStoreIdFromQuery } from '../../../shared/utils/parse-store-id.js'
 
 function buildState(payload: object): string {
   const json = JSON.stringify(payload)
@@ -14,8 +15,7 @@ function buildState(payload: object): string {
 export const connectInstagram = asyncHandler(async (req: Request, res: Response) => {
   if (!req.authUser) throw new AppError(401, 'Unauthorized', 'UNAUTHORIZED')
 
-  const storeId = String(req.query.store_id ?? req.query.storeId ?? '').trim()
-  if (!storeId) throw new AppError(400, 'store_id is required', 'VALIDATION_ERROR')
+  const storeId = parseStoreIdFromQuery(req.query.store_id ?? req.query.storeId)
 
   await storeRepository.assertStoreOwner(storeId, req.authUser.id)
 

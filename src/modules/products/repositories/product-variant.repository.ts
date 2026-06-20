@@ -7,7 +7,7 @@ import type {
 } from '../types/product-variant.types.js'
 
 export async function insertVariants(
-  productId: string,
+  productId: number,
   variants: CreateProductVariantInput[]
 ): Promise<ProductVariant[]> {
   if (variants.length === 0) return []
@@ -39,7 +39,7 @@ export async function insertVariants(
   return (data ?? []) as ProductVariant[]
 }
 
-export async function findVariantsByProductId(productId: string): Promise<ProductVariant[]> {
+export async function findVariantsByProductId(productId: number): Promise<ProductVariant[]> {
   const { data, error } = await supabaseAdmin
     .from('product_variants')
     .select('*')
@@ -54,9 +54,9 @@ export async function findVariantsByProductId(productId: string): Promise<Produc
 }
 
 export async function findVariantsByProductIds(
-  productIds: string[]
-): Promise<Map<string, ProductVariant[]>> {
-  const map = new Map<string, ProductVariant[]>()
+  productIds: number[]
+): Promise<Map<number, ProductVariant[]>> {
+  const map = new Map<number, ProductVariant[]>()
   if (productIds.length === 0) return map
 
   const { data, error } = await supabaseAdmin
@@ -79,7 +79,7 @@ export async function findVariantsByProductIds(
   return map
 }
 
-export async function findVariantById(variantId: string): Promise<ProductVariant | null> {
+export async function findVariantById(variantId: number): Promise<ProductVariant | null> {
   const { data, error } = await supabaseAdmin
     .from('product_variants')
     .select('*')
@@ -94,8 +94,8 @@ export async function findVariantById(variantId: string): Promise<ProductVariant
 }
 
 export async function assertVariantBelongsToProduct(
-  variantId: string,
-  productId: string
+  variantId: number,
+  productId: number
 ): Promise<ProductVariant> {
   const variant = await findVariantById(variantId)
   if (!variant || variant.product_id !== productId) {
@@ -105,7 +105,7 @@ export async function assertVariantBelongsToProduct(
 }
 
 export async function insertVariant(
-  productId: string,
+  productId: number,
   input: CreateProductVariantInput
 ): Promise<ProductVariant> {
   const rows = await insertVariants(productId, [input])
@@ -117,7 +117,7 @@ export async function insertVariant(
 }
 
 export async function updateVariant(
-  variantId: string,
+  variantId: number,
   patch: UpdateProductVariantInput
 ): Promise<ProductVariant> {
   const row: Record<string, unknown> = {}
@@ -149,7 +149,7 @@ export async function updateVariant(
   return data as ProductVariant
 }
 
-export async function adjustVariantStock(variantId: string, delta: number): Promise<void> {
+export async function adjustVariantStock(variantId: number, delta: number): Promise<void> {
   const variant = await findVariantById(variantId)
   if (!variant) {
     throw new AppError(404, 'Variant not found', 'VARIANT_NOT_FOUND')
@@ -165,7 +165,7 @@ export async function adjustVariantStock(variantId: string, delta: number): Prom
   }
 }
 
-export async function deleteVariant(variantId: string): Promise<void> {
+export async function deleteVariant(variantId: number): Promise<void> {
   const { error } = await supabaseAdmin.from('product_variants').delete().eq('id', variantId)
 
   if (error) {

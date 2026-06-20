@@ -1,5 +1,5 @@
 export type Store = {
-  id: string
+  id: number
   owner_id: string
   name: string
   slug: string

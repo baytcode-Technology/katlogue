@@ -11,7 +11,7 @@ import type {
 
 export async function getNotificationPreferencesForOwner(
   ownerId: string
-): Promise<{ store_id: string; notification_preferences: NotificationPreferencesView }> {
+): Promise<{ store_id: number; notification_preferences: NotificationPreferencesView }> {
   const store = await storeRepository.findStoreByOwnerId(ownerId)
   if (!store) {
     throw new AppError(404, 'No store found', 'STORE_NOT_FOUND')
@@ -26,7 +26,7 @@ export async function getNotificationPreferencesForOwner(
 export async function updateNotificationPreferencesForOwner(
   ownerId: string,
   input: UpdateNotificationPreferencesInput
-): Promise<{ store_id: string; notification_preferences: NotificationPreferencesView }> {
+): Promise<{ store_id: number; notification_preferences: NotificationPreferencesView }> {
   const store = await storeRepository.findStoreByOwnerId(ownerId)
   if (!store) {
     throw new AppError(404, 'No store found', 'STORE_NOT_FOUND')

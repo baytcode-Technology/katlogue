@@ -7,8 +7,8 @@ import type { WhatsAppConversation } from '../types/whatsapp-chat.types.js'
 
 export async function markWhatsAppChatRead(
   ownerId: string,
-  storeId: string,
-  conversationId: string
+  storeId: number,
+  conversationId: number
 ): Promise<WhatsAppConversation> {
   await storeRepository.assertStoreOwner(storeId, ownerId)
 

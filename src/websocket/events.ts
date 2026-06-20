@@ -74,7 +74,6 @@ export type SocketOrderNewPayload = {
   storeId: number
   order: {
     id: number
-    order_number: string
     total: number
     currency: string
     source: string

@@ -77,8 +77,6 @@ export type Order = {
 
   conversation_id: number | null
 
-  order_number: string
-
   order_status: OrderLifecycleStatus
 
   payment_status: OrderPaymentStatus

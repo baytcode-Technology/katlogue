@@ -27,7 +27,6 @@ export const getPublicOrderStatus = asyncHandler(async (req: Request, res: Respo
     success: true,
     data: {
       order_id: order.id,
-      order_number: order.order_number,
       order_status: order.order_status,
       payment_status: order.payment_status,
       total: order.total,

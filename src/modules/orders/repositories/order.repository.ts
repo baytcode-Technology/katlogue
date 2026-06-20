@@ -1,11 +1,7 @@
 import { supabaseAdmin } from '../../../config/supabase.js'
 
 import { AppError } from '../../../shared/errors/app.error.js'
-import {
-  formatMonthlyOrderNumber,
-  getCurrentMonthBounds,
-  parseMonthlyOrderSequence,
-} from '../../../shared/utils/generate-order-number.js'
+import { getCurrentMonthBounds } from '../../../shared/utils/order-month-bounds.js'
 import type { Order, OrderItem, Payment, UpdateOrderInput } from '../types/order.types.js'
 
 
@@ -14,7 +10,6 @@ export type InsertOrderRow = {
   store_id: number
   customer_id: number | null
   conversation_id?: number | null
-  order_number: string
   order_status: string
   payment_status: string
   fulfillment_status: string
@@ -48,31 +43,6 @@ export type InsertOrderItemRow = {
 }
 
 
-
-/** Next order number for this store in the current UTC month, e.g. FEB26-1, FEB27-1. */
-export async function allocateOrderNumber(storeId: number): Promise<string> {
-  const { numberPrefix, start, end } = getCurrentMonthBounds()
-
-  const { data, error } = await supabaseAdmin
-    .from('orders')
-    .select('order_number')
-    .eq('store_id', storeId)
-    .gte('created_at', start)
-    .lt('created_at', end)
-    .ilike('order_number', `${numberPrefix}-%`)
-
-  if (error) {
-    throw new AppError(400, error.message, 'ORDER_NUMBER_ALLOC_FAILED')
-  }
-
-  let maxSeq = 0
-  for (const row of data ?? []) {
-    const seq = parseMonthlyOrderSequence(row.order_number)
-    if (seq > maxSeq) maxSeq = seq
-  }
-
-  return formatMonthlyOrderNumber(numberPrefix, maxSeq + 1)
-}
 
 export async function countOrdersInCurrentMonth(storeId: number): Promise<number> {
   const { start, end } = getCurrentMonthBounds()
@@ -271,9 +241,6 @@ export async function markOrderViewedByMerchant(
     .single()
 
   if (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7642/ingest/403551e5-c17d-483b-8ef5-ce6768f0a7b2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6d4d2c'},body:JSON.stringify({sessionId:'6d4d2c',location:'order.repository.ts:markOrderViewedByMerchant',message:'PATCH viewed failed',data:{orderId,storeId,code:error.code,errorMessage:error.message},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     throw new AppError(400, error.message, 'ORDER_VIEWED_UPDATE_FAILED')
   }
 

@@ -142,7 +142,6 @@ function buildItemSnapshot(product: Product, variant: ProductVariant | null): Re
       base_price: product.base_price,
       compare_at_price: product.compare_at_price,
       thumbnail_url: product.thumbnail_url,
-      images: product.images,
     },
     variant: variant
       ? {
@@ -304,13 +303,10 @@ export async function createOrder(
   const orderPaymentStatus = isUpi ? 'confirming' : 'pending'
   const checkoutToken = randomBytes(24).toString('hex')
 
-  const orderNumber = await orderRepository.allocateOrderNumber(storeId)
-
   const order = await orderRepository.insertOrder({
     store_id: storeId,
     customer_id: customerId,
     conversation_id: input.conversation_id ?? null,
-    order_number: orderNumber,
     order_status: orderStatus,
     payment_status: orderPaymentStatus,
     fulfillment_status: 'unfulfilled',
@@ -362,7 +358,7 @@ export async function createOrder(
         storedConfig: storedPaymentConfig,
         amount: total,
         currency: storeCurrency,
-        receipt: order.order_number,
+        receipt: String(order.id),
         notes: {
           store_id: String(storeId),
           order_id: String(order.id),
@@ -384,7 +380,7 @@ export async function createOrder(
         display_name: publicMethods.upi.display_name,
         amount: total,
         currency: storeCurrency,
-        reference: order.order_number,
+        reference: String(order.id),
       }
     }
 
@@ -395,7 +391,6 @@ export async function createOrder(
       storeId,
       order: {
         id: order.id,
-        order_number: order.order_number,
         total: order.total,
         currency: storeCurrency,
         source: orderSource,
@@ -408,7 +403,6 @@ export async function createOrder(
       storeId,
       storeSlug: store.slug,
       orderId: order.id,
-      orderNumber: order.order_number,
       total: order.total,
       currency: storeCurrency,
       source: orderSource,

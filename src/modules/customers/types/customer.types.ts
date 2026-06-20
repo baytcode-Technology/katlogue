@@ -36,7 +36,6 @@ export type UpsertCustomerInput = {
 
 export type StorefrontCustomerOrderSummary = {
   id: number
-  order_number: string
   total: number
   created_at: string
 }

@@ -256,11 +256,6 @@ export function buildOpenApiDocument() {
             store_id: { $ref: '#/components/schemas/EntityId' },
             customer_id: { allOf: [{ $ref: '#/components/schemas/EntityId' }], nullable: true },
             conversation_id: { allOf: [{ $ref: '#/components/schemas/EntityId' }], nullable: true },
-            order_number: {
-              type: 'string',
-              example: 'JUN26-1',
-              description: 'Per-store monthly sequence, e.g. JUN26-1',
-            },
             order_status: {
               type: 'string',
               enum: ['pending', 'confirmed', 'completed', 'cancelled'],
@@ -636,7 +631,6 @@ export function buildOpenApiDocument() {
                 type: 'object',
                 properties: {
                   id: { $ref: '#/components/schemas/EntityId' },
-                  order_number: { type: 'string' },
                   total: { type: 'number' },
                   created_at: { type: 'string', format: 'date-time' },
                 },

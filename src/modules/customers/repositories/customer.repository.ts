@@ -308,12 +308,12 @@ export async function findCustomerById(
 export async function findOrderSummariesForCustomer(
   storeId: number,
   orderIds: number[]
-): Promise<Array<{ id: number; order_number: string; total: number; created_at: string }>> {
+): Promise<Array<{ id: number; total: number; created_at: string }>> {
   if (orderIds.length === 0) return []
 
   const { data, error } = await supabaseAdmin
     .from('orders')
-    .select('id, order_number, total, created_at')
+    .select('id, total, created_at')
     .eq('store_id', storeId)
     .in('id', orderIds)
     .order('created_at', { ascending: false })
@@ -324,7 +324,6 @@ export async function findOrderSummariesForCustomer(
 
   return (data ?? []) as Array<{
     id: number
-    order_number: string
     total: number
     created_at: string
   }>

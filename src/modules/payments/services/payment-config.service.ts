@@ -1,6 +1,7 @@
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import {
+  assertRazorpayKeyMatchesMode,
   getDecryptedRazorpaySecrets,
   mergePaymentConfigUpdate,
   parseStoredPaymentConfig,
@@ -52,6 +53,25 @@ export async function updatePaymentConfigForOwner(
         'Razorpay Key ID and Key Secret are required when Razorpay is enabled',
         'RAZORPAY_KEYS_REQUIRED'
       )
+    }
+
+    const hasWebhook =
+      Boolean(next.razorpay.webhook_secret_encrypted) ||
+      Boolean(input.razorpay?.webhook_secret?.trim()) ||
+      Boolean(current.razorpay?.webhook_secret_encrypted)
+
+    if (!hasWebhook) {
+      throw new AppError(
+        400,
+        'Razorpay webhook secret is required when Razorpay is enabled',
+        'RAZORPAY_WEBHOOK_SECRET_REQUIRED'
+      )
+    }
+
+    const keyId = next.razorpay.key_id?.trim()
+    if (keyId) {
+      const mode = next.razorpay.mode === 'live' ? 'live' : 'test'
+      assertRazorpayKeyMatchesMode(keyId, mode)
     }
   }
 

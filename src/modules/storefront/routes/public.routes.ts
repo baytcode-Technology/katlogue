@@ -12,8 +12,10 @@ import { storefrontCreateOrderSchema } from '../../orders/validations/storefront
 import { getPublicCustomerByPhone } from '../../customers/controllers/get-public-customer-by-phone.controller.js'
 import { publicCustomerByPhoneQuerySchema } from '../../customers/validations/customer.validation.js'
 import { publicOrderStatusQuerySchema } from '../../payments/validations/payment-config.validation.js'
+import { verifyRazorpayPaymentBodySchema } from '../../payments/validations/verify-razorpay-payment.validation.js'
 import { paymentProofUpload } from '../../../shared/middleware/upload.middleware.js'
 import { uploadPaymentProof } from '../../uploads/controllers/upload-payment-proof.controller.js'
+import { verifyRazorpayPayment } from '../../orders/controllers/verify-razorpay-payment.controller.js'
 
 const router = Router()
 
@@ -38,6 +40,11 @@ router.get(
   '/orders/:orderId/status',
   validateQuery(publicOrderStatusQuerySchema),
   getPublicOrderStatus
+)
+router.post(
+  '/orders/:orderId/verify-payment',
+  validateBody(verifyRazorpayPaymentBodySchema),
+  verifyRazorpayPayment
 )
 
 export default router

@@ -147,6 +147,36 @@ export function assertPaymentMethodEnabled(
   }
 }
 
+export function assertRazorpayKeyMatchesMode(keyId: string, mode: 'test' | 'live'): void {
+  const trimmed = keyId.trim()
+  const isTestKey = trimmed.startsWith('rzp_test_')
+  const isLiveKey = trimmed.startsWith('rzp_live_')
+
+  if (!isTestKey && !isLiveKey) {
+    throw new AppError(
+      400,
+      'Razorpay Key ID must start with rzp_test_ or rzp_live_',
+      'RAZORPAY_INVALID_KEY_ID'
+    )
+  }
+
+  if (mode === 'test' && !isTestKey) {
+    throw new AppError(
+      400,
+      'Test mode requires a Razorpay test Key ID (rzp_test_...)',
+      'RAZORPAY_KEY_MODE_MISMATCH'
+    )
+  }
+
+  if (mode === 'live' && !isLiveKey) {
+    throw new AppError(
+      400,
+      'Live mode requires a Razorpay live Key ID (rzp_live_...). Complete business verification in the Razorpay Dashboard first.',
+      'RAZORPAY_KEY_MODE_MISMATCH'
+    )
+  }
+}
+
 export function assertRazorpayConfigured(stored: StoredPaymentConfig): {
   key_id: string
   key_secret: string

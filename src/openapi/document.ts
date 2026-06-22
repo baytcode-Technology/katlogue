@@ -609,6 +609,21 @@ export function buildOpenApiDocument() {
             notes: { type: 'string', nullable: true },
           },
         },
+        VerifyRazorpayPaymentBody: {
+          type: 'object',
+          required: [
+            'checkout_token',
+            'razorpay_order_id',
+            'razorpay_payment_id',
+            'razorpay_signature',
+          ],
+          properties: {
+            checkout_token: { type: 'string', minLength: 16 },
+            razorpay_order_id: { type: 'string' },
+            razorpay_payment_id: { type: 'string' },
+            razorpay_signature: { type: 'string' },
+          },
+        },
         PublicCustomerByPhone: {
           type: 'object',
           properties: {
@@ -2327,6 +2342,31 @@ export function buildOpenApiDocument() {
           responses: {
             '200': { description: 'Order status' },
             '404': { description: 'Order not found or invalid token' },
+          },
+        },
+      },
+      '/api/public/orders/{orderId}/verify-payment': {
+        post: {
+          tags: ['Public'],
+          summary: 'Verify Razorpay payment for guest order',
+          description:
+            'Call after Razorpay checkout success. Verifies payment signature and marks the order paid. Idempotent when already paid.',
+          parameters: [
+            { name: 'X-Store-Slug', in: 'header', schema: { type: 'string' } },
+            { name: 'orderId', in: 'path', required: true, schema: { $ref: '#/components/schemas/EntityId' } },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/VerifyRazorpayPaymentBody' },
+              },
+            },
+          },
+          responses: {
+            '200': { description: 'Payment verified; order marked paid' },
+            '400': { description: 'Invalid signature or Razorpay order mismatch' },
+            '404': { description: 'Order not found or invalid checkout token' },
           },
         },
       },

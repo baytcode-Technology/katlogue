@@ -49,6 +49,8 @@ export type CreateOrderInput = {
 
   payment_method: PaymentMethod
 
+  payment_proof_url?: string | null
+
   shipping_address?: OptionalShippingAddress
 
   notes?: string
@@ -158,6 +160,8 @@ export type Payment = {
   provider_order_id: number | null
 
   provider_payment_id: string | null
+
+  payment_proof_url: string | null
 
   amount: number
 

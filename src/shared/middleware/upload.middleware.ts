@@ -37,3 +37,15 @@ export const productImagesUpload = multer({
     cb(null, true)
   },
 }).array('images', 10)
+
+export const paymentProofUpload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!isAllowedImage(file)) {
+      cb(new Error('Only JPEG, PNG, WebP, or GIF images are allowed'))
+      return
+    }
+    cb(null, true)
+  },
+}).single('image')

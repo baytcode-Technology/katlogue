@@ -159,6 +159,7 @@ export async function insertPayment(row: {
   currency: string
   status: string
   provider_order_id?: string | null
+  payment_proof_url?: string | null
 }): Promise<Payment> {
 
   const { data, error } = await supabaseAdmin

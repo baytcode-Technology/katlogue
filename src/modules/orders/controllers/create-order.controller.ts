@@ -21,7 +21,7 @@ export const createOrder = asyncHandler(async (req: Request, res: Response) => {
       body.payment_method === 'cod'
         ? 'Order placed successfully (cash on delivery)'
         : body.payment_method === 'upi'
-          ? 'Order created — complete UPI payment and wait for confirmation'
+          ? 'Order created — payment proof received, waiting for store confirmation'
           : 'Order created — complete Razorpay payment to confirm',
     data: result,
   })

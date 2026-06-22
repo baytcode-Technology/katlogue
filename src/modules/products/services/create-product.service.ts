@@ -31,7 +31,12 @@ export async function createProduct(
     )
   }
 
-  const product = await productRepository.insertProduct(input)
+  const hasVariants = (input.variants ?? []).length > 0
+  const productInput = hasVariants
+    ? { ...input, mark_as_sold: false, mark_as_non_inventory: false }
+    : input
+
+  const product = await productRepository.insertProduct(productInput)
   const variants = await variantRepository.insertVariants(
     product.id,
     input.variants ?? []

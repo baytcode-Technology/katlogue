@@ -302,11 +302,13 @@ export async function createOrder(
   const orderStatus = isCod ? 'confirmed' : 'pending'
   const orderPaymentStatus = isUpi ? 'confirming' : 'pending'
   const checkoutToken = randomBytes(24).toString('hex')
+  const orderNumber = await orderRepository.allocateOrderNumber(storeId)
 
   const order = await orderRepository.insertOrder({
     store_id: storeId,
     customer_id: customerId,
     conversation_id: input.conversation_id ?? null,
+    order_number: orderNumber,
     order_status: orderStatus,
     payment_status: orderPaymentStatus,
     fulfillment_status: 'unfulfilled',
@@ -358,7 +360,7 @@ export async function createOrder(
         storedConfig: storedPaymentConfig,
         amount: total,
         currency: storeCurrency,
-        receipt: String(order.id),
+        receipt: orderNumber,
         notes: {
           store_id: String(storeId),
           order_id: String(order.id),
@@ -380,7 +382,7 @@ export async function createOrder(
         display_name: publicMethods.upi.display_name,
         amount: total,
         currency: storeCurrency,
-        reference: String(order.id),
+        reference: orderNumber,
       }
     }
 
@@ -391,6 +393,7 @@ export async function createOrder(
       storeId,
       order: {
         id: order.id,
+        order_number: order.order_number,
         total: order.total,
         currency: storeCurrency,
         source: orderSource,
@@ -403,6 +406,7 @@ export async function createOrder(
       storeId,
       storeSlug: store.slug,
       orderId: order.id,
+      orderNumber: order.order_number,
       total: order.total,
       currency: storeCurrency,
       source: orderSource,

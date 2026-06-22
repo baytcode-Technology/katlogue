@@ -120,6 +120,7 @@ export async function notifyNewOrder(input: {
   storeId: number
   storeSlug: string
   orderId: number
+  orderNumber: string
   total: number
   currency: string
   source: string
@@ -132,7 +133,7 @@ export async function notifyNewOrder(input: {
   const kind = isOnline ? 'order_online' : 'order_pos'
   const label = isOnline ? 'New online order' : 'POS order'
   const formattedTotal = `${input.currency} ${Number(input.total).toFixed(2)}`
-  const orderLabel = `#${input.orderId}`
+  const orderLabel = input.orderNumber
 
   await sendStoreNotification({
     storeId: input.storeId,
@@ -142,6 +143,7 @@ export async function notifyNewOrder(input: {
     data: {
       type: 'order',
       orderId: String(input.orderId),
+      orderNumber: input.orderNumber,
       source: input.source,
       storeSlug: input.storeSlug,
     },

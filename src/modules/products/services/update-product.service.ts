@@ -1,5 +1,6 @@
 import { AppError } from '../../../shared/errors/app.error.js'
 import * as productRepository from '../repositories/product.repository.js'
+import * as variantRepository from '../repositories/product-variant.repository.js'
 import type { Product, UpdateProductInput } from '../types/product.types.js'
 
 export async function updateProduct(
@@ -22,5 +23,11 @@ export async function updateProduct(
     )
   }
 
-  return productRepository.updateProduct(productId, input)
+  const variants = await variantRepository.findVariantsByProductId(productId)
+  const patch =
+    variants.length > 0
+      ? { ...input, mark_as_sold: false, mark_as_non_inventory: false }
+      : input
+
+  return productRepository.updateProduct(productId, patch)
 }

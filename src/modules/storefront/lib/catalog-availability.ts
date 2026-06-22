@@ -10,9 +10,8 @@ export function isCatalogProductSoldOut(product: Product): boolean {
 }
 
 export function isCatalogVariantSoldOut(product: Product, variant: ProductVariant): boolean {
-  if (product.mark_as_sold) return true
   if (variant.mark_as_sold) return true
-  if (product.mark_as_non_inventory || variant.mark_as_non_inventory) return false
+  if (variant.mark_as_non_inventory) return false
   if (!product.track_inventory) return false
   return variant.stock_qty < 1
 }

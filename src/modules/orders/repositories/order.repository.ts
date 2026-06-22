@@ -2,6 +2,10 @@ import { supabaseAdmin } from '../../../config/supabase.js'
 
 import { AppError } from '../../../shared/errors/app.error.js'
 import { getCurrentMonthBounds } from '../../../shared/utils/order-month-bounds.js'
+import {
+  formatMonthlyOrderNumber,
+  parseMonthlyOrderSequence,
+} from '../../../shared/utils/generate-order-number.js'
 import type { Order, OrderItem, Payment, UpdateOrderInput } from '../types/order.types.js'
 
 
@@ -10,6 +14,7 @@ export type InsertOrderRow = {
   store_id: number
   customer_id: number | null
   conversation_id?: number | null
+  order_number: string
   order_status: string
   payment_status: string
   fulfillment_status: string
@@ -43,6 +48,33 @@ export type InsertOrderItemRow = {
 }
 
 
+
+export async function allocateOrderNumber(
+  storeId: number,
+  date: Date = new Date()
+): Promise<string> {
+  const { numberPrefix, start, end } = getCurrentMonthBounds(date)
+
+  const { data, error } = await supabaseAdmin
+    .from('orders')
+    .select('order_number')
+    .eq('store_id', storeId)
+    .gte('created_at', start)
+    .lt('created_at', end)
+    .like('order_number', `${numberPrefix}-%`)
+
+  if (error) {
+    throw new AppError(400, error.message, 'ORDER_NUMBER_ALLOCATE_FAILED')
+  }
+
+  let maxSeq = 0
+  for (const row of data ?? []) {
+    const seq = parseMonthlyOrderSequence(String(row.order_number), numberPrefix)
+    if (seq !== null && seq > maxSeq) maxSeq = seq
+  }
+
+  return formatMonthlyOrderNumber(numberPrefix, maxSeq + 1)
+}
 
 export async function countOrdersInCurrentMonth(storeId: number): Promise<number> {
   const { start, end } = getCurrentMonthBounds()

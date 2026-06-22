@@ -206,6 +206,7 @@ Lookup a returning customer for checkout prefill. Requires `X-Store-Slug`.
       "orders": [
         {
           "id": 1,
+          "order_number": "JUN26-1",
           "total": 599,
           "created_at": "2026-06-13T10:00:00.000Z"
         }
@@ -278,7 +279,7 @@ Merchant POS (`POST /api/orders` with `offline: true`) is unchanged — customer
 {
   "success": true,
   "data": {
-    "order": { "id": 1, "total": 599, "payment_status": "pending", "order_status": "pending" },
+    "order": { "id": 1, "order_number": "JUN26-1", "total": 599, "payment_status": "pending", "order_status": "pending" },
     "checkout_token": "hex-string",
     "razorpay": { "key_id": "rzp_...", "order_id": "order_...", "amount": 59900, "currency": "INR" },
     "upi": { "vpa": "shop@upi", "amount": 599, "currency": "INR", "reference": "1", "qr_image_url": null }
@@ -301,6 +302,7 @@ Poll payment after Razorpay checkout.
   "success": true,
   "data": {
     "order_id": 1,
+    "order_number": "JUN26-1",
     "order_status": "confirmed",
     "payment_status": "paid",
     "total": 599

@@ -256,6 +256,7 @@ export function buildOpenApiDocument() {
             store_id: { $ref: '#/components/schemas/EntityId' },
             customer_id: { allOf: [{ $ref: '#/components/schemas/EntityId' }], nullable: true },
             conversation_id: { allOf: [{ $ref: '#/components/schemas/EntityId' }], nullable: true },
+            order_number: { type: 'string', example: 'JUN26-1' },
             order_status: {
               type: 'string',
               enum: ['pending', 'confirmed', 'completed', 'cancelled'],

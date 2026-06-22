@@ -220,6 +220,27 @@ Lookup a returning customer for checkout prefill. Requires `X-Store-Slug`.
 
 ---
 
+## `POST /api/public/uploads/payment-proof`
+
+Guest upload for UPI payment proof screenshots (public storage URL).
+
+### Request
+
+- `multipart/form-data`
+- Field: `image` (JPEG/PNG/WebP/GIF, max 5MB)
+
+Store is resolved from the subdomain / `X-Store-Slug` header.
+
+### Response `data`
+
+```json
+{
+  "url": "https://<supabase-public-host>/storage/v1/object/public/<bucket>/<storeId>/payment-proofs/<uuid>.png"
+}
+```
+
+---
+
 ## `POST /api/public/orders`
 
 Guest checkout (online). Creates or updates a customer by phone, saves unique shipping addresses, and links the order.
@@ -253,6 +274,7 @@ Guest checkout (online). Creates or updates a customer by phone, saves unique sh
 |-------|-------|
 | `payment_method` | **Required** — `cod` \| `razorpay` \| `upi`; must be enabled on the store |
 | `items` | **Required** — at least one line |
+| `payment_proof_url` | Optional; **required when** `payment_method` is `upi` |
 | `shipping_address` | **Required** — all of `name`, `phone_number`, `address`, `city`, `district`, `state`, `postcode` (customer phone and name come from here) |
 | `items[].variant_id` | Optional; omit or send `""` when the product has no variant |
 | `notes` | Optional |
@@ -270,7 +292,7 @@ Merchant POS (`POST /api/orders` with `offline: true`) is unchanged — customer
 | Method | Order status | Payment status | Next step |
 |--------|--------------|----------------|-----------|
 | **cod** | `confirmed` | `pending` | Pay on delivery |
-| **upi** | `pending` | `confirming` | Show UPI details from response `data.upi` |
+| **upi** | `pending` | `confirming` | Waiting for store confirmation (proof submitted) |
 | **razorpay** | `pending` | `pending` | Open Razorpay with `data.razorpay`; poll status endpoint |
 
 ### Response highlights
@@ -346,6 +368,6 @@ Merchant Razorpay keys are configured per store in the merchant app (Settings �
 3. `GET /api/public/catalog` — categories + products; respect `sold_out`.
 4. `POST /api/public/orders` — checkout with enabled `payment_method`.
 5. Razorpay: open checkout → poll `GET .../status?token=checkout_token`.
-6. UPI: display `data.upi` and wait for merchant confirmation.
+6. UPI: upload proof → `POST /api/public/orders` with `payment_method: "upi"` + `payment_proof_url`.
 
 Demo reference implementation: `storefront-web/` in this repo.

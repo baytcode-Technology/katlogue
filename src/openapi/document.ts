@@ -579,6 +579,12 @@ export function buildOpenApiDocument() {
               },
             },
             payment_method: { type: 'string', enum: ['razorpay', 'cod', 'upi'] },
+            payment_proof_url: {
+              type: 'string',
+              format: 'uri',
+              nullable: true,
+              description: 'Required for UPI orders (payment_method = upi)',
+            },
             shipping_address: {
               type: 'object',
               required: [
@@ -2321,6 +2327,50 @@ export function buildOpenApiDocument() {
           responses: {
             '200': { description: 'Order status' },
             '404': { description: 'Order not found or invalid token' },
+          },
+        },
+      },
+      '/api/public/uploads/payment-proof': {
+        post: {
+          tags: ['Public'],
+          summary: 'Upload UPI payment proof',
+          description:
+            'Guest upload for UPI proof screenshots. Returns a public `url` that must be sent in POST /api/public/orders as `payment_proof_url`.',
+          parameters: [{ name: 'X-Store-Slug', in: 'header', schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: {
+              'multipart/form-data': {
+                schema: {
+                  type: 'object',
+                  required: ['image'],
+                  properties: {
+                    image: { type: 'string', format: 'binary' },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '201': {
+              description: 'Upload successful',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          url: { type: 'string', format: 'uri' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
       },

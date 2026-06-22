@@ -12,6 +12,7 @@ import {
   parseStoredPaymentConfig,
   toPublicPaymentMethods,
 } from '../../payments/lib/payment-config.js'
+import { assertPaymentProofUrlForStore } from '../../payments/lib/payment-proof-url.js'
 import { createRazorpayOrder } from '../../payments/services/razorpay.service.js'
 import {
   adjustProductStock,
@@ -301,6 +302,11 @@ export async function createOrder(
   const paymentStatus = isUpi ? 'confirming' : 'pending'
   const orderStatus = isCod ? 'confirmed' : 'pending'
   const orderPaymentStatus = isUpi ? 'confirming' : 'pending'
+
+  if (isUpi && isStorefront) {
+    assertPaymentProofUrlForStore(String(input.payment_proof_url ?? ''), storeId)
+  }
+
   const checkoutToken = randomBytes(24).toString('hex')
   const orderNumber = await orderRepository.allocateOrderNumber(storeId)
 
@@ -342,6 +348,7 @@ export async function createOrder(
       amount: total,
       currency: storeCurrency,
       status: paymentStatus,
+      payment_proof_url: isUpi ? input.payment_proof_url ?? null : null,
     })
 
     await decrementInventory(lines)

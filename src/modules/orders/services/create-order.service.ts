@@ -299,7 +299,8 @@ export async function createOrder(
   const isCod = input.payment_method === 'cod'
   const isUpi = input.payment_method === 'upi'
   const paymentProvider = isCod ? 'manual' : isUpi ? 'upi_manual' : 'razorpay'
-  const paymentStatus = isUpi ? 'confirming' : 'pending'
+  // orders.payment_status uses order_payment_status (has confirming); payments.status uses payment_status (pending|paid|failed|refunded).
+  const paymentRowStatus = 'pending'
   const orderStatus = isCod ? 'confirmed' : 'pending'
   const orderPaymentStatus = isUpi ? 'confirming' : 'pending'
 
@@ -347,7 +348,7 @@ export async function createOrder(
       provider: paymentProvider,
       amount: total,
       currency: storeCurrency,
-      status: paymentStatus,
+      status: paymentRowStatus,
       payment_proof_url: isUpi ? input.payment_proof_url ?? null : null,
     })
 

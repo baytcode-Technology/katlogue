@@ -3,6 +3,7 @@ import { AppError } from '../../../shared/errors/app.error.js'
 import {
   assertRazorpayKeyMatchesMode,
   getDecryptedRazorpaySecrets,
+  isRazorpayVerifiedForMode,
   mergePaymentConfigUpdate,
   parseStoredPaymentConfig,
   toMerchantPaymentConfigView,
@@ -72,6 +73,14 @@ export async function updatePaymentConfigForOwner(
     if (keyId) {
       const mode = next.razorpay.mode === 'live' ? 'live' : 'test'
       assertRazorpayKeyMatchesMode(keyId, mode)
+    }
+
+    if (!isRazorpayVerifiedForMode(next)) {
+      throw new AppError(
+        400,
+        'Run the ₹1 test payment before enabling Razorpay',
+        'RAZORPAY_TEST_REQUIRED'
+      )
     }
   }
 

@@ -1,8 +1,10 @@
+import { createHash } from 'crypto'
 import { decryptPaymentSecret, encryptPaymentSecret, maskSecret } from '../../../shared/lib/payment-encryption.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import type {
   MerchantPaymentConfigView,
   PublicPaymentMethods,
+  RazorpayMode,
   StoredPaymentConfig,
   UpdatePaymentConfigInput,
 } from '../types/payment-config.types.js'
@@ -12,6 +14,55 @@ export const DEFAULT_STORED_PAYMENT_CONFIG: StoredPaymentConfig = {
   cod: { enabled: true },
   razorpay: { enabled: false, mode: 'test' },
   upi: { enabled: false },
+}
+
+function razorpayMode(stored: StoredPaymentConfig): RazorpayMode {
+  return stored.razorpay?.mode === 'live' ? 'live' : 'test'
+}
+
+export function computeRazorpayVerificationFingerprint(stored: StoredPaymentConfig): string | null {
+  const keyId = stored.razorpay?.key_id?.trim()
+  if (!keyId) return null
+
+  const { webhook_secret } = getDecryptedRazorpaySecrets(stored)
+  if (!webhook_secret) return null
+
+  const mode = razorpayMode(stored)
+  return createHash('sha256').update(`${keyId}|${mode}|${webhook_secret}`).digest('hex')
+}
+
+export function isRazorpayGrandfathered(stored: StoredPaymentConfig): boolean {
+  const rz = stored.razorpay
+  if (!rz?.enabled) return false
+  if (!rz.key_id || !rz.key_secret_encrypted) return false
+  return !rz.verification_fingerprint && !rz.verified_at
+}
+
+export function isRazorpayVerifiedForMode(stored: StoredPaymentConfig): boolean {
+  if (isRazorpayGrandfathered(stored)) return true
+
+  const rz = stored.razorpay
+  if (!rz?.verified_at || !rz.verified_mode || !rz.verification_fingerprint) return false
+
+  const currentMode = razorpayMode(stored)
+  if (rz.verified_mode !== currentMode) return false
+
+  const fingerprint = computeRazorpayVerificationFingerprint(stored)
+  return fingerprint !== null && fingerprint === rz.verification_fingerprint
+}
+
+export function isRazorpayTestRequired(stored: StoredPaymentConfig): boolean {
+  if (isRazorpayGrandfathered(stored)) return false
+  return Boolean(stored.razorpay?.key_id && stored.razorpay?.key_secret_encrypted)
+}
+
+function clearRazorpayVerification(razorpay: StoredPaymentConfig['razorpay']) {
+  return {
+    ...razorpay,
+    verified_at: null,
+    verified_mode: null,
+    verification_fingerprint: null,
+  }
 }
 
 export function parseStoredPaymentConfig(raw: unknown): StoredPaymentConfig {
@@ -26,7 +77,10 @@ export function parseStoredPaymentConfig(raw: unknown): StoredPaymentConfig {
       key_id: src.razorpay?.key_id,
       key_secret_encrypted: src.razorpay?.key_secret_encrypted,
       webhook_secret_encrypted: src.razorpay?.webhook_secret_encrypted,
-      mode: src.razorpay?.mode === 'live' ? 'live' : 'test',
+      mode: razorpayMode(src),
+      verified_at: src.razorpay?.verified_at ?? null,
+      verified_mode: src.razorpay?.verified_mode ?? null,
+      verification_fingerprint: src.razorpay?.verification_fingerprint ?? null,
     },
     upi: {
       enabled: src.upi?.enabled ?? false,
@@ -46,6 +100,8 @@ export function toMerchantPaymentConfigView(
   const configured = Boolean(
     stored.razorpay?.key_id && stored.razorpay?.key_secret_encrypted
   )
+  const testPassed = isRazorpayVerifiedForMode(stored)
+  const verifiedMode = stored.razorpay?.verified_mode ?? null
 
   return {
     cod: { enabled: stored.cod?.enabled ?? true },
@@ -54,8 +110,11 @@ export function toMerchantPaymentConfigView(
       key_id: stored.razorpay?.key_id ?? null,
       key_secret_masked: maskSecret(keySecret),
       webhook_secret_masked: maskSecret(webhookSecret),
-      mode: stored.razorpay?.mode === 'live' ? 'live' : 'test',
+      mode: razorpayMode(stored),
       configured,
+      test_passed: testPassed,
+      test_passed_mode: testPassed ? verifiedMode : null,
+      test_required: isRazorpayTestRequired(stored),
     },
     upi: {
       enabled: stored.upi?.enabled ?? false,
@@ -67,11 +126,15 @@ export function toMerchantPaymentConfigView(
 }
 
 export function toPublicPaymentMethods(stored: StoredPaymentConfig): PublicPaymentMethods {
+  const razorpayLive =
+    Boolean(stored.razorpay?.enabled && stored.razorpay?.key_id) &&
+    isRazorpayVerifiedForMode(stored)
+
   return {
     cod: { enabled: stored.cod?.enabled ?? true },
     razorpay: {
-      enabled: Boolean(stored.razorpay?.enabled && stored.razorpay?.key_id),
-      key_id: stored.razorpay?.enabled ? (stored.razorpay?.key_id ?? null) : null,
+      enabled: razorpayLive,
+      key_id: razorpayLive ? (stored.razorpay?.key_id ?? null) : null,
     },
     upi: {
       enabled: Boolean(stored.upi?.enabled && stored.upi?.vpa),
@@ -86,9 +149,25 @@ export function mergePaymentConfigUpdate(
   current: StoredPaymentConfig,
   input: UpdatePaymentConfigInput
 ): StoredPaymentConfig {
+  const credentialsChanged =
+    (input.razorpay?.key_id !== undefined &&
+      input.razorpay.key_id.trim() !== (current.razorpay?.key_id ?? '').trim()) ||
+    Boolean(input.razorpay?.key_secret?.trim()) ||
+    Boolean(input.razorpay?.webhook_secret?.trim()) ||
+    (input.razorpay?.mode !== undefined && input.razorpay.mode !== razorpayMode(current))
+
+  let nextRazorpay: StoredPaymentConfig['razorpay'] = {
+    ...current.razorpay,
+    ...input.razorpay,
+  }
+
+  if (credentialsChanged) {
+    nextRazorpay = clearRazorpayVerification(nextRazorpay)
+  }
+
   const next: StoredPaymentConfig = {
     cod: { ...current.cod, ...input.cod },
-    razorpay: { ...current.razorpay, ...input.razorpay },
+    razorpay: nextRazorpay,
     upi: { ...current.upi, ...input.upi },
   }
 
@@ -111,6 +190,23 @@ export function mergePaymentConfigUpdate(
   }
 
   return next
+}
+
+export function markRazorpayVerified(stored: StoredPaymentConfig): StoredPaymentConfig {
+  const fingerprint = computeRazorpayVerificationFingerprint(stored)
+  if (!fingerprint) {
+    throw new AppError(400, 'Razorpay is not fully configured for verification', 'RAZORPAY_NOT_CONFIGURED')
+  }
+
+  return {
+    ...stored,
+    razorpay: {
+      ...stored.razorpay,
+      verified_at: new Date().toISOString(),
+      verified_mode: razorpayMode(stored),
+      verification_fingerprint: fingerprint,
+    },
+  }
 }
 
 export function getDecryptedRazorpaySecrets(stored: StoredPaymentConfig): {
@@ -187,4 +283,21 @@ export function assertRazorpayConfigured(stored: StoredPaymentConfig): {
     throw new AppError(400, 'Razorpay is not fully configured for this store', 'RAZORPAY_NOT_CONFIGURED')
   }
   return { key_id, key_secret }
+}
+
+export function assertRazorpaySetupConfigured(stored: StoredPaymentConfig): {
+  key_id: string
+  key_secret: string
+  webhook_secret: string
+} {
+  const { key_secret, webhook_secret } = getDecryptedRazorpaySecrets(stored)
+  const key_id = stored.razorpay?.key_id?.trim()
+  if (!key_id || !key_secret || !webhook_secret) {
+    throw new AppError(
+      400,
+      'Save Razorpay Key ID, Key Secret, and Webhook secret before testing',
+      'RAZORPAY_NOT_CONFIGURED'
+    )
+  }
+  return { key_id, key_secret, webhook_secret }
 }

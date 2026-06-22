@@ -3,7 +3,10 @@ import { requireAuth } from '../../shared/middleware/auth.middleware.js'
 import { validateBody } from '../../shared/middleware/validate.middleware.js'
 import { getPaymentConfig } from './controllers/get-payment-config.controller.js'
 import { updatePaymentConfig } from './controllers/update-payment-config.controller.js'
+import { createRazorpaySetupTestCheckout } from './controllers/create-razorpay-setup-test.controller.js'
+import { verifyRazorpaySetupTest } from './controllers/verify-razorpay-setup-test.controller.js'
 import { updatePaymentConfigSchema } from './validations/payment-config.validation.js'
+import { verifyRazorpaySetupTestBodySchema } from './validations/razorpay-setup-test.validation.js'
 
 export const paymentConfigRoutes = Router()
 
@@ -13,4 +16,15 @@ paymentConfigRoutes.patch(
   requireAuth,
   validateBody(updatePaymentConfigSchema),
   updatePaymentConfig
+)
+paymentConfigRoutes.post(
+  '/me/payment-config/razorpay/test-checkout',
+  requireAuth,
+  createRazorpaySetupTestCheckout
+)
+paymentConfigRoutes.post(
+  '/me/payment-config/razorpay/verify-test',
+  requireAuth,
+  validateBody(verifyRazorpaySetupTestBodySchema),
+  verifyRazorpaySetupTest
 )

@@ -377,6 +377,18 @@ The backend verifies the signature, updates payment and order status, and is ide
 
 Merchant Razorpay keys are configured per store in the merchant app (Settings → Payment methods → Razorpay).
 
+### Merchant Razorpay setup test (before enable)
+
+Merchants must pass a **₹1 INR setup test** before Razorpay appears on the storefront:
+
+1. Save Key ID, Key Secret, and Webhook secret in the merchant app.
+2. `POST /api/stores/me/payment-config/razorpay/test-checkout` — returns Razorpay checkout payload (`key_id`, `razorpay_order_id`, `amount: 100`, `checkout_token`, etc.).
+3. Complete payment in the app (test mode = fake money with test card; live mode = real ₹1).
+4. `POST /api/stores/me/payment-config/razorpay/verify-test` with `order_id`, `checkout_token`, and Razorpay payment fields.
+5. Enable Razorpay via `PATCH /api/stores/me/payment-config` only after `test_passed` is true for the current mode.
+
+Changing keys, webhook secret, or test/live mode invalidates the test and requires re-testing.
+
 ---
 
 ## Error codes (common)
@@ -390,6 +402,7 @@ Merchant Razorpay keys are configured per store in the merchant app (Settings �
 | `PAYMENT_METHOD_DISABLED` | 400 | Method not enabled for store |
 | `INVALID_PAYMENT_SIGNATURE` | 400 | Razorpay signature verification failed |
 | `RAZORPAY_WEBHOOK_SECRET_REQUIRED` | 400 | Merchant enabled Razorpay without webhook secret |
+| `RAZORPAY_TEST_REQUIRED` | 400 | Merchant enabled Razorpay without passing the ₹1 setup test |
 
 ---
 

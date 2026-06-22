@@ -718,6 +718,9 @@ export function buildOpenApiDocument() {
                 webhook_secret_masked: { type: 'string', nullable: true },
                 mode: { type: 'string', enum: ['test', 'live'], example: 'test' },
                 configured: { type: 'boolean', example: false },
+                test_passed: { type: 'boolean', example: false },
+                test_passed_mode: { type: 'string', enum: ['test', 'live'], nullable: true },
+                test_required: { type: 'boolean', example: true },
               },
             },
             upi: {
@@ -1107,8 +1110,103 @@ export function buildOpenApiDocument() {
           responses: {
             '200': { description: 'Payment configuration saved' },
             '400': {
-              description: 'Validation error (e.g. UPI enabled without VPA)',
+              description:
+                'Validation error (e.g. UPI enabled without VPA, Razorpay enabled without test)',
               content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+            },
+          },
+        },
+      },
+      '/api/stores/me/payment-config/razorpay/test-checkout': {
+        post: {
+          tags: ['Payments'],
+          summary: 'Start Razorpay setup test (₹1)',
+          description:
+            'Creates an internal ₹1 INR Razorpay order using the store saved keys. Merchant must complete this test before enabling Razorpay on the storefront. Test mode uses fake money; live mode charges real ₹1.',
+          security: [{ bearerAuth: [] }],
+          responses: {
+            '200': {
+              description: 'Razorpay checkout payload for setup test',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      message: { type: 'string' },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          order_id: { $ref: '#/components/schemas/EntityId' },
+                          checkout_token: { type: 'string' },
+                          key_id: { type: 'string' },
+                          razorpay_order_id: { type: 'string' },
+                          amount: { type: 'integer', example: 100 },
+                          currency: { type: 'string', example: 'INR' },
+                          mode: { type: 'string', enum: ['test', 'live'] },
+                          store_name: { type: 'string' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            '400': { description: 'Razorpay not fully configured' },
+          },
+        },
+      },
+      '/api/stores/me/payment-config/razorpay/verify-test': {
+        post: {
+          tags: ['Payments'],
+          summary: 'Verify Razorpay setup test payment',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: [
+                    'order_id',
+                    'checkout_token',
+                    'razorpay_order_id',
+                    'razorpay_payment_id',
+                    'razorpay_signature',
+                  ],
+                  properties: {
+                    order_id: { $ref: '#/components/schemas/EntityId' },
+                    checkout_token: { type: 'string' },
+                    razorpay_order_id: { type: 'string' },
+                    razorpay_payment_id: { type: 'string' },
+                    razorpay_signature: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description: 'Setup test passed',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      message: { type: 'string' },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          test_passed: { type: 'boolean', example: true },
+                          test_passed_mode: { type: 'string', enum: ['test', 'live'], nullable: true },
+                          mode: { type: 'string', enum: ['test', 'live'] },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
         },

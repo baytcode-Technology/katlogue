@@ -90,3 +90,7 @@ export function isInstagramOAuthConfigured(): boolean {
 export function isPlatformRazorpayConfigured(): boolean {
   return Boolean(env.PLATFORM_RAZORPAY.KEY_ID && env.PLATFORM_RAZORPAY.KEY_SECRET)
 }
+
+export function isPaymentEncryptionConfigured(): boolean {
+  return Boolean(env.PAYMENT_ENCRYPTION_KEY)
+}

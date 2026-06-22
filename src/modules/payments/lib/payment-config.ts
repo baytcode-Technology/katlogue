@@ -101,7 +101,6 @@ export function toMerchantPaymentConfigView(
     stored.razorpay?.key_id && stored.razorpay?.key_secret_encrypted
   )
   const testPassed = isRazorpayVerifiedForMode(stored)
-  const verifiedMode = stored.razorpay?.verified_mode ?? null
 
   return {
     cod: { enabled: stored.cod?.enabled ?? true },
@@ -113,7 +112,7 @@ export function toMerchantPaymentConfigView(
       mode: razorpayMode(stored),
       configured,
       test_passed: testPassed,
-      test_passed_mode: testPassed ? verifiedMode : null,
+      test_passed_mode: stored.razorpay?.verified_mode ?? null,
       test_required: isRazorpayTestRequired(stored),
     },
     upi: {

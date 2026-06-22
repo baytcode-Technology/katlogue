@@ -16,6 +16,18 @@ export async function updateOrderStatuses(
     throw new AppError(404, 'Order not found', 'ORDER_NOT_FOUND')
   }
 
-  return orderRepository.updateOrder(orderId, input)
+  const order = await orderRepository.updateOrder(orderId, input)
+
+  if (input.payment_status === 'paid' || input.payment_status === 'refunded') {
+    const payment = await orderRepository.findPaymentByOrderId(orderId)
+    if (payment) {
+      await orderRepository.updatePayment(payment.id, {
+        status: input.payment_status === 'paid' ? 'paid' : 'refunded',
+        paid_at: input.payment_status === 'paid' ? new Date().toISOString() : payment.paid_at,
+      })
+    }
+  }
+
+  return order
 }
 

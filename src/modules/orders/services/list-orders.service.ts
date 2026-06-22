@@ -14,7 +14,9 @@ export async function listOrdersByStore(
 ): Promise<OrderListItem[]> {
   await storeRepository.assertStoreOwner(storeId, ownerId)
 
-  const orders = await orderRepository.findOrdersByStoreId(storeId)
+  const orders = (await orderRepository.findOrdersByStoreId(storeId)).filter(
+    (order) => order.source !== 'razorpay_setup_test'
+  )
   const orderIds = orders.map((o) => o.id)
   const allItems = await orderRepository.findOrderItemsByOrderIds(orderIds)
 

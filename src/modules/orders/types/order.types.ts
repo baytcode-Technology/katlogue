@@ -157,7 +157,7 @@ export type Payment = {
 
   provider: string
 
-  provider_order_id: number | null
+  provider_order_id: string | null
 
   provider_payment_id: string | null
 

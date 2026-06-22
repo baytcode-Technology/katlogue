@@ -1,7 +1,24 @@
+import { createHmac, timingSafeEqual } from 'crypto'
 import Razorpay from 'razorpay'
 import { AppError } from '../../../shared/errors/app.error.js'
 import type { StoredPaymentConfig } from '../types/payment-config.types.js'
 import { assertRazorpayConfigured } from '../lib/payment-config.js'
+
+export function verifyRazorpayPaymentSignature(input: {
+  keySecret: string
+  orderId: string
+  paymentId: string
+  signature: string
+}): boolean {
+  const body = `${input.orderId}|${input.paymentId}`
+  const expected = createHmac('sha256', input.keySecret).update(body).digest('hex')
+
+  try {
+    return timingSafeEqual(Buffer.from(expected), Buffer.from(input.signature))
+  } catch {
+    return false
+  }
+}
 
 export type RazorpayOrderPayload = {
   key_id: string

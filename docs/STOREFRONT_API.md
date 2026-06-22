@@ -293,7 +293,7 @@ Merchant POS (`POST /api/orders` with `offline: true`) is unchanged — customer
 |--------|--------------|----------------|-----------|
 | **cod** | `confirmed` | `pending` | Pay on delivery |
 | **upi** | `pending` | `confirming` | Waiting for store confirmation (proof submitted) |
-| **razorpay** | `pending` | `pending` | Open Razorpay with `data.razorpay`; poll status endpoint |
+| **razorpay** | `pending` | `pending` | Open Razorpay with `data.razorpay`; verify payment, then poll status as fallback |
 
 ### Response highlights
 
@@ -309,13 +309,43 @@ Merchant POS (`POST /api/orders` with `offline: true`) is unchanged — customer
 }
 ```
 
-Save `checkout_token` for Razorpay polling.
+Save `checkout_token` for Razorpay verify and status polling.
+
+---
+
+## `POST /api/public/orders/:orderId/verify-payment`
+
+Confirm Razorpay payment immediately after checkout (preferred over polling alone).
+
+**Body:**
+
+```json
+{
+  "checkout_token": "hex-string",
+  "razorpay_order_id": "order_...",
+  "razorpay_payment_id": "pay_...",
+  "razorpay_signature": "..."
+}
+```
+
+**Response `data`:**
+
+```json
+{
+  "order_id": 1,
+  "order_number": "JUN26-1",
+  "order_status": "confirmed",
+  "payment_status": "paid"
+}
+```
+
+Idempotent: safe to call again if the order is already paid.
 
 ---
 
 ## `GET /api/public/orders/:orderId/status?token=...`
 
-Poll payment after Razorpay checkout.
+Poll payment after Razorpay checkout (fallback if verify-payment fails or webhook is delayed).
 
 **Query:** `token` = `checkout_token` from create-order.
 
@@ -347,6 +377,18 @@ The backend verifies the signature, updates payment and order status, and is ide
 
 Merchant Razorpay keys are configured per store in the merchant app (Settings → Payment methods → Razorpay).
 
+### Merchant Razorpay setup test (before enable)
+
+Merchants must pass a **₹1 INR setup test** before Razorpay appears on the storefront:
+
+1. Save Key ID, Key Secret, and Webhook secret in the merchant app.
+2. `POST /api/stores/me/payment-config/razorpay/test-checkout` — returns Razorpay checkout payload (`key_id`, `razorpay_order_id`, `amount: 100`, `checkout_token`, etc.).
+3. Complete payment in the app (test mode = fake money with test card; live mode = real ₹1).
+4. `POST /api/stores/me/payment-config/razorpay/verify-test` with `order_id`, `checkout_token`, and Razorpay payment fields.
+5. Enable Razorpay via `PATCH /api/stores/me/payment-config` only after `test_passed` is true for the current mode.
+
+Changing keys, webhook secret, or test/live mode invalidates the test and requires re-testing.
+
 ---
 
 ## Error codes (common)
@@ -358,6 +400,9 @@ Merchant Razorpay keys are configured per store in the merchant app (Settings �
 | `INSUFFICIENT_STOCK` | 400 | Sold-out or not enough quantity |
 | `VARIANT_REQUIRED` | 400 | Product has variants but none selected |
 | `PAYMENT_METHOD_DISABLED` | 400 | Method not enabled for store |
+| `INVALID_PAYMENT_SIGNATURE` | 400 | Razorpay signature verification failed |
+| `RAZORPAY_WEBHOOK_SECRET_REQUIRED` | 400 | Merchant enabled Razorpay without webhook secret |
+| `RAZORPAY_TEST_REQUIRED` | 400 | Merchant enabled Razorpay without passing the ₹1 setup test |
 
 ---
 
@@ -367,7 +412,7 @@ Merchant Razorpay keys are configured per store in the merchant app (Settings �
 2. `GET /api/public/store` — branding, currency, payment methods.
 3. `GET /api/public/catalog` — categories + products; respect `sold_out`.
 4. `POST /api/public/orders` — checkout with enabled `payment_method`.
-5. Razorpay: open checkout → poll `GET .../status?token=checkout_token`.
+5. Razorpay: open checkout → `POST .../verify-payment` → poll `GET .../status?token=checkout_token` if needed.
 6. UPI: upload proof → `POST /api/public/orders` with `payment_method: "upi"` + `payment_proof_url`.
 
 Demo reference implementation: `storefront-web/` in this repo.

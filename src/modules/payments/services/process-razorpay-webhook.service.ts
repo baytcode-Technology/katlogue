@@ -6,6 +6,7 @@ import {
   getDecryptedRazorpaySecrets,
   parseStoredPaymentConfig,
 } from '../lib/payment-config.js'
+import { markRazorpayOrderPaid } from './mark-razorpay-order-paid.service.js'
 
 type RazorpayWebhookPayload = {
   event: string
@@ -53,7 +54,12 @@ export async function processRazorpayWebhook(rawBody: string, signature: string 
 
   const payment = await orderRepository.findPaymentByProviderOrderId(providerOrderId)
   if (!payment) {
+    console.warn('[razorpay-webhook] payment not found for order', providerOrderId)
     throw new AppError(404, 'Payment not found for Razorpay order', 'PAYMENT_NOT_FOUND')
+  }
+
+  if (payment.status === 'paid') {
+    return
   }
 
   const store = await storeRepository.findStoreById(payment.store_id)
@@ -76,14 +82,14 @@ export async function processRazorpayWebhook(rawBody: string, signature: string 
   }
 
   if (payload.event === 'payment.captured' || paymentEntity?.status === 'captured') {
-    await orderRepository.updatePayment(payment.id, {
-      status: 'paid',
-      provider_payment_id: providerPaymentId ?? payment.provider_payment_id,
-      paid_at: new Date().toISOString(),
-    })
-    await orderRepository.updateOrder(payment.order_id, {
-      payment_status: 'paid',
-      order_status: 'confirmed',
+    if (!providerPaymentId) {
+      console.warn('[razorpay-webhook] captured event missing payment id', providerOrderId)
+      return
+    }
+
+    await markRazorpayOrderPaid({
+      payment,
+      providerPaymentId,
     })
     return
   }
@@ -92,6 +98,11 @@ export async function processRazorpayWebhook(rawBody: string, signature: string 
     await orderRepository.updatePayment(payment.id, {
       status: 'failed',
       provider_payment_id: providerPaymentId ?? payment.provider_payment_id,
+    })
+    console.info('[razorpay-webhook] payment failed', {
+      orderId: payment.order_id,
+      providerOrderId,
+      providerPaymentId,
     })
   }
 }

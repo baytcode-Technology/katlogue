@@ -5,6 +5,7 @@ import { AppError } from '../../../shared/errors/app.error.js'
 import {
   assertRazorpaySetupConfigured,
   getDecryptedRazorpaySecrets,
+  isRazorpayVerifiedForMode,
   markRazorpayVerified,
   parseStoredPaymentConfig,
   toMerchantPaymentConfigView,
@@ -12,10 +13,38 @@ import {
 import { markRazorpayOrderPaid } from './mark-razorpay-order-paid.service.js'
 import { createRazorpayOrder, verifyRazorpayPaymentSignature } from './razorpay.service.js'
 import type { VerifyRazorpaySetupTestBody } from '../validations/razorpay-setup-test.validation.js'
+import type { StoredPaymentConfig } from '../types/payment-config.types.js'
 
 const SETUP_TEST_SOURCE = 'razorpay_setup_test'
 const SETUP_TEST_AMOUNT = 1
 const SETUP_TEST_CURRENCY = 'INR'
+
+async function persistRazorpayVerificationIfNeeded(
+  storeId: number,
+  stored: StoredPaymentConfig
+): Promise<StoredPaymentConfig> {
+  if (isRazorpayVerifiedForMode(stored)) {
+    return stored
+  }
+
+  const verifiedConfig = markRazorpayVerified(stored)
+  await storeRepository.updatePaymentConfig(storeId, verifiedConfig)
+  return verifiedConfig
+}
+
+function toSetupTestResult(stored: StoredPaymentConfig) {
+  const secrets = getDecryptedRazorpaySecrets(stored)
+  const view = toMerchantPaymentConfigView(stored, {
+    key_secret: secrets.key_secret ?? undefined,
+    webhook_secret: secrets.webhook_secret ?? undefined,
+  })
+
+  return {
+    test_passed: view.razorpay.test_passed,
+    test_passed_mode: view.razorpay.test_passed_mode,
+    mode: view.razorpay.mode,
+  }
+}
 
 export async function createRazorpaySetupTestCheckout(ownerId: string) {
   const store = await storeRepository.findStoreByOwnerId(ownerId)
@@ -107,55 +136,49 @@ export async function verifyRazorpaySetupTest(ownerId: string, body: VerifyRazor
     throw new AppError(400, 'Razorpay payment not found for this test', 'PAYMENT_NOT_FOUND')
   }
 
-  if (order.payment_status === 'paid' && payment.status === 'paid') {
-    const stored = parseStoredPaymentConfig(store.payment_config)
-    const secrets = getDecryptedRazorpaySecrets(stored)
-    const view = toMerchantPaymentConfigView(stored, {
-      key_secret: secrets.key_secret ?? undefined,
-      webhook_secret: secrets.webhook_secret ?? undefined,
-    })
-    return {
-      test_passed: view.razorpay.test_passed,
-      test_passed_mode: view.razorpay.test_passed_mode,
-      mode: view.razorpay.mode,
+  const alreadyPaid = order.payment_status === 'paid' && payment.status === 'paid'
+
+  if (!alreadyPaid) {
+    if (payment.provider_order_id !== body.razorpay_order_id) {
+      throw new AppError(400, 'Razorpay order does not match this payment', 'INVALID_RAZORPAY_ORDER')
     }
+
+    const stored = parseStoredPaymentConfig(store.payment_config)
+    const { key_secret } = assertRazorpaySetupConfigured(stored)
+
+    const valid = verifyRazorpayPaymentSignature({
+      keySecret: key_secret,
+      orderId: body.razorpay_order_id,
+      paymentId: body.razorpay_payment_id,
+      signature: body.razorpay_signature,
+    })
+
+    if (!valid) {
+      throw new AppError(400, 'Invalid Razorpay payment signature', 'INVALID_PAYMENT_SIGNATURE')
+    }
+
+    await markRazorpayOrderPaid({
+      payment,
+      providerPaymentId: body.razorpay_payment_id,
+    })
   }
 
-  if (payment.provider_order_id !== body.razorpay_order_id) {
-    throw new AppError(400, 'Razorpay order does not match this payment', 'INVALID_RAZORPAY_ORDER')
+  const refreshedStore = await storeRepository.findStoreById(store.id)
+  if (!refreshedStore) {
+    throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
   }
 
-  const stored = parseStoredPaymentConfig(store.payment_config)
-  const { key_secret } = assertRazorpaySetupConfigured(stored)
+  const stored = parseStoredPaymentConfig(refreshedStore.payment_config)
+  const verifiedConfig = await persistRazorpayVerificationIfNeeded(store.id, stored)
+  const result = toSetupTestResult(verifiedConfig)
 
-  const valid = verifyRazorpayPaymentSignature({
-    keySecret: key_secret,
-    orderId: body.razorpay_order_id,
-    paymentId: body.razorpay_payment_id,
-    signature: body.razorpay_signature,
-  })
-
-  if (!valid) {
-    throw new AppError(400, 'Invalid Razorpay payment signature', 'INVALID_PAYMENT_SIGNATURE')
+  if (!result.test_passed) {
+    throw new AppError(
+      500,
+      'Payment succeeded but Razorpay verification could not be saved',
+      'RAZORPAY_VERIFICATION_SAVE_FAILED'
+    )
   }
 
-  await markRazorpayOrderPaid({
-    payment,
-    providerPaymentId: body.razorpay_payment_id,
-  })
-
-  const verifiedConfig = markRazorpayVerified(stored)
-  await storeRepository.updatePaymentConfig(store.id, verifiedConfig)
-
-  const secrets = getDecryptedRazorpaySecrets(verifiedConfig)
-  const view = toMerchantPaymentConfigView(verifiedConfig, {
-    key_secret: secrets.key_secret ?? undefined,
-    webhook_secret: secrets.webhook_secret ?? undefined,
-  })
-
-  return {
-    test_passed: view.razorpay.test_passed,
-    test_passed_mode: view.razorpay.test_passed_mode,
-    mode: view.razorpay.mode,
-  }
+  return result
 }

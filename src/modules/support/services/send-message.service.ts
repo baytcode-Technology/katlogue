@@ -21,7 +21,7 @@ export async function sendMessage(
   }
 
   const conversation = await supportRepository.getConversationById(conversationId);
-  if (!conversation || conversation.store_id !== storeId) {
+  if (!conversation || Number(conversation.store_id) !== Number(storeId)) {
     throw new AppError(404, 'Conversation not found', 'NOT_FOUND');
   }
 

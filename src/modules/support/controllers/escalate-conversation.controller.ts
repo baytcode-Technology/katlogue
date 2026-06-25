@@ -10,7 +10,7 @@ import type {
 export const escalateConversation = asyncHandler(async (req: Request, res: Response) => {
   if (!req.authUser) throw new AppError(401, 'Unauthorized', 'UNAUTHORIZED');
 
-  const { store_id } = req.query as unknown as SupportStoreQuery;
+  const { store_id } = req.validatedQuery as SupportStoreQuery;
   const { id } = req.params as unknown as SupportConversationParams;
 
   const conversation = await escalateConversationService.escalateConversation(

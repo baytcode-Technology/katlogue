@@ -22,6 +22,7 @@ import { customerRoutes } from './modules/customers/index.js'
 import { instagramRoutes } from './modules/instagram/index.js'
 import metaWebhookRoutes from './modules/meta/routes/meta-webhook.routes.js'
 import { whatsappRoutes } from './modules/whatsapp/index.js'
+import { supportRoutes } from './modules/support/index.js'
 import { errorMiddleware } from './shared/middleware/error.middleware.js'
 
 const app = express()
@@ -70,6 +71,7 @@ app.use('/api/orders', orderRoutes)
 app.use('/api/customers', customerRoutes)
 app.use('/api/whatsapp', whatsappRoutes)
 app.use('/api/instagram', instagramRoutes)
+app.use('/api/support', supportRoutes)
 app.use('/api/subscriptions', subscriptionRoutes)
 app.use('/api/public', publicRoutes)
 

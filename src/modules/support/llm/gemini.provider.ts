@@ -2,7 +2,7 @@ import { AppError } from '../../../shared/errors/app.error.js';
 import type { LlmChatMessage, LlmProvider } from './types.js';
 
 const FALLBACK_MESSAGE =
-  'Sorry, I could not reach our AI assistant right now. Please try again in a moment or tap "Talk to our team" for human help.';
+  'Sorry, I could not reach our AI assistant right now. Please try again in a moment or tap "Talk with us" for human help.';
 
 export class GeminiProvider implements LlmProvider {
   private apiKey: string;

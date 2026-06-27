@@ -217,7 +217,7 @@ export async function closeConversation(
   const { data, error } = await supabaseAdmin
     .from('support_conversations')
     .update({
-      status: 'closed',
+      status: 'active',
       reply_mode: 'ai',
       closed_at: new Date().toISOString(),
     })
@@ -324,18 +324,17 @@ export async function getAdminSummary(): Promise<SupportAdminSummary> {
     .from('support_conversations')
     .select('id, status, reply_mode, admin_last_read_at, ticket_code')
     .gt('expires_at', now)
-    .not('ticket_code', 'is', null);
+    .eq('status', 'escalated');
 
   if (error) {
     throw new AppError(400, error.message, 'SUPPORT_ADMIN_SUMMARY_FAILED');
   }
 
   const rows = data ?? [];
-  const openTickets = rows.filter((row) => row.status === 'escalated');
   let unreadMessages = 0;
 
   await Promise.all(
-    openTickets.map(async (row) => {
+    rows.map(async (row) => {
       const count = await countUnreadMessages(
         row.id as number,
         'user',
@@ -348,7 +347,7 @@ export async function getAdminSummary(): Promise<SupportAdminSummary> {
   return {
     escalated_count: rows.length,
     unread_messages: unreadMessages,
-    awaiting_manual_count: openTickets.filter((r) => r.reply_mode === 'ai').length,
+    awaiting_manual_count: rows.filter((r) => r.reply_mode === 'ai').length,
   };
 }
 
@@ -369,6 +368,7 @@ export async function listAdminConversations(): Promise<SupportAdminConversation
     `
     )
     .gt('expires_at', now)
+    .neq('status', 'closed')
     .order('last_message_at', { ascending: false, nullsFirst: false });
 
   if (error) {

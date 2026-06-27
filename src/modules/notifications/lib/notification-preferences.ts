@@ -65,6 +65,7 @@ export function shouldSendNotification(
   switch (kind) {
     case 'chat_whatsapp':
     case 'chat_instagram':
+    case 'chat_support':
       return prefs.chats
     case 'order_online':
       return prefs.online_orders

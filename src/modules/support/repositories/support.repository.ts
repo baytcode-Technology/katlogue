@@ -156,7 +156,15 @@ export async function escalateConversation(
     throw new AppError(400, error?.message ?? 'Failed to escalate', 'SUPPORT_ESCALATE_FAILED');
   }
 
-  return mapConversation(data);
+  const resolved = mapConversation(data);
+  const code = resolved.ticket_code ?? ticketCode;
+  await insertMessage(
+    conversationId,
+    'system',
+    `Ticket ${code} raised — AiShopy support team has been notified.`
+  );
+
+  return resolved;
 }
 
 export async function setReplyMode(
@@ -221,7 +229,15 @@ export async function closeConversation(
     throw new AppError(400, error?.message ?? 'Failed to close ticket', 'SUPPORT_CLOSE_FAILED');
   }
 
-  return mapConversation(data);
+  const resolved = mapConversation(data);
+  const code = resolved.ticket_code ? `${resolved.ticket_code} · ` : '';
+  await insertMessage(
+    conversationId,
+    'system',
+    `${code}Issue resolved — you can continue chatting with AI.`
+  );
+
+  return resolved;
 }
 
 async function countUnreadMessages(
@@ -306,19 +322,20 @@ export async function getAdminSummary(): Promise<SupportAdminSummary> {
   const now = new Date().toISOString();
   const { data, error } = await supabaseAdmin
     .from('support_conversations')
-    .select('id, status, reply_mode, admin_last_read_at')
+    .select('id, status, reply_mode, admin_last_read_at, ticket_code')
     .gt('expires_at', now)
-    .eq('status', 'escalated');
+    .not('ticket_code', 'is', null);
 
   if (error) {
     throw new AppError(400, error.message, 'SUPPORT_ADMIN_SUMMARY_FAILED');
   }
 
   const rows = data ?? [];
+  const openTickets = rows.filter((row) => row.status === 'escalated');
   let unreadMessages = 0;
 
   await Promise.all(
-    rows.map(async (row) => {
+    openTickets.map(async (row) => {
       const count = await countUnreadMessages(
         row.id as number,
         'user',
@@ -331,7 +348,7 @@ export async function getAdminSummary(): Promise<SupportAdminSummary> {
   return {
     escalated_count: rows.length,
     unread_messages: unreadMessages,
-    awaiting_manual_count: rows.filter((r) => r.reply_mode === 'ai').length,
+    awaiting_manual_count: openTickets.filter((r) => r.reply_mode === 'ai').length,
   };
 }
 

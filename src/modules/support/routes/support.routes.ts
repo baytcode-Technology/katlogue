@@ -11,6 +11,7 @@ import {
   adminSendMessage,
 } from '../controllers/admin-send-message.controller.js';
 import { closeConversation } from '../controllers/close-conversation.controller.js';
+import { closeMerchantConversation } from '../controllers/close-merchant-conversation.controller.js';
 import { getAdminSummary } from '../controllers/get-admin-summary.controller.js';
 import { getMerchantUnread } from '../controllers/get-merchant-unread.controller.js';
 import { listAdminConversations } from '../controllers/admin-list-conversations.controller.js';
@@ -66,6 +67,14 @@ router.post(
   validateQuery(supportStoreQuerySchema),
   requireAuth,
   escalateConversation
+);
+
+router.post(
+  '/conversations/:id/close',
+  validateParams(supportConversationParamsSchema),
+  validateQuery(supportStoreQuerySchema),
+  requireAuth,
+  closeMerchantConversation
 );
 
 router.get(

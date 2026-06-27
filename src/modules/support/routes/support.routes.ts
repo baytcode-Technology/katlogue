@@ -11,6 +11,8 @@ import {
   adminSendMessage,
 } from '../controllers/admin-send-message.controller.js';
 import { closeConversation } from '../controllers/close-conversation.controller.js';
+import { getAdminSummary } from '../controllers/get-admin-summary.controller.js';
+import { getMerchantUnread } from '../controllers/get-merchant-unread.controller.js';
 import { listAdminConversations } from '../controllers/admin-list-conversations.controller.js';
 import { listAdminMessages } from '../controllers/admin-list-messages.controller.js';
 import { cleanupExpired } from '../controllers/cleanup-expired.controller.js';
@@ -20,6 +22,8 @@ import {
   getOrCreateConversation,
 } from '../controllers/get-or-create-conversation.controller.js';
 import { listMessages } from '../controllers/list-messages.controller.js';
+import { markAdminRead } from '../controllers/mark-admin-read.controller.js';
+import { markMerchantRead } from '../controllers/mark-merchant-read.controller.js';
 import { sendMessage } from '../controllers/send-message.controller.js';
 import { setReplyMode } from '../controllers/set-reply-mode.controller.js';
 import {
@@ -64,9 +68,31 @@ router.post(
   escalateConversation
 );
 
+router.get(
+  '/unread',
+  validateQuery(supportStoreQuerySchema),
+  requireAuth,
+  getMerchantUnread
+);
+
+router.post(
+  '/conversations/:id/read',
+  validateParams(supportConversationParamsSchema),
+  validateQuery(supportStoreQuerySchema),
+  requireAuth,
+  markMerchantRead
+);
+
 router.get('/admin/me', requireAuth, checkPlatformAdmin);
 
 router.get('/admin/conversations', requireAuth, requirePlatformAdmin, listAdminConversations);
+
+router.get(
+  '/admin/summary',
+  requireAuth,
+  requirePlatformAdmin,
+  getAdminSummary
+);
 
 router.get(
   '/admin/conversations/:id/messages',
@@ -100,6 +126,14 @@ router.post(
   requireAuth,
   requirePlatformAdmin,
   closeConversation
+);
+
+router.post(
+  '/admin/conversations/:id/read',
+  validateParams(supportConversationParamsSchema),
+  requireAuth,
+  requirePlatformAdmin,
+  markAdminRead
 );
 
 router.post('/internal/cleanup', requireInternalSecret, cleanupExpired);

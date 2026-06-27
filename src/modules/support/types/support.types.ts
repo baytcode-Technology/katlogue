@@ -1,5 +1,7 @@
 export type SupportConversationStatus = 'active' | 'escalated' | 'closed';
 
+export type SupportReplyMode = 'ai' | 'manual';
+
 export type SupportMessageRole = 'user' | 'assistant' | 'admin';
 
 export type SupportConversation = {
@@ -7,9 +9,11 @@ export type SupportConversation = {
   store_id: number;
   owner_id: string;
   status: SupportConversationStatus;
+  reply_mode: SupportReplyMode;
   last_message_at: string | null;
   expires_at: string;
   escalated_at: string | null;
+  closed_at: string | null;
   ticket_code: string | null;
   created_at: string;
 };

@@ -5,6 +5,7 @@ import type {
   SupportConversation,
   SupportMessage,
   SupportMessageRole,
+  SupportReplyMode,
 } from '../types/support.types.js';
 
 const SUPPORT_TTL_HOURS = 48;
@@ -142,6 +143,8 @@ export async function escalateConversation(
       status: 'escalated',
       escalated_at: new Date().toISOString(),
       ticket_code: existing.ticket_code ?? ticketCode,
+      reply_mode: 'ai',
+      closed_at: null,
     })
     .eq('id', conversationId)
     .select()
@@ -149,6 +152,71 @@ export async function escalateConversation(
 
   if (error || !data) {
     throw new AppError(400, error?.message ?? 'Failed to escalate', 'SUPPORT_ESCALATE_FAILED');
+  }
+
+  return mapConversation(data);
+}
+
+export async function setReplyMode(
+  conversationId: number,
+  replyMode: SupportReplyMode
+): Promise<SupportConversation> {
+  const existing = await getConversationById(conversationId);
+  if (!existing) {
+    throw new AppError(404, 'Conversation not found', 'NOT_FOUND');
+  }
+
+  if (existing.status !== 'escalated') {
+    throw new AppError(
+      400,
+      'Reply mode can only be changed on open tickets',
+      'INVALID_CONVERSATION_STATUS'
+    );
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('support_conversations')
+    .update({ reply_mode: replyMode })
+    .eq('id', conversationId)
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new AppError(400, error?.message ?? 'Failed to update reply mode', 'SUPPORT_REPLY_MODE_FAILED');
+  }
+
+  return mapConversation(data);
+}
+
+export async function closeConversation(
+  conversationId: number
+): Promise<SupportConversation> {
+  const existing = await getConversationById(conversationId);
+  if (!existing) {
+    throw new AppError(404, 'Conversation not found', 'NOT_FOUND');
+  }
+
+  if (existing.status !== 'escalated') {
+    throw new AppError(
+      400,
+      'Only open tickets can be closed',
+      'INVALID_CONVERSATION_STATUS'
+    );
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('support_conversations')
+    .update({
+      status: 'closed',
+      reply_mode: 'ai',
+      closed_at: new Date().toISOString(),
+    })
+    .eq('id', conversationId)
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new AppError(400, error?.message ?? 'Failed to close ticket', 'SUPPORT_CLOSE_FAILED');
   }
 
   return mapConversation(data);
@@ -213,6 +281,17 @@ export async function listAdminConversations(): Promise<SupportAdminConversation
       owner_email: emailByOwner.get(row.owner_id as string) ?? null,
       last_message_preview: previewMap.get(row.id as number) ?? null,
     };
+  }).sort((a, b) => {
+    const statusOrder = (status: string) => {
+      if (status === 'escalated') return 0;
+      if (status === 'active') return 1;
+      return 2;
+    };
+    const orderDiff = statusOrder(a.status) - statusOrder(b.status);
+    if (orderDiff !== 0) return orderDiff;
+    const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+    const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+    return bTime - aTime;
   });
 }
 

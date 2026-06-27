@@ -31,6 +31,15 @@ export async function sendMessage(
 
   const userMessage = await supportRepository.insertMessage(conversationId, 'user', content);
 
+  if (conversation.reply_mode === 'manual') {
+    const updatedConversation = await supportRepository.getConversationById(conversationId);
+    return {
+      user_message: userMessage,
+      assistant_message: null,
+      conversation: updatedConversation,
+    };
+  }
+
   const history = await supportRepository.listMessages(conversationId);
   const llmHistory: LlmChatMessage[] = history
     .filter((m) => m.role === 'user' || m.role === 'assistant')

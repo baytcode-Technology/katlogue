@@ -15,6 +15,8 @@ export type SupportConversation = {
   escalated_at: string | null;
   closed_at: string | null;
   ticket_code: string | null;
+  merchant_last_read_at: string | null;
+  admin_last_read_at: string | null;
   created_at: string;
 };
 
@@ -30,4 +32,17 @@ export type SupportAdminConversation = SupportConversation & {
   store_name: string;
   owner_email: string | null;
   last_message_preview: string | null;
+  unread_count?: number;
+};
+
+export type SupportMerchantUnreadSummary = {
+  unread_count: number;
+  conversation_id: number | null;
+  last_preview: string | null;
+};
+
+export type SupportAdminSummary = {
+  escalated_count: number;
+  unread_messages: number;
+  awaiting_manual_count: number;
 };

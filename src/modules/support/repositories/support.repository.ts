@@ -2,7 +2,9 @@ import { supabaseAdmin } from '../../../config/supabase.js';
 import { AppError } from '../../../shared/errors/app.error.js';
 import type {
   SupportAdminConversation,
+  SupportAdminSummary,
   SupportConversation,
+  SupportMerchantUnreadSummary,
   SupportMessage,
   SupportMessageRole,
   SupportReplyMode,
@@ -222,6 +224,117 @@ export async function closeConversation(
   return mapConversation(data);
 }
 
+async function countUnreadMessages(
+  conversationId: number,
+  role: SupportMessageRole,
+  sinceIso: string | null
+): Promise<number> {
+  let query = supabaseAdmin
+    .from('support_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', conversationId)
+    .eq('role', role);
+
+  if (sinceIso) {
+    query = query.gt('created_at', sinceIso);
+  }
+
+  const { count, error } = await query;
+  if (error) return 0;
+  return count ?? 0;
+}
+
+export async function markMerchantRead(conversationId: number): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await supabaseAdmin
+    .from('support_conversations')
+    .update({ merchant_last_read_at: now })
+    .eq('id', conversationId);
+
+  if (error) {
+    throw new AppError(400, error.message, 'SUPPORT_MARK_READ_FAILED');
+  }
+}
+
+export async function markAdminRead(conversationId: number): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await supabaseAdmin
+    .from('support_conversations')
+    .update({ admin_last_read_at: now })
+    .eq('id', conversationId);
+
+  if (error) {
+    throw new AppError(400, error.message, 'SUPPORT_MARK_READ_FAILED');
+  }
+}
+
+export async function getMerchantUnreadSummary(
+  storeId: number
+): Promise<SupportMerchantUnreadSummary> {
+  const conversation = await findActiveConversation(storeId);
+  if (!conversation) {
+    return { unread_count: 0, conversation_id: null, last_preview: null };
+  }
+
+  const unreadCount = await countUnreadMessages(
+    conversation.id,
+    'admin',
+    conversation.merchant_last_read_at
+  );
+
+  let lastPreview: string | null = null;
+  if (unreadCount > 0) {
+    const { data: lastMsg } = await supabaseAdmin
+      .from('support_messages')
+      .select('content')
+      .eq('conversation_id', conversation.id)
+      .eq('role', 'admin')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    lastPreview = (lastMsg?.content as string | undefined) ?? null;
+  }
+
+  return {
+    unread_count: unreadCount,
+    conversation_id: conversation.id,
+    last_preview: lastPreview,
+  };
+}
+
+export async function getAdminSummary(): Promise<SupportAdminSummary> {
+  const now = new Date().toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('support_conversations')
+    .select('id, status, reply_mode, admin_last_read_at')
+    .gt('expires_at', now)
+    .eq('status', 'escalated');
+
+  if (error) {
+    throw new AppError(400, error.message, 'SUPPORT_ADMIN_SUMMARY_FAILED');
+  }
+
+  const rows = data ?? [];
+  let unreadMessages = 0;
+
+  await Promise.all(
+    rows.map(async (row) => {
+      const count = await countUnreadMessages(
+        row.id as number,
+        'user',
+        (row.admin_last_read_at as string | null) ?? null
+      );
+      unreadMessages += count;
+    })
+  );
+
+  return {
+    escalated_count: rows.length,
+    unread_messages: unreadMessages,
+    awaiting_manual_count: rows.filter((r) => r.reply_mode === 'ai').length,
+  };
+}
+
 function generateTicketCode(): string {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -272,6 +385,21 @@ export async function listAdminConversations(): Promise<SupportAdminConversation
 
   const previewMap = new Map(previews.map((p) => [p.id, p.preview]));
 
+  const unreadCounts = await Promise.all(
+    rows.map(async (row) => {
+      if (row.status !== 'escalated') {
+        return { id: row.id as number, count: 0 };
+      }
+      const count = await countUnreadMessages(
+        row.id as number,
+        'user',
+        (row.admin_last_read_at as string | null) ?? null
+      );
+      return { id: row.id as number, count };
+    })
+  );
+  const unreadMap = new Map(unreadCounts.map((u) => [u.id, u.count]));
+
   return rows.map((row) => {
     const stores = row.stores as { name: string } | { name: string }[] | null;
     const storeName = Array.isArray(stores) ? stores[0]?.name : stores?.name;
@@ -280,6 +408,7 @@ export async function listAdminConversations(): Promise<SupportAdminConversation
       store_name: storeName ?? 'Unknown store',
       owner_email: emailByOwner.get(row.owner_id as string) ?? null,
       last_message_preview: previewMap.get(row.id as number) ?? null,
+      unread_count: unreadMap.get(row.id as number) ?? 0,
     };
   }).sort((a, b) => {
     const statusOrder = (status: string) => {

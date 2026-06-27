@@ -10,6 +10,7 @@ import {
 import {
   adminSendMessage,
 } from '../controllers/admin-send-message.controller.js';
+import { closeConversation } from '../controllers/close-conversation.controller.js';
 import { listAdminConversations } from '../controllers/admin-list-conversations.controller.js';
 import { listAdminMessages } from '../controllers/admin-list-messages.controller.js';
 import { cleanupExpired } from '../controllers/cleanup-expired.controller.js';
@@ -20,9 +21,11 @@ import {
 } from '../controllers/get-or-create-conversation.controller.js';
 import { listMessages } from '../controllers/list-messages.controller.js';
 import { sendMessage } from '../controllers/send-message.controller.js';
+import { setReplyMode } from '../controllers/set-reply-mode.controller.js';
 import {
   adminSendMessageSchema,
   sendSupportMessageSchema,
+  setReplyModeSchema,
   supportConversationParamsSchema,
   supportStoreQuerySchema,
 } from '../validations/support.validation.js';
@@ -80,6 +83,23 @@ router.post(
   requireAuth,
   requirePlatformAdmin,
   adminSendMessage
+);
+
+router.patch(
+  '/admin/conversations/:id/reply-mode',
+  validateParams(supportConversationParamsSchema),
+  validateBody(setReplyModeSchema),
+  requireAuth,
+  requirePlatformAdmin,
+  setReplyMode
+);
+
+router.post(
+  '/admin/conversations/:id/close',
+  validateParams(supportConversationParamsSchema),
+  requireAuth,
+  requirePlatformAdmin,
+  closeConversation
 );
 
 router.post('/internal/cleanup', requireInternalSecret, cleanupExpired);

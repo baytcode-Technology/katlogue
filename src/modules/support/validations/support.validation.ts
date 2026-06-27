@@ -17,6 +17,10 @@ export const adminSendMessageSchema = z.object({
   content: z.string().trim().min(1).max(2000),
 });
 
+export const setReplyModeSchema = z.object({
+  reply_mode: z.enum(['ai', 'manual']),
+});
+
 export type SupportStoreQuery = z.infer<typeof supportStoreQuerySchema>;
 export type SupportConversationParams = z.infer<typeof supportConversationParamsSchema>;
 export type SendSupportMessageBody = z.infer<typeof sendSupportMessageSchema>;

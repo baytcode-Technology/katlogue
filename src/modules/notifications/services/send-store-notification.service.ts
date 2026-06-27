@@ -116,6 +116,27 @@ export async function notifyInstagramChat(input: {
   })
 }
 
+export async function notifySupportChat(input: {
+  storeId: number
+  storeSlug: string
+  conversationId: number
+  preview: string
+}): Promise<void> {
+  const body = input.preview.trim() || 'New message'
+  await sendStoreNotification({
+    storeId: input.storeId,
+    kind: 'chat_support',
+    title: 'AiShopy team',
+    body,
+    data: {
+      type: 'support',
+      channel: 'support',
+      conversationId: String(input.conversationId),
+      storeSlug: input.storeSlug,
+    },
+  })
+}
+
 export async function notifyNewOrder(input: {
   storeId: number
   storeSlug: string

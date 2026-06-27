@@ -46,6 +46,7 @@ export type UpsertPushTokenInput = {
 export type StoreNotificationKind =
   | 'chat_whatsapp'
   | 'chat_instagram'
+  | 'chat_support'
   | 'order_online'
   | 'order_pos'
 

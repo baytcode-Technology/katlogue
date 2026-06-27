@@ -2,7 +2,7 @@ export type SupportConversationStatus = 'active' | 'escalated' | 'closed';
 
 export type SupportReplyMode = 'ai' | 'manual';
 
-export type SupportMessageRole = 'user' | 'assistant' | 'admin';
+export type SupportMessageRole = 'user' | 'assistant' | 'admin' | 'system';
 
 export type SupportConversation = {
   id: number;

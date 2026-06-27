@@ -12,6 +12,16 @@ export async function setReplyMode(conversationId: number, replyMode: SupportRep
     throw new AppError(410, 'This conversation has expired', 'CONVERSATION_EXPIRED');
   }
 
+  const wasManual = conversation.reply_mode === 'manual';
   const updated = await supportRepository.setReplyMode(conversationId, replyMode);
+
+  if (replyMode === 'manual' && !wasManual) {
+    await supportRepository.insertMessage(
+      conversationId,
+      'system',
+      'AiShopy support team has taken over this ticket.'
+    );
+  }
+
   return { conversation: updated };
 }

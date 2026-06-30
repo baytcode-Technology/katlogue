@@ -1,3 +1,4 @@
+import * as storeStaffRepository from '../../stores/repositories/store-staff.repository.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import {
@@ -11,12 +12,10 @@ import {
 import type { MerchantPaymentConfigView, UpdatePaymentConfigInput } from '../types/payment-config.types.js'
 
 export async function getPaymentConfigForOwner(
-  ownerId: string
+  ownerId: string,
+  storeId: number
 ): Promise<{ store_id: number; payment_config: MerchantPaymentConfigView }> {
-  const store = await storeRepository.findStoreByOwnerId(ownerId)
-  if (!store) {
-    throw new AppError(404, 'No store found', 'STORE_NOT_FOUND')
-  }
+  const store = await storeStaffRepository.resolveOwnedStore(ownerId, storeId)
 
   const stored = parseStoredPaymentConfig(store.payment_config)
   const secrets = getDecryptedRazorpaySecrets(stored)
@@ -32,12 +31,10 @@ export async function getPaymentConfigForOwner(
 
 export async function updatePaymentConfigForOwner(
   ownerId: string,
+  storeId: number,
   input: UpdatePaymentConfigInput
 ): Promise<{ store_id: number; payment_config: MerchantPaymentConfigView }> {
-  const store = await storeRepository.findStoreByOwnerId(ownerId)
-  if (!store) {
-    throw new AppError(404, 'No store found', 'STORE_NOT_FOUND')
-  }
+  const store = await storeStaffRepository.resolveOwnedStore(ownerId, storeId)
 
   const current = parseStoredPaymentConfig(store.payment_config)
   const next = mergePaymentConfigUpdate(current, input)

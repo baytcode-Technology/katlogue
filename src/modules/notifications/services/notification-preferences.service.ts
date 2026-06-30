@@ -1,3 +1,4 @@
+import * as storeStaffRepository from '../../stores/repositories/store-staff.repository.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import {
@@ -10,12 +11,10 @@ import type {
 } from '../types/notification.types.js'
 
 export async function getNotificationPreferencesForOwner(
-  ownerId: string
+  ownerId: string,
+  storeId: number
 ): Promise<{ store_id: number; notification_preferences: NotificationPreferencesView }> {
-  const store = await storeRepository.findStoreByOwnerId(ownerId)
-  if (!store) {
-    throw new AppError(404, 'No store found', 'STORE_NOT_FOUND')
-  }
+  const store = await storeStaffRepository.resolveOwnedStore(ownerId, storeId)
 
   return {
     store_id: store.id,
@@ -25,12 +24,10 @@ export async function getNotificationPreferencesForOwner(
 
 export async function updateNotificationPreferencesForOwner(
   ownerId: string,
+  storeId: number,
   input: UpdateNotificationPreferencesInput
 ): Promise<{ store_id: number; notification_preferences: NotificationPreferencesView }> {
-  const store = await storeRepository.findStoreByOwnerId(ownerId)
-  if (!store) {
-    throw new AppError(404, 'No store found', 'STORE_NOT_FOUND')
-  }
+  const store = await storeStaffRepository.resolveOwnedStore(ownerId, storeId)
 
   const current = parseStoredNotificationPreferences(store.notification_preferences)
   const next = mergeNotificationPreferencesUpdate(current, input)

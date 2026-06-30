@@ -1,19 +1,30 @@
 import { Router } from 'express'
 import express from 'express'
 import { requireAuth } from '../../../shared/middleware/auth.middleware.js'
-import { validateBody } from '../../../shared/middleware/validate.middleware.js'
-import { asyncHandler } from '../../../shared/helpers/async-handler.js'
+import { validateBody, validateQuery } from '../../../shared/middleware/validate.middleware.js'
+import { requiredStoreQuerySchema } from '../../stores/validations/store.validation.js'
 import { createSubscriptionCheckout } from '../controllers/create-checkout.controller.js'
 import { getSubscriptionPricing } from '../controllers/get-pricing.controller.js'
 import { verifySubscriptionPayment } from '../controllers/verify-payment.controller.js'
 import { getSubscriptionCheckoutStatus } from '../controllers/get-checkout-status.controller.js'
 import { verifySubscriptionPaymentSchema } from '../validations/subscription.validation.js'
 import * as processPlatformWebhookService from '../services/process-platform-webhook.service.js'
+import { asyncHandler } from '../../../shared/helpers/async-handler.js'
 
 export const subscriptionRoutes = Router()
 
-subscriptionRoutes.get('/pricing', requireAuth, getSubscriptionPricing)
-subscriptionRoutes.post('/checkout', requireAuth, createSubscriptionCheckout)
+subscriptionRoutes.get(
+  '/pricing',
+  requireAuth,
+  validateQuery(requiredStoreQuerySchema),
+  getSubscriptionPricing
+)
+subscriptionRoutes.post(
+  '/checkout',
+  requireAuth,
+  validateQuery(requiredStoreQuerySchema),
+  createSubscriptionCheckout
+)
 subscriptionRoutes.post(
   '/verify',
   requireAuth,

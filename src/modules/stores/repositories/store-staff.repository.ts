@@ -320,3 +320,18 @@ export async function claimPendingStaffInvites(
 
   return data?.length ?? 0
 }
+
+export async function resolveOwnedStore(
+  userId: string,
+  storeId: number
+): Promise<Store> {
+  const match = await findStoreByIdForUser(storeId, userId)
+  if (!match || match.role !== 'owner') {
+    throw new AppError(
+      403,
+      'Only the store owner can perform this action',
+      'FORBIDDEN'
+    )
+  }
+  return match.store
+}

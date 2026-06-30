@@ -1,15 +1,12 @@
-import * as storeRepository from '../../stores/repositories/store.repository.js'
+import * as storeStaffRepository from '../../stores/repositories/store-staff.repository.js'
 import * as checkoutRepository from '../repositories/subscription-checkout.repository.js'
 import { getBusinessCheckoutAmount } from '../../../shared/lib/subscription.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import { createPlatformOrder } from './platform-razorpay.service.js'
 import { randomBytes } from 'crypto'
 
-export async function createSubscriptionCheckout(ownerId: string) {
-  const store = await storeRepository.findStoreByOwnerId(ownerId)
-  if (!store) {
-    throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
-  }
+export async function createSubscriptionCheckout(ownerId: string, storeId: number) {
+  const store = await storeStaffRepository.resolveOwnedStore(ownerId, storeId)
 
   const hasPaidBefore = await checkoutRepository.hasPaidCheckoutForStore(store.id)
   const trialEligible = !hasPaidBefore
@@ -61,7 +58,7 @@ export async function getSubscriptionCheckoutStatus(ownerId: string, checkoutId:
     throw new AppError(403, 'You do not have access to this checkout', 'FORBIDDEN')
   }
 
-  const store = await storeRepository.findStoreById(checkout.store_id)
+  const store = await storeStaffRepository.resolveOwnedStore(ownerId, checkout.store_id)
 
   return {
     checkout,

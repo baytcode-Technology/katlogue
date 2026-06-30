@@ -12,7 +12,7 @@ export async function listOrdersByStore(
   ownerId: string,
   storeId: number
 ): Promise<OrderListItem[]> {
-  await storeRepository.assertStoreOwner(storeId, ownerId)
+  await storeRepository.assertStoreMember(storeId, ownerId)
 
   const orders = (await orderRepository.findOrdersByStoreId(storeId)).filter(
     (order) => order.source !== 'razorpay_setup_test'

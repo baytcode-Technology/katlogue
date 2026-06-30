@@ -1,8 +1,8 @@
-import { assertStoreOwner } from '../../stores/repositories/store.repository.js';
+import { assertStoreMember } from '../../stores/repositories/store.repository.js';
 import * as supportRepository from '../repositories/support.repository.js';
 
 export async function getOrCreateConversation(ownerId: string, storeId: number) {
-  await assertStoreOwner(storeId, ownerId);
+  await assertStoreMember(storeId, ownerId);
 
   const existing = await supportRepository.findActiveConversation(storeId);
   if (existing) {

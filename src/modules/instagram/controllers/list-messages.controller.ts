@@ -11,7 +11,7 @@ export const listInstagramChatMessages = asyncHandler(async (req: Request, res: 
   const params = req.params as unknown as ListMessagesParams
   const q = req.validatedQuery as ListMessagesQuery
 
-  await storeRepository.assertStoreOwner(q.store_id, req.authUser.id)
+  await storeRepository.assertStoreMember(q.store_id, req.authUser.id)
 
   const messages = await chatRepository.listMessages({
     storeId: q.store_id,

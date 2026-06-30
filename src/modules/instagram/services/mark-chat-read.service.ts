@@ -10,7 +10,7 @@ export async function markInstagramChatRead(
   storeId: number,
   conversationId: number
 ): Promise<InstagramConversation> {
-  await storeRepository.assertStoreOwner(storeId, ownerId)
+  await storeRepository.assertStoreMember(storeId, ownerId)
 
   const existing = await chatRepository.findConversationById({ storeId, conversationId })
   if (!existing) {

@@ -24,6 +24,8 @@ export async function assertStoreOwner(
   }
 }
 
+export { assertStoreMember } from './store-staff.repository.js'
+
 function mapUniqueViolation(error: { code?: string; message?: string }): never {
   const message = error.message ?? ''
   if (message.includes('slug')) {

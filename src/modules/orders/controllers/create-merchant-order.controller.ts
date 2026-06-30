@@ -15,7 +15,7 @@ export const createMerchantOrder = asyncHandler(async (req: Request, res: Respon
   if (!store) {
     throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
   }
-  await storeRepository.assertStoreOwner(body.store_id, req.authUser.id)
+  await storeRepository.assertStoreMember(body.store_id, req.authUser.id)
 
   const { store_id: _storeId, ...orderInput } = body
   const isPos = orderInput.offline === true

@@ -1,5 +1,5 @@
 import { AppError } from '../../../shared/errors/app.error.js'
-import { assertStoreOwner } from '../../stores/repositories/store.repository.js'
+import { assertStoreMember } from '../../stores/repositories/store.repository.js'
 import * as categoryRepository from '../repositories/category.repository.js'
 
 /**
@@ -13,6 +13,6 @@ export async function deleteCategory(ownerId: string, categoryId: number): Promi
     throw new AppError(404, 'Category not found', 'CATEGORY_NOT_FOUND')
   }
 
-  await assertStoreOwner(existing.store_id, ownerId)
+  await assertStoreMember(existing.store_id, ownerId)
   await categoryRepository.deleteCategory(categoryId)
 }

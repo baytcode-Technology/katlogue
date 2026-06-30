@@ -102,7 +102,7 @@ export async function sendWhatsAppTemplateMessage(
 
   if (input.storeId && input.ownerId) {
 
-    await storeRepository.assertStoreOwner(input.storeId, input.ownerId)
+    await storeRepository.assertStoreMember(input.storeId, input.ownerId)
 
     const store = await storeRepository.findStoreById(input.storeId)
 

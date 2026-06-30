@@ -11,7 +11,7 @@ export const listChats = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const q = req.validatedQuery as ListChatsQuery
-  await storeRepository.assertStoreOwner(q.store_id, req.authUser.id)
+  await storeRepository.assertStoreMember(q.store_id, req.authUser.id)
 
   const chats = await chatRepository.listConversations(q.store_id)
 

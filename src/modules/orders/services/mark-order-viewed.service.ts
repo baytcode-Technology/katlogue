@@ -8,7 +8,7 @@ export async function markOrderViewedByMerchant(
   storeId: number,
   orderId: number
 ): Promise<OrderWithCustomer> {
-  await storeRepository.assertStoreOwner(storeId, ownerId)
+  await storeRepository.assertStoreMember(storeId, ownerId)
 
   const order = await orderRepository.findOrderById(orderId)
   if (!order || order.store_id !== storeId) {

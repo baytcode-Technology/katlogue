@@ -50,7 +50,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
           const storeId = typeof raw === 'number' ? raw : Number(String(raw ?? '').trim())
           if (!Number.isFinite(storeId) || storeId <= 0) return
 
-          await storeRepository.assertStoreOwner(storeId, auth.userId)
+          await storeRepository.assertStoreMember(storeId, auth.userId)
           await socket.join(storeRoom(storeId))
           socket.data.storeId = storeId
         } catch {

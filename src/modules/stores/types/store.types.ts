@@ -33,6 +33,7 @@ export type Store = {
 export type MyStoreResult = {
   hasStore: boolean
   store: Store | null
+  role: 'owner' | 'staff' | null
 }
 
 /** Partial PATCH — only defined keys are updated. */

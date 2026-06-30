@@ -1,5 +1,5 @@
 import { AppError } from '../../../shared/errors/app.error.js';
-import { assertStoreOwner, findStoreById } from '../../stores/repositories/store.repository.js';
+import { assertStoreMember, findStoreById } from '../../stores/repositories/store.repository.js';
 import { buildSupportSystemPrompt } from '../knowledge/katlogue-support-knowledge.js';
 import { completeWithFallback } from '../llm/index.js';
 import type { LlmChatMessage } from '../llm/types.js';
@@ -12,7 +12,7 @@ export async function sendMessage(
   conversationId: number,
   content: string
 ) {
-  await assertStoreOwner(storeId, ownerId);
+  await assertStoreMember(storeId, ownerId);
 
   try {
     checkSupportRateLimit(storeId);

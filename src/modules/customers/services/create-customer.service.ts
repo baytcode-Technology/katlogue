@@ -9,7 +9,7 @@ function isOfflinePlaceholder(number: string): boolean {
 }
 
 export async function createCustomer(ownerId: string, body: CreateCustomerBody) {
-  await storeRepository.assertStoreOwner(body.store_id, ownerId)
+  await storeRepository.assertStoreMember(body.store_id, ownerId)
 
   const phone = body.phone?.trim()
   const whatsapp_number = phone

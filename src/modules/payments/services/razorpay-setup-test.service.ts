@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto'
 import * as orderRepository from '../../orders/repositories/order.repository.js'
+import * as storeStaffRepository from '../../stores/repositories/store-staff.repository.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import {
@@ -46,11 +47,8 @@ function toSetupTestResult(stored: StoredPaymentConfig) {
   }
 }
 
-export async function createRazorpaySetupTestCheckout(ownerId: string) {
-  const store = await storeRepository.findStoreByOwnerId(ownerId)
-  if (!store) {
-    throw new AppError(404, 'No store found', 'STORE_NOT_FOUND')
-  }
+export async function createRazorpaySetupTestCheckout(ownerId: string, storeId: number) {
+  const store = await storeStaffRepository.resolveOwnedStore(ownerId, storeId)
 
   const stored = parseStoredPaymentConfig(store.payment_config)
   assertRazorpaySetupConfigured(stored)
@@ -116,11 +114,12 @@ export async function createRazorpaySetupTestCheckout(ownerId: string) {
   }
 }
 
-export async function verifyRazorpaySetupTest(ownerId: string, body: VerifyRazorpaySetupTestBody) {
-  const store = await storeRepository.findStoreByOwnerId(ownerId)
-  if (!store) {
-    throw new AppError(404, 'No store found', 'STORE_NOT_FOUND')
-  }
+export async function verifyRazorpaySetupTest(
+  ownerId: string,
+  storeId: number,
+  body: VerifyRazorpaySetupTestBody
+) {
+  const store = await storeStaffRepository.resolveOwnedStore(ownerId, storeId)
 
   const order = await orderRepository.findOrderByIdAndCheckoutToken(body.order_id, body.checkout_token)
   if (!order || order.store_id !== store.id) {

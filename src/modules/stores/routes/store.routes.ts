@@ -18,6 +18,7 @@ import {
   createStoreSchema,
   inviteStaffSchema,
   myStoreQuerySchema,
+  requiredStoreQuerySchema,
   staffParamsSchema,
   staffStoreQuerySchema,
   updateStoreSchema,
@@ -32,7 +33,13 @@ router.get(
   validateQuery(myStoreQuerySchema),
   getMyStore
 )
-router.patch('/me', requireAuth, validateBody(updateStoreSchema), updateMyStore)
+router.patch(
+  '/me',
+  requireAuth,
+  validateQuery(requiredStoreQuerySchema),
+  validateBody(updateStoreSchema),
+  updateMyStore
+)
 router.post('/', validateBody(createStoreSchema), requireAuth, createStore)
 
 router.get(

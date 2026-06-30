@@ -98,6 +98,12 @@ export const myStoreQuerySchema = z.object({
 
 export type MyStoreQuery = z.infer<typeof myStoreQuerySchema>
 
+export const requiredStoreQuerySchema = z.object({
+  store_id: z.coerce.number().int().positive(),
+})
+
+export type RequiredStoreQuery = z.infer<typeof requiredStoreQuerySchema>
+
 export const inviteStaffSchema = z.object({
   email: z.string().trim().email('Invalid email address'),
 })

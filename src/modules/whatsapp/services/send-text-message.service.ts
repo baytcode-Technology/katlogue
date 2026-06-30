@@ -88,7 +88,7 @@ export type SendWhatsAppTextInput = {
 
 export async function sendWhatsAppTextMessage(input: SendWhatsAppTextInput) {
 
-  await storeRepository.assertStoreOwner(input.storeId, input.ownerId)
+  await storeRepository.assertStoreMember(input.storeId, input.ownerId)
 
 
 

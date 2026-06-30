@@ -9,7 +9,7 @@ export async function updateOrderStatuses(
   orderId: number,
   input: UpdateOrderInput
 ): Promise<Order> {
-  await storeRepository.assertStoreOwner(storeId, ownerId)
+  await storeRepository.assertStoreMember(storeId, ownerId)
 
   const existing = await orderRepository.findOrderById(orderId)
   if (!existing || existing.store_id !== storeId) {

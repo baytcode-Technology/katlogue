@@ -10,7 +10,7 @@ export const listInstagramChats = asyncHandler(async (req: Request, res: Respons
   if (!req.authUser) throw new AppError(401, 'Unauthorized', 'UNAUTHORIZED')
 
   const q = req.validatedQuery as ListChatsQuery
-  await storeRepository.assertStoreOwner(q.store_id, req.authUser.id)
+  await storeRepository.assertStoreMember(q.store_id, req.authUser.id)
 
   const store = await storeRepository.findStoreById(q.store_id)
   if (store?.ig_user_id && store.ig_access_token) {

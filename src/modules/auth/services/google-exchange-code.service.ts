@@ -1,6 +1,7 @@
 import { env, isGoogleOAuthConfigured } from '../../../config/env.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import * as authRepository from '../repositories/auth.repository.js'
+import * as claimStaffInvitesService from './claim-staff-invites.service.js'
 import type { VerifyOtpResult } from '../types/auth.types.js'
 
 type GoogleTokenResponse = {
@@ -16,7 +17,8 @@ export async function signInWithGoogleAuthCode(input: {
   codeVerifier: string
 }): Promise<VerifyOtpResult> {
   const idToken = await exchangeGoogleAuthCode(input)
-  return authRepository.signInWithGoogleIdToken(idToken)
+  const result = await authRepository.signInWithGoogleIdToken(idToken)
+  return claimStaffInvitesService.claimStaffInvitesForUser(result)
 }
 
 async function exchangeGoogleAuthCode(input: {

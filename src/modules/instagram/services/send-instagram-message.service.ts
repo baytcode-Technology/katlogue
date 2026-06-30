@@ -42,7 +42,7 @@ export type SendInstagramTextInput = {
 }
 
 export async function sendInstagramTextMessageService(input: SendInstagramTextInput) {
-  await storeRepository.assertStoreOwner(input.storeId, input.ownerId)
+  await storeRepository.assertStoreMember(input.storeId, input.ownerId)
 
   const store = await storeRepository.findStoreById(input.storeId)
   if (!store) {

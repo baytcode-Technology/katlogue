@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../../../config/supabase.js'
 import { AppError } from '../../../shared/errors/app.error.js'
+import { assertStoreMember } from '../../stores/repositories/store-staff.repository.js'
 import type {
   CreateProductInput,
   Product,
@@ -26,20 +27,7 @@ export async function assertStoreOwner(
   storeId: number,
   ownerId: string
 ): Promise<void> {
-  const { data, error } = await supabaseAdmin
-    .from('stores')
-    .select('id')
-    .eq('id', storeId)
-    .eq('owner_id', ownerId)
-    .maybeSingle()
-
-  if (error) {
-    throw new AppError(400, error.message, 'STORE_LOOKUP_FAILED')
-  }
-
-  if (!data) {
-    throw new AppError(403, 'You do not have access to this store', 'FORBIDDEN')
-  }
+  await assertStoreMember(storeId, ownerId)
 }
 
 export async function assertCategoryBelongsToStore(

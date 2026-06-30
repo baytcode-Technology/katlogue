@@ -55,7 +55,7 @@ export async function uploadProductImages(
     throw new AppError(400, 'At least one image file is required', 'NO_FILES')
   }
 
-  await storeRepository.assertStoreOwner(storeId, ownerId)
+  await storeRepository.assertStoreMember(storeId, ownerId)
 
   const bucket = env.SUPABASE_STORAGE_BUCKET
   await ensureStorageBucket(bucket)

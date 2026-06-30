@@ -91,3 +91,27 @@ export const updateStoreSchema = z
 
 export type CreateStoreBody = z.infer<typeof createStoreSchema>
 export type UpdateStoreBody = z.infer<typeof updateStoreSchema>
+
+export const myStoreQuerySchema = z.object({
+  store_id: z.coerce.number().int().positive().optional(),
+})
+
+export type MyStoreQuery = z.infer<typeof myStoreQuerySchema>
+
+export const inviteStaffSchema = z.object({
+  email: z.string().trim().email('Invalid email address'),
+})
+
+export type InviteStaffBody = z.infer<typeof inviteStaffSchema>
+
+export const staffParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+})
+
+export type StaffParams = z.infer<typeof staffParamsSchema>
+
+export const staffStoreQuerySchema = z.object({
+  store_id: z.coerce.number().int().positive(),
+})
+
+export type StaffStoreQuery = z.infer<typeof staffStoreQuerySchema>

@@ -89,6 +89,7 @@ export async function updateStore(storeId: number, patch: UpdateStoreInput): Pro
   if (patch.ai_system_prompt !== undefined) row.ai_system_prompt = patch.ai_system_prompt
   if (patch.ai_language !== undefined) row.ai_language = patch.ai_language
   if (patch.is_active !== undefined) row.is_active = patch.is_active
+  if (patch.theme_config !== undefined) row.theme_config = patch.theme_config
 
   const { data, error } = await supabaseAdmin
     .from('stores')

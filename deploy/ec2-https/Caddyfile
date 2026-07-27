@@ -1,0 +1,6 @@
+# Alternative to Nginx: Caddy auto-issues and renews Let's Encrypt certificates.
+# Install Caddy on Ubuntu, copy this file to /etc/caddy/Caddyfile, then: sudo systemctl reload caddy
+
+api.aishopy.io {
+    reverse_proxy 127.0.0.1:5000
+}

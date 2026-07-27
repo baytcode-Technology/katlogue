@@ -27,6 +27,10 @@ import { errorMiddleware } from './shared/middleware/error.middleware.js'
 
 const app = express()
 
+if (process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true') {
+  app.set('trust proxy', 1)
+}
+
 setupApiDocs(app)
 
 app.use(cors())

@@ -1,6 +1,6 @@
 import type { PublicPaymentMethods } from '../../payments/types/payment-config.types.js'
 import { parseStoredPaymentConfig, toPublicPaymentMethods } from '../../payments/lib/payment-config.js'
-import type { Store } from '../../stores/types/store.types.js'
+import type { Store, ThemeConfig } from '../../stores/types/store.types.js'
 import { parseStoredNotificationPreferences } from '../../notifications/lib/notification-preferences.js'
 import type { StoredNotificationPreferences } from '../../notifications/types/notification.types.js'
 
@@ -24,6 +24,7 @@ export type PublicStoreResponse = {
   country: string
   notification_preferences: StoredNotificationPreferences
   payment_methods: PublicPaymentMethods
+  theme_config: ThemeConfig | null
 }
 
 export function toPublicStore(store: Store): PublicStore {
@@ -50,5 +51,6 @@ export function toPublicStoreResponse(store: PublicStore): PublicStoreResponse {
     country: store.country,
     notification_preferences: parseStoredNotificationPreferences(store.notification_preferences),
     payment_methods: store.payment_methods,
+    theme_config: store.theme_config ?? null,
   }
 }

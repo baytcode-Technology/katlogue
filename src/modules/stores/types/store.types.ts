@@ -1,3 +1,18 @@
+export type ThemeTemplate = 'classic' | 'boutique' | 'modern'
+export type ProductCardStyle = 'classic' | 'minimal' | 'bold'
+
+/** Storefront theme customization. null / missing → default (current) look. */
+export type ThemeConfig = {
+  template?: ThemeTemplate
+  colors?: {
+    /** Hex color, e.g. #2DB84C */
+    primary?: string
+    background?: string
+    text?: string
+  }
+  productCard?: ProductCardStyle
+}
+
 export type Store = {
   id: number
   owner_id: string
@@ -18,6 +33,7 @@ export type Store = {
   timezone: string
   payment_config: Record<string, unknown>
   notification_preferences: Record<string, unknown>
+  theme_config: ThemeConfig | null
   ai_system_prompt: string | null
   ai_language: string | null
   industry: string | null
@@ -51,6 +67,7 @@ export type UpdateStoreInput = {
   ai_system_prompt?: string | null
   ai_language?: string | null
   is_active?: boolean
+  theme_config?: ThemeConfig | null
 }
 
 export type CreateStoreInput = {

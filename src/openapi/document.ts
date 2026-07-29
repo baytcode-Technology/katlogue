@@ -445,6 +445,24 @@ export function buildOpenApiDocument() {
             },
           },
         },
+        ThemeConfig: {
+          type: 'object',
+          nullable: true,
+          description:
+            'Storefront theme customization. null / missing = default look.',
+          properties: {
+            template: { type: 'string', enum: ['classic', 'boutique', 'modern'], example: 'classic' },
+            colors: {
+              type: 'object',
+              properties: {
+                primary: { type: 'string', example: '#2DB84C' },
+                background: { type: 'string', example: '#FFFFFF' },
+                text: { type: 'string', example: '#1A1A1A' },
+              },
+            },
+            productCard: { type: 'string', enum: ['classic', 'minimal', 'bold'], example: 'classic' },
+          },
+        },
         PublicStoreResponse: {
           type: 'object',
           properties: {
@@ -461,6 +479,7 @@ export function buildOpenApiDocument() {
             country: { type: 'string', example: 'IN' },
             notification_preferences: { $ref: '#/components/schemas/NotificationPreferences' },
             payment_methods: { $ref: '#/components/schemas/PublicPaymentMethods' },
+            theme_config: { $ref: '#/components/schemas/ThemeConfig' },
           },
         },
         PublicStoreData: {
@@ -699,6 +718,7 @@ export function buildOpenApiDocument() {
               description: 'Calendar date (YYYY-MM-DD). Valid through end of that day.',
               example: '2026-09-18',
             },
+            theme_config: { $ref: '#/components/schemas/ThemeConfig' },
             product_count: { type: 'integer', example: 12 },
             order_count: { type: 'integer', example: 34 },
             created_at: { type: 'string', format: 'date-time' },

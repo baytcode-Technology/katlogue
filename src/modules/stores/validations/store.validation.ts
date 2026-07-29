@@ -42,6 +42,23 @@ export const createStoreSchema = z.object({
   country: z.string().trim().min(1, 'Country is required').max(100),
 })
 
+const hexColor = z
+  .string()
+  .regex(/^#[0-9A-Fa-f]{6}$/, 'Must be a hex color like #RRGGBB')
+
+/** Storefront theme customization — strict: unknown keys are rejected. */
+export const themeConfigSchema = z.strictObject({
+  template: z.enum(['classic', 'boutique', 'modern']).optional(),
+  colors: z
+    .strictObject({
+      primary: hexColor.optional(),
+      background: hexColor.optional(),
+      text: hexColor.optional(),
+    })
+    .optional(),
+  productCard: z.enum(['classic', 'minimal', 'bold']).optional(),
+})
+
 const optionalUrl = z
   .union([z.string().trim().url('Must be a valid URL'), z.literal('')])
   .optional()
@@ -84,6 +101,8 @@ export const updateStoreSchema = z
     ai_system_prompt: z.union([z.string().trim().max(8000), z.null()]).optional(),
     ai_language: z.union([z.string().trim().max(16), z.null()]).optional(),
     is_active: z.boolean().optional(),
+    // null resets the theme to defaults
+    theme_config: themeConfigSchema.nullable().optional(),
   })
   .refine((data) => Object.values(data).some((value) => value !== undefined), {
     message: 'At least one field is required to update',

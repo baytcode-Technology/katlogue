@@ -41,6 +41,18 @@ export const connectWhatsApp = asyncHandler(async (req: Request, res: Response) 
         return 'invalid'
       }
     })(),
+    signupParams: (() => {
+      try {
+        const u = new URL(url)
+        return {
+          redirect_uri: u.searchParams.get('redirect_uri'),
+          override_default_response_type: u.searchParams.get('override_default_response_type'),
+          response_type: u.searchParams.get('response_type'),
+        }
+      } catch {
+        return null
+      }
+    })(),
   })
 
   res.status(200).json({

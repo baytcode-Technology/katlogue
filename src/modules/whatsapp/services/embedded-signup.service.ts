@@ -60,11 +60,7 @@ export function buildMetaOAuthUrl(input: { state: string }): string {
     redirect_uri: env.META.OAUTH_REDIRECT_URI!,
     response_type: 'code',
     state: input.state,
-    scope: [
-      'business_management',
-      'whatsapp_business_management',
-      'whatsapp_business_messaging',
-    ].join(','),
+    scope: ['whatsapp_business_management', 'whatsapp_business_messaging'].join(','),
   }
 
   const qs = new URLSearchParams(params).toString()
@@ -169,59 +165,100 @@ export async function exchangeForLongLivedToken(
   }
 }
 
-/** Discover WABA + phone number from Graph API after OAuth. */
-export async function fetchConnectedPhoneNumber(
+/** Resolve phone number details from a known phone number ID. */
+export async function fetchPhoneNumberDetails(input: {
+  phoneNumberId: string
   accessToken: string
-): Promise<MetaPhoneNumberAsset | null> {
+  wabaId?: string | null
+}): Promise<MetaPhoneNumberAsset | null> {
   try {
-    const { data: businesses } = await axios.get<{
-      data?: Array<{ id?: string }>
-    }>(`https://graph.facebook.com/${env.WHATSAPP.API_VERSION}/me/businesses`, {
-      params: { access_token: accessToken },
-      timeout: 15_000,
-    })
-
-    for (const business of businesses.data ?? []) {
-      if (!business.id) continue
-
-      const { data: wabaData } = await axios.get<{
-        data?: Array<{ id?: string; name?: string }>
-      }>(
-        `https://graph.facebook.com/${env.WHATSAPP.API_VERSION}/${business.id}/owned_whatsapp_business_accounts`,
-        { params: { access_token: accessToken }, timeout: 15_000 }
-      )
-
-      for (const waba of wabaData.data ?? []) {
-        if (!waba.id) continue
-
-        const { data: phones } = await axios.get<{
-          data?: Array<{
-            id?: string
-            display_phone_number?: string
-            verified_name?: string
-          }>
-        }>(
-          `https://graph.facebook.com/${env.WHATSAPP.API_VERSION}/${waba.id}/phone_numbers`,
-          { params: { access_token: accessToken }, timeout: 15_000 }
-        )
-
-        const phone = phones.data?.[0]
-        if (!phone?.id) continue
-
-        return {
-          phoneNumberId: phone.id,
-          displayPhoneNumber: phone.display_phone_number
-            ? normalizeWhatsAppNumber(phone.display_phone_number)
-            : null,
-          wabaId: waba.id,
-          verifiedName: phone.verified_name ?? null,
-        }
+    const { data } = await axios.get<{
+      id?: string
+      display_phone_number?: string
+      verified_name?: string
+    }>(
+      `https://graph.facebook.com/${env.WHATSAPP.API_VERSION}/${input.phoneNumberId}`,
+      {
+        params: {
+          fields: 'display_phone_number,verified_name',
+          access_token: input.accessToken,
+        },
+        timeout: 15_000,
       }
-    }
+    )
 
-    return null
+    if (!data.id) return null
+
+    return {
+      phoneNumberId: data.id,
+      displayPhoneNumber: data.display_phone_number
+        ? normalizeWhatsAppNumber(data.display_phone_number)
+        : null,
+      wabaId: input.wabaId ?? null,
+      verifiedName: data.verified_name ?? null,
+    }
   } catch {
     return null
+  }
+}
+
+/** List phone numbers under a WABA (uses whatsapp_business_management, not business_management). */
+export async function fetchPhoneFromWaba(input: {
+  wabaId: string
+  accessToken: string
+}): Promise<MetaPhoneNumberAsset | null> {
+  try {
+    const { data: phones } = await axios.get<{
+      data?: Array<{
+        id?: string
+        display_phone_number?: string
+        verified_name?: string
+      }>
+    }>(
+      `https://graph.facebook.com/${env.WHATSAPP.API_VERSION}/${input.wabaId}/phone_numbers`,
+      { params: { access_token: input.accessToken }, timeout: 15_000 }
+    )
+
+    const phone = phones.data?.[0]
+    if (!phone?.id) return null
+
+    return {
+      phoneNumberId: phone.id,
+      displayPhoneNumber: phone.display_phone_number
+        ? normalizeWhatsAppNumber(phone.display_phone_number)
+        : null,
+      wabaId: input.wabaId,
+      verifiedName: phone.verified_name ?? null,
+    }
+  } catch {
+    return null
+  }
+}
+
+/** Subscribe app to webhooks on the merchant WABA (required after Embedded Signup). */
+export async function subscribeWhatsAppWebhooks(input: {
+  wabaId: string
+  accessToken: string
+}): Promise<void> {
+  try {
+    const { data } = await axios.post<{ success?: boolean }>(
+      `https://graph.facebook.com/${env.WHATSAPP.API_VERSION}/${input.wabaId}/subscribed_apps`,
+      null,
+      {
+        params: { access_token: input.accessToken },
+        timeout: 15_000,
+      }
+    )
+
+    if (data.success === false) {
+      throw new Error('Meta returned success=false')
+    }
+
+    console.info('[whatsapp] subscribed_apps ok wabaId=%s', input.wabaId)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'unknown error'
+    console.warn('[whatsapp] subscribed_apps failed wabaId=%s %s', input.wabaId, message)
+    throw err
   }
 }
 

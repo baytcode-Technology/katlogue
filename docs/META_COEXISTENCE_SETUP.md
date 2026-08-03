@@ -1,5 +1,45 @@
 # Meta WhatsApp Coexistence Setup (Katlogue)
 
+## Permissions (no `business_management` required)
+
+Embedded Signup uses only:
+
+- `whatsapp_business_management` — WABA assets, webhook subscribe, phone lookup
+- `whatsapp_business_messaging` — send/receive messages
+
+**Do not request `business_management`.** WABA and phone IDs come from Meta's `WA_EMBEDDED_SIGNUP` session event in the mobile app WebView, not from `GET /me/businesses`.
+
+## Connect flow (mobile app)
+
+```mermaid
+sequenceDiagram
+  participant App as AiShopyApp
+  participant WebView as EmbeddedSignupWebView
+  participant Meta as MetaEmbeddedSignup
+  participant API as Backend
+
+  App->>API: GET /api/whatsapp/connect
+  API-->>App: signup URL
+  App->>WebView: open URL
+  Meta-->>WebView: WA_EMBEDDED_SIGNUP FINISH event
+  WebView-->>App: waba_id, phone_number_id
+  Meta-->>WebView: redirect with OAuth code
+  WebView-->>App: intercept callback URL
+  App->>API: POST /api/whatsapp/complete-onboarding
+  API-->>App: connected
+```
+
+1. Merchant taps **Connect WhatsApp** in the app.
+2. In-app WebView opens Meta Embedded Signup (`META_EMBEDDED_SIGNUP_CONFIG_ID` required).
+3. WebView captures `WA_EMBEDDED_SIGNUP` finish event (`waba_id`, optional `phone_number_id`).
+4. WebView intercepts OAuth redirect to `/api/whatsapp/oauth/callback` and extracts `code`.
+5. App calls `POST /api/whatsapp/complete-onboarding` with `{ storeId, code, wabaId, phoneNumberId? }`.
+6. Backend exchanges code, resolves phone via WABA if needed, subscribes webhooks, stores credentials.
+
+The OAuth callback URL (`/api/whatsapp/oauth/callback`) returns a static HTML page only; onboarding completes via the API above.
+
+---
+
 ## Partner path: Option A — Tech Provider (selected)
 
 | Step | Action | Status |
@@ -66,7 +106,7 @@ Sample payloads live in `backend/src/modules/whatsapp/fixtures/`.
 | # | Test | Expected |
 |---|------|----------|
 | 1 | Embedded Signup shows "Connect WhatsApp Business App" | Coexistence path visible |
-| 2 | Complete connect from Katlogue app → Account → WhatsApp | OAuth callback stores token + phone IDs |
+| 2 | Complete connect from Katlogue app → Settings → Connect WhatsApp | `POST /api/whatsapp/complete-onboarding` stores token + phone IDs |
 | 3 | `GET /api/whatsapp/connection-status` | `is_on_biz_app: true`, sync jobs listed |
 | 4 | Contacts appear in `customers` table | From `smb_app_state_sync` webhooks |
 | 5 | Past messages in `whatsapp_messages` | From `history` webhooks (if merchant opted in) |

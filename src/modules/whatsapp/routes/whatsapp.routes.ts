@@ -14,6 +14,7 @@ import { listChats } from '../controllers/list-chats.controller.js'
 import { listChatMessages } from '../controllers/list-messages.controller.js'
 import { markChatRead } from '../controllers/mark-chat-read.controller.js'
 import { connectWhatsApp } from '../controllers/connect-whatsapp.controller.js'
+import { completeOnboarding } from '../controllers/complete-onboarding.controller.js'
 import { metaOAuthCallback } from '../controllers/oauth-callback.controller.js'
 import { connectionStatus } from '../controllers/connection-status.controller.js'
 import { triggerSync } from '../controllers/trigger-sync.controller.js'
@@ -21,6 +22,7 @@ import { triggerSync } from '../controllers/trigger-sync.controller.js'
 import { sendTemplateSchema } from '../validations/send-template.validation.js'
 import { sendMessageSchema } from '../validations/send-message.validation.js'
 import { triggerSyncSchema } from '../validations/trigger-sync.validation.js'
+import { completeOnboardingSchema } from '../validations/complete-onboarding.validation.js'
 import {
   listChatsQuerySchema,
   listMessagesParamsSchema,
@@ -30,6 +32,12 @@ import {
 const router = Router()
 
 router.get('/connect', requireAuth, connectWhatsApp)
+router.post(
+  '/complete-onboarding',
+  requireAuth,
+  validateBody(completeOnboardingSchema),
+  completeOnboarding
+)
 router.get('/oauth/callback', metaOAuthCallback)
 router.get('/connection-status', requireAuth, connectionStatus)
 router.post('/sync', requireAuth, validateBody(triggerSyncSchema), triggerSync)

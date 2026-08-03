@@ -3,8 +3,11 @@ import * as storeNumberRepository from '../repositories/whatsapp-store-number.re
 import * as syncRepository from '../repositories/whatsapp-sync.repository.js'
 import {
   exchangeForLongLivedToken,
-  fetchConnectedPhoneNumber,
   fetchPhoneCoexistenceStatus,
+  fetchPhoneFromWaba,
+  fetchPhoneNumberDetails,
+  subscribeWhatsAppWebhooks,
+  type MetaPhoneNumberAsset,
   type MetaTokenExchangeResult,
 } from './embedded-signup.service.js'
 import { runFullCoexistenceSync } from './coexistence-sync.service.js'
@@ -15,6 +18,8 @@ import { assertPremiumAccess } from '../../../shared/lib/subscription.js'
 export type OnboardCoexistenceInput = {
   storeId: number
   token: MetaTokenExchangeResult
+  wabaId: string
+  phoneNumberId?: string | null
 }
 
 export type OnboardCoexistenceResult = {
@@ -25,9 +30,51 @@ export type OnboardCoexistenceResult = {
   syncTriggered: boolean
 }
 
+async function resolvePhoneAsset(input: {
+  wabaId: string
+  phoneNumberId?: string | null
+  accessToken: string
+}): Promise<MetaPhoneNumberAsset | null> {
+  const wabaId = input.wabaId.trim()
+  if (!wabaId) return null
+
+  if (input.phoneNumberId?.trim()) {
+    const details = await fetchPhoneNumberDetails({
+      phoneNumberId: input.phoneNumberId.trim(),
+      accessToken: input.accessToken,
+      wabaId,
+    })
+    if (details) return details
+
+    return {
+      phoneNumberId: input.phoneNumberId.trim(),
+      displayPhoneNumber: null,
+      wabaId,
+      verifiedName: null,
+    }
+  }
+
+  return fetchPhoneFromWaba({ wabaId, accessToken: input.accessToken })
+}
+
 export async function onboardCoexistenceStore(
   input: OnboardCoexistenceInput
 ): Promise<OnboardCoexistenceResult> {
+  const wabaId = input.wabaId?.trim()
+  if (!wabaId) {
+    throw new AppError(
+      400,
+      'wabaId is required from Embedded Signup session',
+      'EMBEDDED_SIGNUP_ASSETS_REQUIRED'
+    )
+  }
+
+  const existingStore = await storeRepository.findStoreById(input.storeId)
+  if (!existingStore) {
+    throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
+  }
+  assertPremiumAccess(existingStore)
+
   let accessToken = input.token.accessToken
 
   try {
@@ -37,29 +84,39 @@ export async function onboardCoexistenceStore(
     // Keep short-lived token if exchange fails (dev/test)
   }
 
-  const phoneAsset = await fetchConnectedPhoneNumber(accessToken)
+  const phoneAsset = await resolvePhoneAsset({
+    wabaId,
+    phoneNumberId: input.phoneNumberId,
+    accessToken,
+  })
 
-  const existingStore = await storeRepository.findStoreById(input.storeId)
-  if (!existingStore) {
-    throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
+  if (!phoneAsset?.phoneNumberId) {
+    throw new AppError(
+      400,
+      'Could not resolve WhatsApp phone number from Embedded Signup assets',
+      'EMBEDDED_SIGNUP_PHONE_NOT_FOUND'
+    )
   }
-  assertPremiumAccess(existingStore)
+
+  try {
+    await subscribeWhatsAppWebhooks({ wabaId, accessToken })
+  } catch (err) {
+    console.error('[coexistence] webhook subscribe failed', err)
+  }
 
   const store = await storeRepository.updateWhatsAppConnection({
     storeId: input.storeId,
-    waPhoneNumberId: phoneAsset?.phoneNumberId ?? null,
-    waWabaId: phoneAsset?.wabaId ?? null,
+    waPhoneNumberId: phoneAsset.phoneNumberId,
+    waWabaId: phoneAsset.wabaId ?? wabaId,
     waAccessToken: accessToken,
-    whatsappNumber: phoneAsset?.displayPhoneNumber ?? undefined,
+    whatsappNumber: phoneAsset.displayPhoneNumber ?? undefined,
   })
 
-  if (phoneAsset?.phoneNumberId) {
-    await storeNumberRepository.upsertStoreNumber({
-      storeId: input.storeId,
-      waPhoneNumberId: phoneAsset.phoneNumberId,
-      waBusinessAccountId: phoneAsset.wabaId,
-    })
-  }
+  await storeNumberRepository.upsertStoreNumber({
+    storeId: input.storeId,
+    waPhoneNumberId: phoneAsset.phoneNumberId,
+    waBusinessAccountId: phoneAsset.wabaId ?? wabaId,
+  })
 
   let syncTriggered = false
   const credentials = resolveStoreWhatsAppCredentials(store)
@@ -75,9 +132,9 @@ export async function onboardCoexistenceStore(
 
   return {
     storeId: input.storeId,
-    phoneNumberId: phoneAsset?.phoneNumberId ?? null,
-    wabaId: phoneAsset?.wabaId ?? null,
-    whatsappNumber: phoneAsset?.displayPhoneNumber ?? null,
+    phoneNumberId: phoneAsset.phoneNumberId,
+    wabaId: phoneAsset.wabaId ?? wabaId,
+    whatsappNumber: phoneAsset.displayPhoneNumber,
     syncTriggered,
   }
 }

@@ -5,7 +5,7 @@ import { AppError } from '../../../shared/errors/app.error.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { env } from '../../../config/env.js'
 import { assertPremiumAccess } from '../../../shared/lib/subscription.js'
-import { buildMetaOAuthUrl } from '../services/embedded-signup.service.js'
+import { buildEmbeddedSignupBridgeUrl, buildMetaOAuthUrl } from '../services/embedded-signup.service.js'
 import { parseStoreIdFromQuery } from '../../../shared/utils/parse-store-id.js'
 
 function buildState(payload: object): string {
@@ -28,10 +28,13 @@ export const connectWhatsApp = asyncHandler(async (req: Request, res: Response) 
   const nonce = crypto.randomBytes(12).toString('hex')
   const state = buildState({ storeId, nonce })
 
-  const url = buildMetaOAuthUrl({ state })
+  const url = env.META.EMBEDDED_SIGNUP_CONFIG_ID
+    ? buildEmbeddedSignupBridgeUrl({ state })
+    : buildMetaOAuthUrl({ state })
 
   console.info('[whatsapp][connect] generated signup URL', {
     storeId,
+    signupFlow: env.META.EMBEDDED_SIGNUP_CONFIG_ID ? 'sdk-bridge' : 'oauth-dialog',
     redirectUri: env.META.OAUTH_REDIRECT_URI ?? null,
     hasConfigId: Boolean(env.META.EMBEDDED_SIGNUP_CONFIG_ID),
     urlHost: (() => {

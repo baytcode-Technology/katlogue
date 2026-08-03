@@ -18,6 +18,7 @@ import { completeOnboarding } from '../controllers/complete-onboarding.controlle
 import { metaOAuthCallback } from '../controllers/oauth-callback.controller.js'
 import { connectionStatus } from '../controllers/connection-status.controller.js'
 import { triggerSync } from '../controllers/trigger-sync.controller.js'
+import { embeddedSignupPage } from '../controllers/embedded-signup-page.controller.js'
 import { whatsappDebugSession } from '../controllers/debug-session.controller.js'
 
 import { sendTemplateSchema } from '../validations/send-template.validation.js'
@@ -40,6 +41,7 @@ router.post(
   completeOnboarding
 )
 router.get('/oauth/callback', metaOAuthCallback)
+router.get('/embedded-signup', embeddedSignupPage)
 router.post('/debug-session', requireAuth, whatsappDebugSession)
 router.get('/connection-status', requireAuth, connectionStatus)
 router.post('/sync', requireAuth, validateBody(triggerSyncSchema), triggerSync)

@@ -49,11 +49,112 @@ function buildWhatsAppEmbeddedSignupUrl(input: { state: string }): string {
   return `https://business.facebook.com/messaging/whatsapp/onboard/?${qs}`
 }
 
+export function resolveApiPublicOrigin(): string {
+  if (env.API_PUBLIC_URL) return env.API_PUBLIC_URL.replace(/\/$/, '')
+  if (env.META.OAUTH_REDIRECT_URI) {
+    return new URL(env.META.OAUTH_REDIRECT_URI).origin
+  }
+  throw new AppError(
+    503,
+    'API_PUBLIC_URL or META_OAUTH_REDIRECT_URI must be set for Embedded Signup bridge',
+    'META_OAUTH_NOT_CONFIGURED'
+  )
+}
+
+/** Mobile WebView bridge on our domain (FB SDK + postMessage). */
+export function buildEmbeddedSignupBridgeUrl(input: { state: string }): string {
+  assertMetaOAuthConfigured()
+  if (!env.META.EMBEDDED_SIGNUP_CONFIG_ID) {
+    return buildMetaOAuthUrl(input)
+  }
+  const base = resolveApiPublicOrigin()
+  return `${base}/api/whatsapp/embedded-signup?state=${encodeURIComponent(input.state)}`
+}
+
+export function buildEmbeddedSignupBridgeHtml(): string {
+  assertMetaOAuthConfigured()
+  const appId = env.META.APP_ID!
+  const configId = env.META.EMBEDDED_SIGNUP_CONFIG_ID!
+  const apiVersion = env.WHATSAPP.API_VERSION
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Connect WhatsApp</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f8fafc; color: #334155; }
+      .card { text-align: center; padding: 24px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <p>Opening WhatsApp connection…</p>
+      <p id="status">Loading Meta SDK…</p>
+    </div>
+    <script>
+      function post(payload) {
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+        }
+      }
+      function setStatus(text) {
+        var el = document.getElementById('status');
+        if (el) el.textContent = text;
+      }
+      window.addEventListener('message', function (event) {
+        if (!event.origin || event.origin.indexOf('facebook.com') === -1) return;
+        try {
+          var data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+          if (data && data.type === 'WA_EMBEDDED_SIGNUP') {
+            post({ type: 'embedded_signup', data: data });
+          }
+        } catch (e) {}
+      });
+      window.fbAsyncInit = function () {
+        FB.init({
+          appId: ${JSON.stringify(appId)},
+          cookie: true,
+          xfbml: true,
+          version: ${JSON.stringify(apiVersion)}
+        });
+        setStatus('Starting WhatsApp signup…');
+        FB.login(function (response) {
+          if (response && response.authResponse && response.authResponse.code) {
+            post({ type: 'oauth_code', code: response.authResponse.code });
+            setStatus('Authorization complete. Return to AiShopy.');
+            return;
+          }
+          if (response && response.status === 'not_authorized') {
+            post({ type: 'embedded_signup', data: { type: 'WA_EMBEDDED_SIGNUP', event: 'ERROR', data: {} } });
+            setStatus('Authorization was not completed.');
+            return;
+          }
+          post({ type: 'embedded_signup', data: { type: 'WA_EMBEDDED_SIGNUP', event: 'CANCEL', data: {} } });
+          setStatus('Signup cancelled.');
+        }, {
+          config_id: ${JSON.stringify(configId)},
+          response_type: 'code',
+          override_default_response_type: true,
+          extras: {
+            setup: {},
+            sessionInfoVersion: '3',
+            featureType: 'whatsapp_business_app_onboarding'
+          }
+        });
+      };
+    </script>
+    <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
+  </body>
+</html>`
+}
+
 export function buildMetaOAuthUrl(input: { state: string }): string {
   assertMetaOAuthConfigured()
 
   if (env.META.EMBEDDED_SIGNUP_CONFIG_ID) {
-    return buildWhatsAppEmbeddedSignupUrl(input)
+    return buildEmbeddedSignupBridgeUrl(input)
   }
 
   const params: Record<string, string> = {

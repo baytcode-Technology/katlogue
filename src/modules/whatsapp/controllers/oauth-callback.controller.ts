@@ -1,25 +1,46 @@
 import type { Request, Response } from 'express'
 import { asyncHandler } from '../../../shared/helpers/async-handler.js'
-import { AppError } from '../../../shared/errors/app.error.js'
-import * as storeRepository from '../../stores/repositories/store.repository.js'
-import { exchangeCodeForAccessToken } from '../services/embedded-signup.service.js'
-import { onboardCoexistenceStore } from '../services/onboard-coexistence.service.js'
 
-function parseState(state: string | undefined): { storeId: number } | null {
-  if (!state) return null
-  try {
-    const json = Buffer.from(state, 'base64url').toString('utf8')
-    const data = JSON.parse(json) as { storeId?: string }
-    if (!data.storeId) return null
-    return { storeId: Number(data.storeId) }
-  } catch {
-    return null
-  }
-}
+const RETURN_HTML = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AiShopy — WhatsApp</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        margin: 0;
+        background: #f8fafc;
+        color: #334155;
+        text-align: center;
+        padding: 24px;
+      }
+      .card {
+        max-width: 360px;
+        background: #fff;
+        border-radius: 12px;
+        padding: 32px 24px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      }
+      h1 { font-size: 20px; margin: 0 0 12px; color: #0f172a; }
+      p { margin: 0; line-height: 1.5; font-size: 15px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Return to AiShopy</h1>
+      <p>WhatsApp authorization is complete. Close this window and return to the AiShopy app to finish connecting.</p>
+    </div>
+  </body>
+</html>`
 
+/** OAuth redirect target — mobile app intercepts this URL and completes onboarding via API. */
 export const metaOAuthCallback = asyncHandler(async (req: Request, res: Response) => {
-  const code = String(req.query.code ?? '').trim()
-  const stateRaw = typeof req.query.state === 'string' ? req.query.state : undefined
   const error = typeof req.query.error === 'string' ? req.query.error : undefined
 
   if (error) {
@@ -27,25 +48,5 @@ export const metaOAuthCallback = asyncHandler(async (req: Request, res: Response
     return
   }
 
-  if (!code) throw new AppError(400, 'Missing code', 'META_OAUTH_BAD_REQUEST')
-
-  const state = parseState(stateRaw)
-  if (!state) throw new AppError(400, 'Invalid state', 'META_OAUTH_BAD_STATE')
-
-  const token = await exchangeCodeForAccessToken(code)
-  const result = await onboardCoexistenceStore({ storeId: state.storeId, token })
-
-  const deepLink = process.env.MOBILE_DEEP_LINK_URL?.trim()
-  if (deepLink) {
-    const qs = new URLSearchParams({
-      connected: result.phoneNumberId ? '1' : '0',
-      sync: result.syncTriggered ? '1' : '0',
-    }).toString()
-    res.redirect(`${deepLink}?${qs}`)
-    return
-  }
-
-  res.status(200).send(
-    `WhatsApp connected successfully.${result.syncTriggered ? ' Contact and history sync started — this may take up to 24 hours.' : ''} You can close this window and return to the app.`
-  )
+  res.status(200).type('html').send(RETURN_HTML)
 })

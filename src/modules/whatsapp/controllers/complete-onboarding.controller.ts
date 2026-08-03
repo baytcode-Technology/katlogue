@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express'
 import { asyncHandler } from '../../../shared/helpers/async-handler.js'
 import { AppError } from '../../../shared/errors/app.error.js'
+import { env } from '../../../config/env.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { assertPremiumAccess } from '../../../shared/lib/subscription.js'
 import { exchangeCodeForAccessToken } from '../services/embedded-signup.service.js'
@@ -12,6 +13,15 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
 
   const body = req.body as CompleteOnboardingBody
   const { storeId, code, wabaId, phoneNumberId } = body
+
+  console.info('[whatsapp][complete-onboarding] START', {
+    storeId,
+    wabaId,
+    phoneNumberId: phoneNumberId ?? null,
+    codeLength: code?.length ?? 0,
+    userId: req.authUser.id,
+    configuredRedirectUri: env.META.OAUTH_REDIRECT_URI ?? null,
+  })
 
   await storeRepository.assertStoreOwner(storeId, req.authUser.id)
 
@@ -25,6 +35,14 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
     token,
     wabaId,
     phoneNumberId,
+  })
+
+  console.info('[whatsapp][complete-onboarding] SUCCESS', {
+    storeId: result.storeId,
+    phoneNumberId: result.phoneNumberId,
+    wabaId: result.wabaId,
+    whatsappNumber: result.whatsappNumber,
+    syncTriggered: result.syncTriggered,
   })
 
   res.status(200).json({

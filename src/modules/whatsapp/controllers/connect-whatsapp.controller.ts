@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import { asyncHandler } from '../../../shared/helpers/async-handler.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
+import { env } from '../../../config/env.js'
 import { assertPremiumAccess } from '../../../shared/lib/subscription.js'
 import { buildMetaOAuthUrl } from '../services/embedded-signup.service.js'
 import { parseStoreIdFromQuery } from '../../../shared/utils/parse-store-id.js'
@@ -28,6 +29,19 @@ export const connectWhatsApp = asyncHandler(async (req: Request, res: Response) 
   const state = buildState({ storeId, nonce })
 
   const url = buildMetaOAuthUrl({ state })
+
+  console.info('[whatsapp][connect] generated signup URL', {
+    storeId,
+    redirectUri: env.META.OAUTH_REDIRECT_URI ?? null,
+    hasConfigId: Boolean(env.META.EMBEDDED_SIGNUP_CONFIG_ID),
+    urlHost: (() => {
+      try {
+        return new URL(url).hostname
+      } catch {
+        return 'invalid'
+      }
+    })(),
+  })
 
   res.status(200).json({
     success: true,

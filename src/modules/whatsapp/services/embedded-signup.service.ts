@@ -39,6 +39,7 @@ function buildWhatsAppEmbeddedSignupUrl(input: { state: string }): string {
     config_id: env.META.EMBEDDED_SIGNUP_CONFIG_ID!,
     redirect_uri: env.META.OAUTH_REDIRECT_URI!,
     response_type: 'code',
+    override_default_response_type: 'true',
     state: input.state,
     scope: ['whatsapp_business_management', 'whatsapp_business_messaging'].join(','),
     extras,

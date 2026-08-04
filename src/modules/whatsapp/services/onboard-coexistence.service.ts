@@ -123,8 +123,17 @@ export async function onboardCoexistenceStore(
 
   if (credentials) {
     try {
-      await runFullCoexistenceSync({ storeId: input.storeId, credentials })
-      syncTriggered = true
+      const syncResult = await runFullCoexistenceSync({
+        storeId: input.storeId,
+        credentials,
+        initialDelayMs: 5_000,
+      })
+      syncTriggered = Boolean(syncResult.contacts)
+      if (syncResult.historySkipped) {
+        console.warn('[coexistence] contacts sync started; history sync deferred/failed', {
+          storeId: input.storeId,
+        })
+      }
     } catch (err) {
       console.error('[coexistence] sync trigger failed', err)
     }

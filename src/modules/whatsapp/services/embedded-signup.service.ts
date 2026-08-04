@@ -167,13 +167,47 @@ export async function exchangeCodeForAccessToken(code: string): Promise<MetaToke
 
 /** Resolve WABA ID from token via debug_token granular_scopes (no business_management). */
 export async function fetchWabaFromAccessToken(accessToken: string): Promise<string | null> {
+  const inspected = await inspectAccessToken(accessToken)
+  return inspected.wabaIds[0] ?? null
+}
+
+export type AccessTokenInspection = {
+  isValid: boolean
+  expiresAt: number | null
+  dataAccessExpiresAt: number | null
+  isExpired: boolean
+  scopes: string[]
+  wabaIds: string[]
+  appId: string | null
+  type: string | null
+}
+
+/** Validate merchant token before Graph API calls (sync, send, etc.). */
+export async function inspectAccessToken(accessToken: string): Promise<AccessTokenInspection> {
   assertMetaOAuthConfigured()
+
+  const empty: AccessTokenInspection = {
+    isValid: false,
+    expiresAt: null,
+    dataAccessExpiresAt: null,
+    isExpired: true,
+    scopes: [],
+    wabaIds: [],
+    appId: null,
+    type: null,
+  }
 
   try {
     const appAccessToken = `${env.META.APP_ID}|${env.META.APP_SECRET}`
     const { data } = await axios.get<{
       data?: {
+        is_valid?: boolean
+        expires_at?: number
+        data_access_expires_at?: number
+        scopes?: string[]
         granular_scopes?: Array<{ scope?: string; target_ids?: string[] }>
+        app_id?: string
+        type?: string
       }
     }>(`https://graph.facebook.com/${env.WHATSAPP.API_VERSION}/debug_token`, {
       params: {
@@ -183,17 +217,40 @@ export async function fetchWabaFromAccessToken(accessToken: string): Promise<str
       timeout: 15_000,
     })
 
-    for (const entry of data.data?.granular_scopes ?? []) {
+    const tokenData = data.data
+    if (!tokenData) return empty
+
+    const wabaIds: string[] = []
+    for (const entry of tokenData.granular_scopes ?? []) {
       if (entry.scope === 'whatsapp_business_management' && entry.target_ids?.[0]) {
-        return String(entry.target_ids[0])
+        wabaIds.push(String(entry.target_ids[0]))
       }
     }
 
-    return null
+    const expiresAt =
+      typeof tokenData.expires_at === 'number' && tokenData.expires_at > 0
+        ? tokenData.expires_at
+        : null
+    const nowSec = Math.floor(Date.now() / 1000)
+    const isExpired = expiresAt != null ? expiresAt <= nowSec : false
+
+    return {
+      isValid: Boolean(tokenData.is_valid) && !isExpired,
+      expiresAt,
+      dataAccessExpiresAt:
+        typeof tokenData.data_access_expires_at === 'number'
+          ? tokenData.data_access_expires_at
+          : null,
+      isExpired,
+      scopes: tokenData.scopes ?? [],
+      wabaIds,
+      appId: tokenData.app_id ?? null,
+      type: tokenData.type ?? null,
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'unknown error'
-    console.warn('[whatsapp] fetchWabaFromAccessToken failed %s', message)
-    return null
+    console.warn('[whatsapp] inspectAccessToken failed %s', message)
+    return empty
   }
 }
 

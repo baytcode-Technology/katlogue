@@ -7,6 +7,7 @@ import { resolveStoreWhatsAppCredentials } from '../services/whatsapp.service.js
 import {
   fetchPhoneCoexistenceStatus,
   fetchWabaWebhookSubscription,
+  inspectAccessToken,
   resolveWhatsAppWebhookCallbackUrl,
 } from '../services/embedded-signup.service.js'
 import * as syncRepository from '../repositories/whatsapp-sync.repository.js'
@@ -51,6 +52,8 @@ export const whatsappSyncDiagnostics = asyncHandler(async (req: Request, res: Re
     accessToken: credentials.accessToken,
   })
 
+  const tokenInspection = await inspectAccessToken(credentials.accessToken)
+
   const overrideMatches =
     Boolean(expectedCallback) &&
     webhookSubscription.overrideCallbackUri === expectedCallback
@@ -75,6 +78,14 @@ export const whatsappSyncDiagnostics = asyncHandler(async (req: Request, res: Re
         hasWebhookVerifyToken: Boolean(env.WHATSAPP.WEBHOOK_VERIFY_TOKEN),
         apiPublicUrl: env.API_PUBLIC_URL ?? null,
       },
+      token: {
+        isValid: tokenInspection.isValid,
+        isExpired: tokenInspection.isExpired,
+        expiresAt: tokenInspection.expiresAt,
+        scopes: tokenInspection.scopes,
+        wabaIds: tokenInspection.wabaIds,
+        type: tokenInspection.type,
+      },
       syncJobs,
       hints: [
         !expectedCallback
@@ -84,7 +95,10 @@ export const whatsappSyncDiagnostics = asyncHandler(async (req: Request, res: Re
           ? 'Set WHATSAPP_WEBHOOK_VERIFY_TOKEN on server (required for webhook override)'
           : null,
         !overrideMatches
-          ? 'Webhook override not set — deploy latest backend and tap Retry sync or reconnect'
+          ? 'Webhook override not set — tap Retry sync or reconnect'
+          : null,
+        !tokenInspection.isValid
+          ? 'Access token invalid/expired — tap Reconnect account in Connect WhatsApp'
           : null,
         phoneStatus.isOnBizApp && phoneStatus.platformType === 'CLOUD_API'
           ? null

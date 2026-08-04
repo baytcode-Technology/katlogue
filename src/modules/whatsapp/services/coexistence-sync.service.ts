@@ -5,6 +5,7 @@ import * as syncRepository from '../repositories/whatsapp-sync.repository.js'
 import {
   fetchPhoneCoexistenceStatus,
   fetchWabaWebhookSubscription,
+  inspectAccessToken,
   resolveWhatsAppWebhookCallbackUrl,
   subscribeWhatsAppWebhooksWithOverride,
 } from './embedded-signup.service.js'
@@ -46,8 +47,60 @@ function formatMetaSyncError(err: unknown, syncType: SmbAppDataSyncType): string
   return parts.join(' | ')
 }
 
+function isTokenAuthError(meta: MetaGraphError | null): boolean {
+  return meta?.code === 190 || meta?.code === 102 || meta?.error_subcode === 463
+}
+
 function isAlreadySyncedError(meta: MetaGraphError | null): boolean {
   return meta?.code === 2593107 || meta?.error_subcode === 2593107
+}
+
+function buildSyncFailure(meta: MetaGraphError | null, syncType: SmbAppDataSyncType): AppError {
+  if (isTokenAuthError(meta)) {
+    return new AppError(
+      401,
+      'WhatsApp access token expired or invalid — tap Reconnect account in Connect WhatsApp',
+      'WHATSAPP_TOKEN_EXPIRED'
+    )
+  }
+
+  if (meta?.code === 135000) {
+    const trace = meta.fbtrace_id ? ` fbtrace_id=${meta.fbtrace_id}` : ''
+    return new AppError(
+      400,
+      `Meta rejected coexistence sync (135000). Reconnect WhatsApp, finish the verification step in WhatsApp Business app, then retry within 24h.${trace}`,
+      'SMB_APP_DATA_FAILED'
+    )
+  }
+
+  const parts = [
+    meta?.message ?? 'Meta sync error',
+    meta?.code != null ? `code=${meta.code}` : null,
+    meta?.error_subcode != null ? `subcode=${meta.error_subcode}` : null,
+    `sync_type=${syncType}`,
+    meta?.fbtrace_id ? `fbtrace_id=${meta.fbtrace_id}` : null,
+  ].filter(Boolean)
+
+  return new AppError(400, parts.join(' | '), 'SMB_APP_DATA_FAILED')
+}
+
+export async function assertAccessTokenReadyForSync(accessToken: string): Promise<void> {  const inspection = await inspectAccessToken(accessToken)
+  console.info('[coexistence] token inspection', {
+    isValid: inspection.isValid,
+    isExpired: inspection.isExpired,
+    expiresAt: inspection.expiresAt,
+    scopes: inspection.scopes,
+    wabaIds: inspection.wabaIds,
+    type: inspection.type,
+  })
+
+  if (!inspection.isValid) {
+    throw new AppError(
+      401,
+      'WhatsApp access token expired or invalid — tap Reconnect account in Connect WhatsApp',
+      'WHATSAPP_TOKEN_EXPIRED'
+    )
+  }
 }
 
 export async function triggerSmbAppDataSync(input: {
@@ -79,7 +132,7 @@ export async function triggerSmbAppDataSync(input: {
     }
   }
 
-  const attempt = async (authMode: 'bearer' | 'query' | 'raw'): Promise<{ requestId: string; jobId: string }> => {
+  const attempt = async (): Promise<{ requestId: string; jobId: string }> => {
     const url = `https://graph.facebook.com/${input.credentials.apiVersion}/${input.credentials.phoneNumberId}/smb_app_data`
 
     console.info('[coexistence] smb_app_data request', {
@@ -87,31 +140,7 @@ export async function triggerSmbAppDataSync(input: {
       syncType: input.syncType,
       phoneNumberId: input.credentials.phoneNumberId,
       apiVersion: input.credentials.apiVersion,
-      authMode,
     })
-
-    const axiosConfig =
-      authMode === 'query'
-        ? {
-            params: { access_token: input.credentials.accessToken },
-            headers: { 'Content-Type': 'application/json' },
-            timeout: 30_000,
-          }
-        : authMode === 'raw'
-          ? {
-              headers: {
-                Authorization: input.credentials.accessToken,
-                'Content-Type': 'application/json',
-              },
-              timeout: 30_000,
-            }
-          : {
-              headers: {
-                Authorization: `Bearer ${input.credentials.accessToken}`,
-                'Content-Type': 'application/json',
-              },
-              timeout: 30_000,
-            }
 
     const { data } = await axios.post<{ request_id?: string; messaging_product?: string }>(
       url,
@@ -119,7 +148,13 @@ export async function triggerSmbAppDataSync(input: {
         messaging_product: 'whatsapp',
         sync_type: input.syncType,
       },
-      axiosConfig
+      {
+        headers: {
+          Authorization: `Bearer ${input.credentials.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 30_000,
+      }
     )
 
     const requestId = data.request_id?.trim() ?? null
@@ -139,25 +174,23 @@ export async function triggerSmbAppDataSync(input: {
     return { requestId: requestId ?? job.id, jobId: job.id }
   }
 
+  await assertAccessTokenReadyForSync(input.credentials.accessToken)
+
   try {
-    for (const authMode of ['bearer', 'query', 'raw'] as const) {
-      try {
-        return await attempt(authMode)
-      } catch (innerErr) {
-        const meta = parseMetaGraphError(innerErr)
-        if (meta?.code !== 135000 || authMode === 'raw') {
-          throw innerErr
-        }
-        console.warn('[coexistence] smb_app_data auth fallback', {
-          storeId: input.storeId,
-          syncType: input.syncType,
-          from: authMode,
-        })
-      }
-    }
-    throw new AppError(400, 'Failed to trigger sync', 'SMB_APP_DATA_FAILED')
+    return await attempt()
   } catch (err) {
     const meta = parseMetaGraphError(err)
+    if (meta) {
+      console.error('[coexistence] smb_app_data meta error', {
+        storeId: input.storeId,
+        syncType: input.syncType,
+        code: meta.code ?? null,
+        subcode: meta.error_subcode ?? null,
+        message: meta.message ?? null,
+        fbtrace_id: meta.fbtrace_id ?? null,
+      })
+    }
+
     if (isAlreadySyncedError(meta)) {
       console.warn('[coexistence] smb_app_data already synced at Meta', {
         storeId: input.storeId,
@@ -180,21 +213,19 @@ export async function triggerSmbAppDataSync(input: {
       })
       await sleep(8_000)
       try {
-        return await attempt('bearer')
+        return await attempt()
       } catch (retryErr) {
-        const message = formatMetaSyncError(retryErr, input.syncType)
-        console.error('[coexistence] smb_app_data retry failed', { storeId: input.storeId, message })
-        throw new AppError(400, message, 'SMB_APP_DATA_FAILED')
+        const retryMeta = parseMetaGraphError(retryErr)
+        console.error('[coexistence] smb_app_data retry failed', {
+          storeId: input.storeId,
+          code: retryMeta?.code ?? null,
+          fbtrace_id: retryMeta?.fbtrace_id ?? null,
+        })
+        throw buildSyncFailure(retryMeta, input.syncType)
       }
     }
 
-    const message = formatMetaSyncError(err, input.syncType)
-    console.error('[coexistence] smb_app_data failed', {
-      storeId: input.storeId,
-      syncType: input.syncType,
-      message,
-    })
-    throw new AppError(400, message, 'SMB_APP_DATA_FAILED')
+    throw buildSyncFailure(meta, input.syncType)
   }
 }
 

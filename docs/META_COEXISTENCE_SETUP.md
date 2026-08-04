@@ -7,19 +7,19 @@ Embedded Signup uses only:
 - `whatsapp_business_management` — WABA assets, webhook subscribe, phone lookup
 - `whatsapp_business_messaging` — send/receive messages
 
-**Do not request `business_management`.** WABA and phone IDs come from Meta's `WA_EMBEDDED_SIGNUP` session event in the mobile app WebView, not from `GET /me/businesses`.
+**Do not request `business_management`.** WABA ID is resolved server-side via `debug_token` granular scopes after OAuth code exchange; phone number ID is fetched from the WABA via `GET /{waba-id}/phone_numbers`.
 
 ## Connect flow (mobile app)
 
 1. Merchant taps **Connect WhatsApp** in the app.
-2. App opens `expo-web-browser` auth session (Custom Tabs / ASWebAuthenticationSession) to the FB SDK bridge page on `api.aishopy.io`.
-3. Bridge page calls `FB.login()` with Embedded Signup v4 extras (`whatsapp_business_app_onboarding`).
-4. Bridge page saves `waba_id` via `POST /api/whatsapp/embedded-signup/session` when `WA_EMBEDDED_SIGNUP` fires.
-5. Meta redirects to `/api/whatsapp/oauth/callback?code=...&state=...`; auth session returns that URL to the app.
-6. App calls `POST /api/whatsapp/complete-onboarding` with `{ storeId, code, state }`; backend resolves `wabaId` from session store.
-7. Backend exchanges code, subscribes webhooks, stores credentials.
+2. `openAuthSessionAsync` opens Meta's **direct Embedded Signup dialog URL** (top-level redirect in Custom Tabs — no FB.login bridge page).
+3. Merchant completes coexistence flow in Meta UI.
+4. Meta redirects to `https://api.aishopy.io/api/whatsapp/oauth/callback?code=...&state=...`.
+5. Backend **302 redirects** to `aishopyapp://whatsapp-oauth?code=...&state=...`; auth session returns to the app.
+6. App calls `POST /api/whatsapp/complete-onboarding` with `{ storeId, code, state? }`.
+7. Backend exchanges code, resolves WABA ID server-side, subscribes webhooks, stores credentials.
 
-Do **not** navigate directly to `business.facebook.com/messaging/whatsapp/onboard/` — that bypasses the FB SDK `window.opener` handshake and lands on Hosted ES OAuth Callback without delivering results.
+Do **not** use FB.login() bridge pages or `https://` as `openAuthSessionAsync`'s `redirectUri` — only the app scheme (`aishopyapp://whatsapp-oauth`) lets Custom Tabs / ASWebAuthenticationSession hand control back to the app.
 
 ---
 

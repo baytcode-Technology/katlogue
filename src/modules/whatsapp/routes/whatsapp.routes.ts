@@ -18,15 +18,12 @@ import { completeOnboarding } from '../controllers/complete-onboarding.controlle
 import { metaOAuthCallback } from '../controllers/oauth-callback.controller.js'
 import { connectionStatus } from '../controllers/connection-status.controller.js'
 import { triggerSync } from '../controllers/trigger-sync.controller.js'
-import { embeddedSignupPage } from '../controllers/embedded-signup-page.controller.js'
-import { saveEmbeddedSignupSessionAssets } from '../controllers/embedded-signup-session.controller.js'
 import { whatsappDebugSession } from '../controllers/debug-session.controller.js'
 
 import { sendTemplateSchema } from '../validations/send-template.validation.js'
 import { sendMessageSchema } from '../validations/send-message.validation.js'
 import { triggerSyncSchema } from '../validations/trigger-sync.validation.js'
 import { completeOnboardingSchema } from '../validations/complete-onboarding.validation.js'
-import { embeddedSignupSessionSchema } from '../validations/embedded-signup-session.validation.js'
 import {
   listChatsQuerySchema,
   listMessagesParamsSchema,
@@ -43,12 +40,6 @@ router.post(
   completeOnboarding
 )
 router.get('/oauth/callback', metaOAuthCallback)
-router.get('/embedded-signup', embeddedSignupPage)
-router.post(
-  '/embedded-signup/session',
-  validateBody(embeddedSignupSessionSchema),
-  saveEmbeddedSignupSessionAssets
-)
 router.post('/debug-session', requireAuth, whatsappDebugSession)
 router.get('/connection-status', requireAuth, connectionStatus)
 router.post('/sync', requireAuth, validateBody(triggerSyncSchema), triggerSync)

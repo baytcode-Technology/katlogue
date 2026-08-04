@@ -16,6 +16,8 @@ export type MetaPhoneNumberAsset = {
   verifiedName: string | null
 }
 
+export const WHATSAPP_APP_AUTH_REDIRECT_URI = 'aishopyapp://whatsapp-oauth'
+
 function assertMetaOAuthConfigured() {
   if (!env.META.APP_ID || !env.META.APP_SECRET || !env.META.OAUTH_REDIRECT_URI) {
     throw new AppError(
@@ -26,15 +28,21 @@ function assertMetaOAuthConfigured() {
   }
 }
 
-/** @deprecated LaunchBridge direct navigation breaks window.opener; use FB SDK bridge page instead. */
-export function buildLaunchBridgeSignupUrl(input: { state: string }): string {
-  const extras = JSON.stringify({
-    setup: {},
-    version: 'v4',
-    sessionInfoVersion: '3',
-    featureType: 'whatsapp_business_app_onboarding',
-  })
+const EMBEDDED_SIGNUP_EXTRAS = {
+  setup: {},
+  version: 'v4',
+  sessionInfoVersion: '3',
+  featureType: 'whatsapp_business_app_onboarding',
+} as const
 
+/** Top-level Embedded Signup dialog URL (Custom Tabs / auth session — no FB.login popup). */
+export function buildEmbeddedSignupDialogUrl(input: { state: string }): string {
+  assertMetaOAuthConfigured()
+  if (!env.META.EMBEDDED_SIGNUP_CONFIG_ID) {
+    return buildLegacyMetaOAuthUrl(input)
+  }
+
+  const extras = JSON.stringify(EMBEDDED_SIGNUP_EXTRAS)
   const params: Record<string, string> = {
     app_id: env.META.APP_ID!,
     config_id: env.META.EMBEDDED_SIGNUP_CONFIG_ID!,
@@ -50,136 +58,12 @@ export function buildLaunchBridgeSignupUrl(input: { state: string }): string {
   return `https://business.facebook.com/messaging/whatsapp/onboard/?${qs}`
 }
 
-export function resolveApiPublicOrigin(): string {
-  if (env.API_PUBLIC_URL) return env.API_PUBLIC_URL.replace(/\/$/, '')
-  if (env.META.OAUTH_REDIRECT_URI) {
-    return new URL(env.META.OAUTH_REDIRECT_URI).origin
-  }
-  throw new AppError(
-    503,
-    'API_PUBLIC_URL or META_OAUTH_REDIRECT_URI must be set for Embedded Signup bridge',
-    'META_OAUTH_NOT_CONFIGURED'
-  )
-}
-
-/** Mobile WebView bridge on our domain (FB SDK + postMessage). */
-export function buildEmbeddedSignupBridgeUrl(input: { state: string }): string {
-  assertMetaOAuthConfigured()
-  if (!env.META.EMBEDDED_SIGNUP_CONFIG_ID) {
-    return buildMetaOAuthUrl(input)
-  }
-  const base = resolveApiPublicOrigin()
-  return `${base}/api/whatsapp/embedded-signup?state=${encodeURIComponent(input.state)}`
-}
-
-export function buildEmbeddedSignupBridgeHtml(input: { state: string }): string {
-  assertMetaOAuthConfigured()
-  const appId = env.META.APP_ID!
-  const configId = env.META.EMBEDDED_SIGNUP_CONFIG_ID!
-  const apiVersion = env.WHATSAPP.API_VERSION
-  const oauthState = input.state
-  const sessionSavePath = '/api/whatsapp/embedded-signup/session'
-  const appReturnUri = 'aishopyapp://whatsapp-oauth'
-
-  return `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Connect WhatsApp</title>
-    <style>
-      body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f8fafc; color: #334155; }
-      .card { text-align: center; padding: 24px; max-width: 360px; }
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <p>Opening WhatsApp connection…</p>
-      <p id="status">Loading Meta SDK…</p>
-    </div>
-    <script>
-      var OAUTH_STATE = ${JSON.stringify(oauthState)};
-      var SESSION_SAVE_PATH = ${JSON.stringify(sessionSavePath)};
-      var APP_RETURN_URI = ${JSON.stringify(appReturnUri)};
-      var FINISH_EVENTS = {
-        FINISH: true,
-        FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING: true,
-        FINISH_ONLY_WABA: true
-      };
-      function setStatus(text) {
-        var el = document.getElementById('status');
-        if (el) el.textContent = text;
-      }
-      function finishWithCode(code) {
-        var params = new URLSearchParams({ code: code, state: OAUTH_STATE });
-        setStatus('Returning to AiShopy…');
-        window.location.replace(APP_RETURN_URI + '?' + params.toString());
-      }
-      function saveSessionAssets(data) {
-        if (!data || data.type !== 'WA_EMBEDDED_SIGNUP' || !FINISH_EVENTS[data.event]) return;
-        var wabaId = data.data && data.data.waba_id;
-        if (!wabaId) return;
-        fetch(SESSION_SAVE_PATH, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            state: OAUTH_STATE,
-            wabaId: wabaId,
-            phoneNumberId: (data.data && data.data.phone_number_id) || null
-          })
-        }).catch(function () {});
-      }
-      window.addEventListener('message', function (event) {
-        if (!event.origin || event.origin.indexOf('facebook.com') === -1) return;
-        try {
-          var data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-          if (data && data.type === 'WA_EMBEDDED_SIGNUP') {
-            saveSessionAssets(data);
-          }
-        } catch (e) {}
-      });
-      window.fbAsyncInit = function () {
-        FB.init({
-          appId: ${JSON.stringify(appId)},
-          cookie: true,
-          xfbml: true,
-          version: ${JSON.stringify(apiVersion)}
-        });
-        setStatus('Starting WhatsApp signup…');
-        FB.login(function (response) {
-          if (response && response.authResponse && response.authResponse.code) {
-            finishWithCode(response.authResponse.code);
-            return;
-          }
-          if (response && response.status === 'not_authorized') {
-            setStatus('Authorization was not completed.');
-            return;
-          }
-          setStatus('Signup cancelled.');
-        }, {
-          config_id: ${JSON.stringify(configId)},
-          response_type: 'code',
-          override_default_response_type: true,
-          extras: {
-            setup: {},
-            version: 'v4',
-            sessionInfoVersion: '3',
-            featureType: 'whatsapp_business_app_onboarding'
-          }
-        });
-      };
-    </script>
-    <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
-  </body>
-</html>`
-}
-
 export function buildMetaOAuthUrl(input: { state: string }): string {
-  assertMetaOAuthConfigured()
+  return buildEmbeddedSignupDialogUrl(input)
+}
 
-  if (env.META.EMBEDDED_SIGNUP_CONFIG_ID) {
-    return buildEmbeddedSignupBridgeUrl(input)
-  }
+function buildLegacyMetaOAuthUrl(input: { state: string }): string {
+  assertMetaOAuthConfigured()
 
   const params: Record<string, string> = {
     client_id: env.META.APP_ID!,
@@ -238,7 +122,6 @@ export async function exchangeCodeForAccessToken(code: string): Promise<MetaToke
   const useEmbeddedSignup = Boolean(env.META.EMBEDDED_SIGNUP_CONFIG_ID)
 
   try {
-    // Embedded Signup codes must omit redirect_uri; legacy OAuth requires it.
     if (useEmbeddedSignup) {
       try {
         return await requestAccessTokenFromCode(code, false)
@@ -251,6 +134,38 @@ export async function exchangeCodeForAccessToken(code: string): Promise<MetaToke
   } catch (err) {
     if (err instanceof AppError) throw err
     throw new AppError(400, 'Failed to exchange Meta OAuth code', 'META_OAUTH_EXCHANGE_FAILED')
+  }
+}
+
+/** Resolve WABA ID from token via debug_token granular_scopes (no business_management). */
+export async function fetchWabaFromAccessToken(accessToken: string): Promise<string | null> {
+  assertMetaOAuthConfigured()
+
+  try {
+    const appAccessToken = `${env.META.APP_ID}|${env.META.APP_SECRET}`
+    const { data } = await axios.get<{
+      data?: {
+        granular_scopes?: Array<{ scope?: string; target_ids?: string[] }>
+      }
+    }>(`https://graph.facebook.com/${env.WHATSAPP.API_VERSION}/debug_token`, {
+      params: {
+        input_token: accessToken,
+        access_token: appAccessToken,
+      },
+      timeout: 15_000,
+    })
+
+    for (const entry of data.data?.granular_scopes ?? []) {
+      if (entry.scope === 'whatsapp_business_management' && entry.target_ids?.[0]) {
+        return String(entry.target_ids[0])
+      }
+    }
+
+    return null
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'unknown error'
+    console.warn('[whatsapp] fetchWabaFromAccessToken failed %s', message)
+    return null
   }
 }
 

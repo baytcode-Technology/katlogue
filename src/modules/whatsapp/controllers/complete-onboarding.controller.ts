@@ -4,8 +4,10 @@ import { AppError } from '../../../shared/errors/app.error.js'
 import { env } from '../../../config/env.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { assertPremiumAccess } from '../../../shared/lib/subscription.js'
-import { exchangeCodeForAccessToken } from '../services/embedded-signup.service.js'
-import { consumeEmbeddedSignupSession } from '../services/embedded-signup-session.service.js'
+import {
+  exchangeCodeForAccessToken,
+  fetchWabaFromAccessToken,
+} from '../services/embedded-signup.service.js'
 import { onboardCoexistenceStore } from '../services/onboard-coexistence.service.js'
 import type { CompleteOnboardingBody } from '../validations/complete-onboarding.validation.js'
 
@@ -16,25 +18,9 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
   const { storeId, code, state } = body
   let { wabaId, phoneNumberId } = body
 
-  if (!wabaId && state) {
-    const session = consumeEmbeddedSignupSession(state)
-    if (session) {
-      wabaId = session.wabaId
-      phoneNumberId = phoneNumberId ?? session.phoneNumberId
-    }
-  }
-
-  if (!wabaId) {
-    throw new AppError(
-      400,
-      'wabaId is required — complete Embedded Signup in Meta first',
-      'EMBEDDED_SIGNUP_ASSETS_REQUIRED'
-    )
-  }
-
   console.info('[whatsapp][complete-onboarding] START', {
     storeId,
-    wabaId,
+    hasWabaId: Boolean(wabaId),
     phoneNumberId: phoneNumberId ?? null,
     hasState: Boolean(state),
     codeLength: code?.length ?? 0,
@@ -49,6 +35,27 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
   assertPremiumAccess(store)
 
   const token = await exchangeCodeForAccessToken(code)
+  console.info('[whatsapp][complete-onboarding] token exchanged', {
+    storeId,
+    expiresIn: token.expiresIn,
+  })
+
+  if (!wabaId) {
+    wabaId = await fetchWabaFromAccessToken(token.accessToken)
+    console.info('[whatsapp][complete-onboarding] wabaId from debug_token', {
+      storeId,
+      wabaId: wabaId ?? null,
+    })
+  }
+
+  if (!wabaId) {
+    throw new AppError(
+      400,
+      'Could not resolve WhatsApp Business Account from Meta token — ensure Embedded Signup completed',
+      'EMBEDDED_SIGNUP_ASSETS_REQUIRED'
+    )
+  }
+
   const result = await onboardCoexistenceStore({
     storeId,
     token,

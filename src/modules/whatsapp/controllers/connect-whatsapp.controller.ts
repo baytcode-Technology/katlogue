@@ -5,7 +5,11 @@ import { AppError } from '../../../shared/errors/app.error.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { env } from '../../../config/env.js'
 import { assertPremiumAccess } from '../../../shared/lib/subscription.js'
-import { buildEmbeddedSignupBridgeUrl, buildMetaOAuthUrl } from '../services/embedded-signup.service.js'
+import {
+  buildEmbeddedSignupDialogUrl,
+  buildMetaOAuthUrl,
+  WHATSAPP_APP_AUTH_REDIRECT_URI,
+} from '../services/embedded-signup.service.js'
 import { parseStoreIdFromQuery } from '../../../shared/utils/parse-store-id.js'
 
 function buildState(payload: object): string {
@@ -24,36 +28,26 @@ export const connectWhatsApp = asyncHandler(async (req: Request, res: Response) 
   if (!store) throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
   assertPremiumAccess(store)
 
-  // State: small, signed-in-context and store-scoped
   const nonce = crypto.randomBytes(12).toString('hex')
   const state = buildState({ storeId, nonce })
 
   const url = env.META.EMBEDDED_SIGNUP_CONFIG_ID
-    ? buildEmbeddedSignupBridgeUrl({ state })
+    ? buildEmbeddedSignupDialogUrl({ state })
     : buildMetaOAuthUrl({ state })
 
   console.info('[whatsapp][connect] generated signup URL', {
     storeId,
-    signupFlow: env.META.EMBEDDED_SIGNUP_CONFIG_ID ? 'sdk-auth-session' : 'oauth-dialog',
+    signupFlow: env.META.EMBEDDED_SIGNUP_CONFIG_ID
+      ? 'direct-oauth-dialog'
+      : 'oauth-dialog',
     redirectUri: env.META.OAUTH_REDIRECT_URI ?? null,
+    appRedirectUri: WHATSAPP_APP_AUTH_REDIRECT_URI,
     hasConfigId: Boolean(env.META.EMBEDDED_SIGNUP_CONFIG_ID),
     urlHost: (() => {
       try {
         return new URL(url).hostname
       } catch {
         return 'invalid'
-      }
-    })(),
-    signupParams: (() => {
-      try {
-        const u = new URL(url)
-        return {
-          redirect_uri: u.searchParams.get('redirect_uri'),
-          override_default_response_type: u.searchParams.get('override_default_response_type'),
-          response_type: u.searchParams.get('response_type'),
-        }
-      } catch {
-        return null
       }
     })(),
   })
@@ -63,9 +57,8 @@ export const connectWhatsApp = asyncHandler(async (req: Request, res: Response) 
     message: 'Meta connect URL generated',
     data: {
       url,
-      redirectUri: 'aishopyapp://whatsapp-oauth',
+      redirectUri: WHATSAPP_APP_AUTH_REDIRECT_URI,
       oauthRedirectUri: env.META.OAUTH_REDIRECT_URI ?? null,
     },
   })
 })
-

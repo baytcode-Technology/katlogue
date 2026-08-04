@@ -16,10 +16,6 @@ export const completeOnboardingSchema = z
     message: 'storeId is required',
     path: ['storeId'],
   })
-  .refine((v) => Boolean(v.wabaId || v.waba_id || v.state), {
-    message: 'wabaId or state is required',
-    path: ['wabaId'],
-  })
   .transform((v) => ({
     storeId: (v.storeId ?? v.store_id)!,
     code: v.code,

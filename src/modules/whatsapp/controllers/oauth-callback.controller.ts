@@ -42,6 +42,25 @@ const RETURN_HTML = `<!DOCTYPE html>
       <h1>Return to AiShopy</h1>
       <p>WhatsApp authorization is complete. Close this window and return to the AiShopy app to finish connecting.</p>
     </div>
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var code = params.get('code');
+        var error = params.get('error') || params.get('error_reason');
+        if (window.ReactNativeWebView && code) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'oauth_code', code: code }));
+        }
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'debug',
+            step: 'oauth_callback_page_loaded',
+            hypothesisId: 'H8',
+            hasCode: Boolean(code),
+            hasError: Boolean(error)
+          }));
+        }
+      })();
+    </script>
   </body>
 </html>`
 

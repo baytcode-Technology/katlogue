@@ -30,6 +30,7 @@ function assertMetaOAuthConfigured() {
 export function buildLaunchBridgeSignupUrl(input: { state: string }): string {
   const extras = JSON.stringify({
     setup: {},
+    version: 'v4',
     sessionInfoVersion: '3',
     featureType: 'whatsapp_business_app_onboarding',
   })
@@ -148,6 +149,7 @@ export function buildEmbeddedSignupBridgeHtml(input: { state: string }): string 
           override_default_response_type: true,
           extras: {
             setup: {},
+            version: 'v4',
             sessionInfoVersion: '3',
             featureType: 'whatsapp_business_app_onboarding'
           }

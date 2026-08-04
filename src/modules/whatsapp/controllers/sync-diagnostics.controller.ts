@@ -100,9 +100,15 @@ export const whatsappSyncDiagnostics = asyncHandler(async (req: Request, res: Re
         !tokenInspection.isValid
           ? 'Access token invalid/expired — tap Reconnect account in Connect WhatsApp'
           : null,
-        phoneStatus.isOnBizApp && phoneStatus.platformType === 'CLOUD_API'
-          ? null
-          : 'Phone not in coexistence mode — complete Embedded Signup with WhatsApp Business app flow',
+        phoneStatus.phoneStatus && phoneStatus.phoneStatus !== 'CONNECTED'
+          ? `Phone API status is ${phoneStatus.phoneStatus} (need CONNECTED) — finish coexistence on device`
+          : null,
+        phoneStatus.codeVerificationStatus === 'NOT_VERIFIED'
+          ? 'Phone not verified (code_verification_status=NOT_VERIFIED) — complete verification in WhatsApp Business app'
+          : null,
+        !phoneStatus.isOnBizApp || phoneStatus.platformType !== 'CLOUD_API'
+          ? 'Phone not in coexistence mode — complete Embedded Signup with WhatsApp Business app flow'
+          : null,
       ].filter(Boolean),
     },
   })

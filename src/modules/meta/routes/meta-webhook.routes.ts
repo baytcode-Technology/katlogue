@@ -58,7 +58,19 @@ router.post(
         ? String((body as { object?: string }).object ?? '')
         : ''
 
-    console.info('[meta webhook] POST object=%s bytes=%d', objectType || 'unknown', raw.length)
+    console.info('[meta webhook] POST object=%s bytes=%d fields=%s', objectType || 'unknown', raw.length, (() => {
+      try {
+        const payload = body as {
+          entry?: Array<{ changes?: Array<{ field?: string }> }>
+        }
+        return (payload.entry ?? [])
+          .flatMap((e) => (e.changes ?? []).map((c) => c.field))
+          .filter(Boolean)
+          .join(',') || 'none'
+      } catch {
+        return 'parse-failed'
+      }
+    })())
 
     res.status(200).json({ success: true })
 

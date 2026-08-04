@@ -480,6 +480,8 @@ export async function fetchPhoneCoexistenceStatus(input: {
   platformType: string | null
   codeVerificationStatus: string | null
   qualityRating: string | null
+  phoneStatus: string | null
+  nameStatus: string | null
 }> {
   try {
     const { data } = await axios.get<{
@@ -487,11 +489,14 @@ export async function fetchPhoneCoexistenceStatus(input: {
       platform_type?: string
       code_verification_status?: string
       quality_rating?: string
+      status?: string
+      name_status?: string
     }>(
       `https://graph.facebook.com/${env.WHATSAPP.API_VERSION}/${input.phoneNumberId}`,
       {
         params: {
-          fields: 'is_on_biz_app,platform_type,code_verification_status,quality_rating',
+          fields:
+            'is_on_biz_app,platform_type,code_verification_status,quality_rating,status,name_status',
           access_token: input.accessToken,
         },
         timeout: 10_000,
@@ -503,6 +508,8 @@ export async function fetchPhoneCoexistenceStatus(input: {
       platformType: data.platform_type ?? null,
       codeVerificationStatus: data.code_verification_status ?? null,
       qualityRating: data.quality_rating ?? null,
+      phoneStatus: data.status ?? null,
+      nameStatus: data.name_status ?? null,
     }
   } catch {
     return {
@@ -510,6 +517,8 @@ export async function fetchPhoneCoexistenceStatus(input: {
       platformType: null,
       codeVerificationStatus: null,
       qualityRating: null,
+      phoneStatus: null,
+      nameStatus: null,
     }
   }
 }

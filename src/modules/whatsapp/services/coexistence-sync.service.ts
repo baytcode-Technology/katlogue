@@ -84,7 +84,8 @@ function buildSyncFailure(meta: MetaGraphError | null, syncType: SmbAppDataSyncT
   return new AppError(400, parts.join(' | '), 'SMB_APP_DATA_FAILED')
 }
 
-export async function assertAccessTokenReadyForSync(accessToken: string): Promise<void> {  const inspection = await inspectAccessToken(accessToken)
+export async function assertAccessTokenReadyForSync(accessToken: string): Promise<void> {
+  const inspection = await inspectAccessToken(accessToken)
   console.info('[coexistence] token inspection', {
     isValid: inspection.isValid,
     isExpired: inspection.isExpired,
@@ -269,6 +270,14 @@ export async function runFullCoexistenceSync(input: {
       400,
       'Phone number is not in coexistence mode (is_on_biz_app + CLOUD_API required for smb_app_data)',
       'COEXISTENCE_NOT_READY'
+    )
+  }
+
+  if (phoneStatus.phoneStatus && phoneStatus.phoneStatus !== 'CONNECTED') {
+    throw new AppError(
+      400,
+      `WhatsApp phone status is ${phoneStatus.phoneStatus} (must be CONNECTED before smb_app_data sync). Complete Embedded Signup on the phone — open WhatsApp Business, paste Meta verification code, confirm API connection.`,
+      'PHONE_NOT_CONNECTED'
     )
   }
 

@@ -6,14 +6,15 @@ import {
   fetchPhoneCoexistenceStatus,
   fetchPhoneFromWaba,
   fetchPhoneNumberDetails,
-  subscribeWhatsAppWebhooks,
+  fetchWabaWebhookSubscription,
+  subscribeWhatsAppWebhooksWithOverride,
   type MetaPhoneNumberAsset,
   type MetaTokenExchangeResult,
 } from './embedded-signup.service.js'
 import { runFullCoexistenceSync } from './coexistence-sync.service.js'
-import { resolveStoreWhatsAppCredentials } from './whatsapp.service.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import { assertPremiumAccess } from '../../../shared/lib/subscription.js'
+import { env } from '../../../config/env.js'
 
 export type OnboardCoexistenceInput = {
   storeId: number
@@ -77,13 +78,6 @@ export async function onboardCoexistenceStore(
 
   let accessToken = input.token.accessToken
 
-  try {
-    const longLived = await exchangeForLongLivedToken(accessToken)
-    accessToken = longLived.accessToken
-  } catch {
-    // Keep short-lived token if exchange fails (dev/test)
-  }
-
   const phoneAsset = await resolvePhoneAsset({
     wabaId,
     phoneNumberId: input.phoneNumberId,
@@ -98,10 +92,70 @@ export async function onboardCoexistenceStore(
     )
   }
 
+  const coexistenceStatus = await fetchPhoneCoexistenceStatus({
+    phoneNumberId: phoneAsset.phoneNumberId,
+    accessToken,
+  })
+  console.info('[coexistence] phone readiness', {
+    storeId: input.storeId,
+    phoneNumberId: phoneAsset.phoneNumberId,
+    ...coexistenceStatus,
+  })
+
+  let webhookOverrideApplied = false
   try {
-    await subscribeWhatsAppWebhooks({ wabaId, accessToken })
+    const webhookResult = await subscribeWhatsAppWebhooksWithOverride({
+      wabaId,
+      accessToken,
+    })
+    webhookOverrideApplied = webhookResult.overrideApplied
+    const subscription = await fetchWabaWebhookSubscription({ wabaId, accessToken })
+    console.info('[coexistence] webhook subscription state', {
+      storeId: input.storeId,
+      wabaId,
+      overrideApplied: webhookOverrideApplied,
+      overrideCallbackUri: subscription.overrideCallbackUri,
+    })
   } catch (err) {
-    console.error('[coexistence] webhook subscribe failed', err)
+    console.error('[coexistence] webhook subscribe/override failed', err)
+  }
+
+  let syncTriggered = false
+  const credentialsForSync = {
+    accessToken,
+    phoneNumberId: phoneAsset.phoneNumberId,
+    apiVersion: env.WHATSAPP.API_VERSION,
+  }
+
+  if (coexistenceStatus.isOnBizApp && coexistenceStatus.platformType === 'CLOUD_API') {
+    try {
+      const syncResult = await runFullCoexistenceSync({
+        storeId: input.storeId,
+        credentials: credentialsForSync,
+        initialDelayMs: 3_000,
+        wabaId,
+      })
+      syncTriggered = Boolean(syncResult.contacts)
+      if (syncResult.historySkipped) {
+        console.warn('[coexistence] contacts sync started; history sync deferred/failed', {
+          storeId: input.storeId,
+        })
+      }
+    } catch (err) {
+      console.error('[coexistence] sync trigger failed', err)
+    }
+  } else {
+    console.warn('[coexistence] skipping smb_app_data — phone not coexistence-ready', {
+      storeId: input.storeId,
+      ...coexistenceStatus,
+    })
+  }
+
+  try {
+    const longLived = await exchangeForLongLivedToken(accessToken)
+    accessToken = longLived.accessToken
+  } catch {
+    // Keep short-lived token if exchange fails (dev/test)
   }
 
   const store = await storeRepository.updateWhatsAppConnection({
@@ -117,27 +171,6 @@ export async function onboardCoexistenceStore(
     waPhoneNumberId: phoneAsset.phoneNumberId,
     waBusinessAccountId: phoneAsset.wabaId ?? wabaId,
   })
-
-  let syncTriggered = false
-  const credentials = resolveStoreWhatsAppCredentials(store)
-
-  if (credentials) {
-    try {
-      const syncResult = await runFullCoexistenceSync({
-        storeId: input.storeId,
-        credentials,
-        initialDelayMs: 5_000,
-      })
-      syncTriggered = Boolean(syncResult.contacts)
-      if (syncResult.historySkipped) {
-        console.warn('[coexistence] contacts sync started; history sync deferred/failed', {
-          storeId: input.storeId,
-        })
-      }
-    } catch (err) {
-      console.error('[coexistence] sync trigger failed', err)
-    }
-  }
 
   return {
     storeId: input.storeId,

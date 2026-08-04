@@ -2,6 +2,12 @@ import axios from 'axios'
 import { AppError } from '../../../shared/errors/app.error.js'
 import type { WhatsAppCredentials } from './whatsapp.service.js'
 import * as syncRepository from '../repositories/whatsapp-sync.repository.js'
+import {
+  fetchPhoneCoexistenceStatus,
+  fetchWabaWebhookSubscription,
+  resolveWhatsAppWebhookCallbackUrl,
+  subscribeWhatsAppWebhooksWithOverride,
+} from './embedded-signup.service.js'
 
 export type SmbAppDataSyncType = 'smb_app_state_sync' | 'history'
 
@@ -73,7 +79,7 @@ export async function triggerSmbAppDataSync(input: {
     }
   }
 
-  const attempt = async (): Promise<{ requestId: string; jobId: string }> => {
+  const attempt = async (authMode: 'bearer' | 'query' | 'raw'): Promise<{ requestId: string; jobId: string }> => {
     const url = `https://graph.facebook.com/${input.credentials.apiVersion}/${input.credentials.phoneNumberId}/smb_app_data`
 
     console.info('[coexistence] smb_app_data request', {
@@ -81,7 +87,31 @@ export async function triggerSmbAppDataSync(input: {
       syncType: input.syncType,
       phoneNumberId: input.credentials.phoneNumberId,
       apiVersion: input.credentials.apiVersion,
+      authMode,
     })
+
+    const axiosConfig =
+      authMode === 'query'
+        ? {
+            params: { access_token: input.credentials.accessToken },
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 30_000,
+          }
+        : authMode === 'raw'
+          ? {
+              headers: {
+                Authorization: input.credentials.accessToken,
+                'Content-Type': 'application/json',
+              },
+              timeout: 30_000,
+            }
+          : {
+              headers: {
+                Authorization: `Bearer ${input.credentials.accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              timeout: 30_000,
+            }
 
     const { data } = await axios.post<{ request_id?: string; messaging_product?: string }>(
       url,
@@ -89,13 +119,7 @@ export async function triggerSmbAppDataSync(input: {
         messaging_product: 'whatsapp',
         sync_type: input.syncType,
       },
-      {
-        headers: {
-          Authorization: `Bearer ${input.credentials.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 30_000,
-      }
+      axiosConfig
     )
 
     const requestId = data.request_id?.trim() ?? null
@@ -116,7 +140,22 @@ export async function triggerSmbAppDataSync(input: {
   }
 
   try {
-    return await attempt()
+    for (const authMode of ['bearer', 'query', 'raw'] as const) {
+      try {
+        return await attempt(authMode)
+      } catch (innerErr) {
+        const meta = parseMetaGraphError(innerErr)
+        if (meta?.code !== 135000 || authMode === 'raw') {
+          throw innerErr
+        }
+        console.warn('[coexistence] smb_app_data auth fallback', {
+          storeId: input.storeId,
+          syncType: input.syncType,
+          from: authMode,
+        })
+      }
+    }
+    throw new AppError(400, 'Failed to trigger sync', 'SMB_APP_DATA_FAILED')
   } catch (err) {
     const meta = parseMetaGraphError(err)
     if (isAlreadySyncedError(meta)) {
@@ -141,7 +180,7 @@ export async function triggerSmbAppDataSync(input: {
       })
       await sleep(8_000)
       try {
-        return await attempt()
+        return await attempt('bearer')
       } catch (retryErr) {
         const message = formatMetaSyncError(retryErr, input.syncType)
         console.error('[coexistence] smb_app_data retry failed', { storeId: input.storeId, message })
@@ -163,7 +202,45 @@ export async function runFullCoexistenceSync(input: {
   storeId: number
   credentials: WhatsAppCredentials
   initialDelayMs?: number
+  wabaId?: string | null
 }): Promise<{ contacts: string; history: string | null; historySkipped?: boolean }> {
+  if (input.wabaId) {
+    try {
+      await subscribeWhatsAppWebhooksWithOverride({
+        wabaId: input.wabaId,
+        accessToken: input.credentials.accessToken,
+      })
+      const subscription = await fetchWabaWebhookSubscription({
+        wabaId: input.wabaId,
+        accessToken: input.credentials.accessToken,
+      })
+      console.info('[coexistence] pre-sync webhook state', {
+        storeId: input.storeId,
+        overrideCallbackUri: subscription.overrideCallbackUri,
+        expectedCallback: resolveWhatsAppWebhookCallbackUrl(),
+      })
+    } catch (err) {
+      console.warn('[coexistence] pre-sync webhook override failed', err)
+    }
+  }
+
+  const phoneStatus = await fetchPhoneCoexistenceStatus({
+    phoneNumberId: input.credentials.phoneNumberId,
+    accessToken: input.credentials.accessToken,
+  })
+  console.info('[coexistence] pre-sync phone status', {
+    storeId: input.storeId,
+    ...phoneStatus,
+  })
+
+  if (!phoneStatus.isOnBizApp || phoneStatus.platformType !== 'CLOUD_API') {
+    throw new AppError(
+      400,
+      'Phone number is not in coexistence mode (is_on_biz_app + CLOUD_API required for smb_app_data)',
+      'COEXISTENCE_NOT_READY'
+    )
+  }
+
   if (input.initialDelayMs && input.initialDelayMs > 0) {
     await sleep(input.initialDelayMs)
   }

@@ -19,6 +19,7 @@ import { metaOAuthCallback } from '../controllers/oauth-callback.controller.js'
 import { metaOAuthLaunch } from '../controllers/oauth-launch.controller.js'
 import { connectionStatus } from '../controllers/connection-status.controller.js'
 import { triggerSync } from '../controllers/trigger-sync.controller.js'
+import { whatsappSyncDiagnostics } from '../controllers/sync-diagnostics.controller.js'
 import { whatsappDebugSession } from '../controllers/debug-session.controller.js'
 
 import { sendTemplateSchema } from '../validations/send-template.validation.js'
@@ -44,6 +45,7 @@ router.get('/oauth/launch', metaOAuthLaunch)
 router.get('/oauth/callback', metaOAuthCallback)
 router.post('/debug-session', requireAuth, whatsappDebugSession)
 router.get('/connection-status', requireAuth, connectionStatus)
+router.get('/sync-diagnostics', requireAuth, whatsappSyncDiagnostics)
 router.post('/sync', requireAuth, validateBody(triggerSyncSchema), triggerSync)
 
 router.post('/send', requireAuth, validateBody(sendMessageSchema), sendMessage)

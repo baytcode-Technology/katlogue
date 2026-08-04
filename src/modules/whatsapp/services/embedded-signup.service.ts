@@ -304,6 +304,17 @@ export async function fetchPhoneFromWaba(input: {
   }
 }
 
+/** Public webhook URL Meta should deliver smb_app_state_sync / history / messages to. */
+export function resolveWhatsAppWebhookCallbackUrl(): string | null {
+  const explicit = process.env.WHATSAPP_WEBHOOK_CALLBACK_URL?.trim()
+  if (explicit) return explicit.replace(/\/$/, '')
+
+  const apiPublic = env.API_PUBLIC_URL?.replace(/\/$/, '')
+  if (apiPublic) return `${apiPublic}/webhook`
+
+  return null
+}
+
 /** Subscribe app to webhooks on the merchant WABA (required after Embedded Signup). */
 export async function subscribeWhatsAppWebhooks(input: {
   wabaId: string
@@ -331,20 +342,99 @@ export async function subscribeWhatsAppWebhooks(input: {
   }
 }
 
+/**
+ * Coexistence requires per-WABA webhook override so smb_app_state_sync / history /
+ * smb_message_echoes route to our server (not only the app-dashboard default).
+ * Meta requires subscribe first, then override in a second POST.
+ */
+export async function subscribeWhatsAppWebhooksWithOverride(input: {
+  wabaId: string
+  accessToken: string
+}): Promise<{ callbackUrl: string | null; overrideApplied: boolean }> {
+  const callbackUrl = resolveWhatsAppWebhookCallbackUrl()
+  const verifyToken = env.WHATSAPP.WEBHOOK_VERIFY_TOKEN
+
+  await subscribeWhatsAppWebhooks({ wabaId: input.wabaId, accessToken: input.accessToken })
+
+  if (!callbackUrl || !verifyToken) {
+    console.warn('[whatsapp] webhook override skipped — missing callback URL or verify token', {
+      wabaId: input.wabaId,
+      hasCallbackUrl: Boolean(callbackUrl),
+      hasVerifyToken: Boolean(verifyToken),
+    })
+    return { callbackUrl, overrideApplied: false }
+  }
+
+  try {
+    const { data } = await axios.post<{ success?: boolean }>(
+      `https://graph.facebook.com/${env.WHATSAPP.API_VERSION}/${input.wabaId}/subscribed_apps`,
+      {
+        override_callback_uri: callbackUrl,
+        verify_token: verifyToken,
+      },
+      {
+        params: { access_token: input.accessToken },
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 15_000,
+      }
+    )
+
+    if (data.success === false) {
+      throw new Error('Meta returned success=false for webhook override')
+    }
+
+    console.info('[whatsapp] subscribed_apps override ok', {
+      wabaId: input.wabaId,
+      callbackUrl,
+    })
+    return { callbackUrl, overrideApplied: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'unknown error'
+    console.error('[whatsapp] subscribed_apps override failed wabaId=%s %s', input.wabaId, message)
+    throw err
+  }
+}
+
+export async function fetchWabaWebhookSubscription(input: {
+  wabaId: string
+  accessToken: string
+}): Promise<{ overrideCallbackUri: string | null }> {
+  try {
+    const { data } = await axios.get<{
+      data?: Array<{ override_callback_uri?: string }>
+    }>(`https://graph.facebook.com/${env.WHATSAPP.API_VERSION}/${input.wabaId}/subscribed_apps`, {
+      params: { access_token: input.accessToken },
+      timeout: 15_000,
+    })
+
+    const overrideCallbackUri = data.data?.[0]?.override_callback_uri?.trim() ?? null
+    return { overrideCallbackUri }
+  } catch {
+    return { overrideCallbackUri: null }
+  }
+}
+
 /** Check if phone number is on Business App + Cloud API (coexistence). */
 export async function fetchPhoneCoexistenceStatus(input: {
   phoneNumberId: string
   accessToken: string
-}): Promise<{ isOnBizApp: boolean; platformType: string | null }> {
+}): Promise<{
+  isOnBizApp: boolean
+  platformType: string | null
+  codeVerificationStatus: string | null
+  qualityRating: string | null
+}> {
   try {
     const { data } = await axios.get<{
       is_on_biz_app?: boolean
       platform_type?: string
+      code_verification_status?: string
+      quality_rating?: string
     }>(
       `https://graph.facebook.com/${env.WHATSAPP.API_VERSION}/${input.phoneNumberId}`,
       {
         params: {
-          fields: 'is_on_biz_app,platform_type',
+          fields: 'is_on_biz_app,platform_type,code_verification_status,quality_rating',
           access_token: input.accessToken,
         },
         timeout: 10_000,
@@ -354,8 +444,15 @@ export async function fetchPhoneCoexistenceStatus(input: {
     return {
       isOnBizApp: Boolean(data.is_on_biz_app),
       platformType: data.platform_type ?? null,
+      codeVerificationStatus: data.code_verification_status ?? null,
+      qualityRating: data.quality_rating ?? null,
     }
   } catch {
-    return { isOnBizApp: false, platformType: null }
+    return {
+      isOnBizApp: false,
+      platformType: null,
+      codeVerificationStatus: null,
+      qualityRating: null,
+    }
   }
 }

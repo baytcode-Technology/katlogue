@@ -42,7 +42,12 @@ export const triggerSync = asyncHandler(async (req: Request, res: Response) => {
     return
   }
 
-  const result = await runFullCoexistenceSync({ storeId, credentials, initialDelayMs: 3_000 })
+  const result = await runFullCoexistenceSync({
+    storeId,
+    credentials,
+    initialDelayMs: 3_000,
+    wabaId: store.wa_waba_id,
+  })
 
   res.status(200).json({
     success: true,

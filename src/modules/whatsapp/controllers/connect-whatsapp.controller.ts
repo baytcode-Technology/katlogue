@@ -63,7 +63,8 @@ export const connectWhatsApp = asyncHandler(async (req: Request, res: Response) 
     message: 'Meta connect URL generated',
     data: {
       url,
-      redirectUri: env.META.OAUTH_REDIRECT_URI ?? null,
+      redirectUri: 'aishopyapp://whatsapp-oauth',
+      oauthRedirectUri: env.META.OAUTH_REDIRECT_URI ?? null,
     },
   })
 })

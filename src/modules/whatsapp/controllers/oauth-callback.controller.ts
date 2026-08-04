@@ -40,8 +40,16 @@ const RETURN_HTML = `<!DOCTYPE html>
   <body>
     <div class="card">
       <h1>Return to AiShopy</h1>
-      <p>WhatsApp authorization is complete. You can close this window and return to the AiShopy app.</p>
+      <p>WhatsApp authorization is complete. Returning to AiShopy…</p>
     </div>
+    <script>
+      (function () {
+        var params = window.location.search;
+        if (params) {
+          window.location.replace('aishopyapp://whatsapp-oauth' + params);
+        }
+      })();
+    </script>
   </body>
 </html>`
 

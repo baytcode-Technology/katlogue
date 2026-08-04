@@ -79,6 +79,7 @@ export function buildEmbeddedSignupBridgeHtml(input: { state: string }): string 
   const apiVersion = env.WHATSAPP.API_VERSION
   const oauthState = input.state
   const sessionSavePath = '/api/whatsapp/embedded-signup/session'
+  const appReturnUri = 'aishopyapp://whatsapp-oauth'
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -99,6 +100,7 @@ export function buildEmbeddedSignupBridgeHtml(input: { state: string }): string 
     <script>
       var OAUTH_STATE = ${JSON.stringify(oauthState)};
       var SESSION_SAVE_PATH = ${JSON.stringify(sessionSavePath)};
+      var APP_RETURN_URI = ${JSON.stringify(appReturnUri)};
       var FINISH_EVENTS = {
         FINISH: true,
         FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING: true,
@@ -107,6 +109,11 @@ export function buildEmbeddedSignupBridgeHtml(input: { state: string }): string 
       function setStatus(text) {
         var el = document.getElementById('status');
         if (el) el.textContent = text;
+      }
+      function finishWithCode(code) {
+        var params = new URLSearchParams({ code: code, state: OAUTH_STATE });
+        setStatus('Returning to AiShopy…');
+        window.location.replace(APP_RETURN_URI + '?' + params.toString());
       }
       function saveSessionAssets(data) {
         if (!data || data.type !== 'WA_EMBEDDED_SIGNUP' || !FINISH_EVENTS[data.event]) return;
@@ -141,7 +148,7 @@ export function buildEmbeddedSignupBridgeHtml(input: { state: string }): string 
         setStatus('Starting WhatsApp signup…');
         FB.login(function (response) {
           if (response && response.authResponse && response.authResponse.code) {
-            setStatus('Authorization complete. Return to AiShopy.');
+            finishWithCode(response.authResponse.code);
             return;
           }
           if (response && response.status === 'not_authorized') {

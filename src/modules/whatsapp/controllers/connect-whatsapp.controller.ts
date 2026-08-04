@@ -34,7 +34,7 @@ export const connectWhatsApp = asyncHandler(async (req: Request, res: Response) 
 
   console.info('[whatsapp][connect] generated signup URL', {
     storeId,
-    signupFlow: env.META.EMBEDDED_SIGNUP_CONFIG_ID ? 'sdk-bridge' : 'oauth-dialog',
+    signupFlow: env.META.EMBEDDED_SIGNUP_CONFIG_ID ? 'sdk-bridge-launch-redirect' : 'oauth-dialog',
     redirectUri: env.META.OAUTH_REDIRECT_URI ?? null,
     hasConfigId: Boolean(env.META.EMBEDDED_SIGNUP_CONFIG_ID),
     urlHost: (() => {

@@ -27,7 +27,7 @@ function assertMetaOAuthConfigured() {
 }
 
 /** WhatsApp Embedded Signup LaunchBridge (required when using config_id). */
-function buildWhatsAppEmbeddedSignupUrl(input: { state: string }): string {
+export function buildLaunchBridgeSignupUrl(input: { state: string }): string {
   const extras = JSON.stringify({
     setup: {},
     sessionInfoVersion: '3',
@@ -71,11 +71,12 @@ export function buildEmbeddedSignupBridgeUrl(input: { state: string }): string {
   return `${base}/api/whatsapp/embedded-signup?state=${encodeURIComponent(input.state)}`
 }
 
-export function buildEmbeddedSignupBridgeHtml(): string {
+export function buildEmbeddedSignupBridgeHtml(input: { state: string }): string {
   assertMetaOAuthConfigured()
   const appId = env.META.APP_ID!
   const configId = env.META.EMBEDDED_SIGNUP_CONFIG_ID!
   const apiVersion = env.WHATSAPP.API_VERSION
+  const launchBridgeUrl = buildLaunchBridgeSignupUrl({ state: input.state })
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -94,6 +95,7 @@ export function buildEmbeddedSignupBridgeHtml(): string {
       <p id="status">Loading Meta SDK…</p>
     </div>
     <script>
+      var LAUNCH_BRIDGE_URL = ${JSON.stringify(launchBridgeUrl)};
       function post(payload) {
         if (window.ReactNativeWebView) {
           window.ReactNativeWebView.postMessage(JSON.stringify(payload));
@@ -103,6 +105,13 @@ export function buildEmbeddedSignupBridgeHtml(): string {
         var el = document.getElementById('status');
         if (el) el.textContent = text;
       }
+      // #region agent log H7 — FB.login popups do not work in RN WebView; redirect to LaunchBridge
+      if (window.ReactNativeWebView) {
+        post({ type: 'debug', step: 'webview_redirect_launch_bridge', hypothesisId: 'H7', launchHost: 'business.facebook.com' });
+        setStatus('Redirecting to Meta…');
+        window.location.replace(LAUNCH_BRIDGE_URL);
+      }
+      // #endregion
       window.addEventListener('message', function (event) {
         if (!event.origin || event.origin.indexOf('facebook.com') === -1) return;
         try {

@@ -26,7 +26,7 @@ function assertMetaOAuthConfigured() {
   }
 }
 
-/** WhatsApp Embedded Signup LaunchBridge (required when using config_id). */
+/** @deprecated LaunchBridge direct navigation breaks window.opener; use FB SDK bridge page instead. */
 export function buildLaunchBridgeSignupUrl(input: { state: string }): string {
   const extras = JSON.stringify({
     setup: {},
@@ -77,7 +77,8 @@ export function buildEmbeddedSignupBridgeHtml(input: { state: string }): string 
   const appId = env.META.APP_ID!
   const configId = env.META.EMBEDDED_SIGNUP_CONFIG_ID!
   const apiVersion = env.WHATSAPP.API_VERSION
-  const launchBridgeUrl = buildLaunchBridgeSignupUrl({ state: input.state })
+  const oauthState = input.state
+  const sessionSavePath = '/api/whatsapp/embedded-signup/session'
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -87,7 +88,7 @@ export function buildEmbeddedSignupBridgeHtml(input: { state: string }): string 
     <title>Connect WhatsApp</title>
     <style>
       body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f8fafc; color: #334155; }
-      .card { text-align: center; padding: 24px; }
+      .card { text-align: center; padding: 24px; max-width: 360px; }
     </style>
   </head>
   <body>
@@ -96,29 +97,37 @@ export function buildEmbeddedSignupBridgeHtml(input: { state: string }): string 
       <p id="status">Loading Meta SDK…</p>
     </div>
     <script>
-      var LAUNCH_BRIDGE_URL = ${JSON.stringify(launchBridgeUrl)};
-      function post(payload) {
-        if (window.ReactNativeWebView) {
-          window.ReactNativeWebView.postMessage(JSON.stringify(payload));
-        }
-      }
+      var OAUTH_STATE = ${JSON.stringify(oauthState)};
+      var SESSION_SAVE_PATH = ${JSON.stringify(sessionSavePath)};
+      var FINISH_EVENTS = {
+        FINISH: true,
+        FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING: true,
+        FINISH_ONLY_WABA: true
+      };
       function setStatus(text) {
         var el = document.getElementById('status');
         if (el) el.textContent = text;
       }
-      // #region agent log H7 — FB.login popups do not work in RN WebView; redirect to LaunchBridge
-      if (window.ReactNativeWebView) {
-        post({ type: 'debug', step: 'webview_redirect_launch_bridge', hypothesisId: 'H7', launchHost: 'business.facebook.com' });
-        setStatus('Redirecting to Meta…');
-        window.location.replace(LAUNCH_BRIDGE_URL);
+      function saveSessionAssets(data) {
+        if (!data || data.type !== 'WA_EMBEDDED_SIGNUP' || !FINISH_EVENTS[data.event]) return;
+        var wabaId = data.data && data.data.waba_id;
+        if (!wabaId) return;
+        fetch(SESSION_SAVE_PATH, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            state: OAUTH_STATE,
+            wabaId: wabaId,
+            phoneNumberId: (data.data && data.data.phone_number_id) || null
+          })
+        }).catch(function () {});
       }
-      // #endregion
       window.addEventListener('message', function (event) {
         if (!event.origin || event.origin.indexOf('facebook.com') === -1) return;
         try {
           var data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
           if (data && data.type === 'WA_EMBEDDED_SIGNUP') {
-            post({ type: 'embedded_signup', data: data });
+            saveSessionAssets(data);
           }
         } catch (e) {}
       });
@@ -132,16 +141,13 @@ export function buildEmbeddedSignupBridgeHtml(input: { state: string }): string 
         setStatus('Starting WhatsApp signup…');
         FB.login(function (response) {
           if (response && response.authResponse && response.authResponse.code) {
-            post({ type: 'oauth_code', code: response.authResponse.code });
             setStatus('Authorization complete. Return to AiShopy.');
             return;
           }
           if (response && response.status === 'not_authorized') {
-            post({ type: 'embedded_signup', data: { type: 'WA_EMBEDDED_SIGNUP', event: 'ERROR', data: {} } });
             setStatus('Authorization was not completed.');
             return;
           }
-          post({ type: 'embedded_signup', data: { type: 'WA_EMBEDDED_SIGNUP', event: 'CANCEL', data: {} } });
           setStatus('Signup cancelled.');
         }, {
           config_id: ${JSON.stringify(configId)},

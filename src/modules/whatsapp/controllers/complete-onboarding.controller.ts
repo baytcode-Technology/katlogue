@@ -5,6 +5,7 @@ import { env } from '../../../config/env.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { assertPremiumAccess } from '../../../shared/lib/subscription.js'
 import { exchangeCodeForAccessToken } from '../services/embedded-signup.service.js'
+import { consumeEmbeddedSignupSession } from '../services/embedded-signup-session.service.js'
 import { onboardCoexistenceStore } from '../services/onboard-coexistence.service.js'
 import type { CompleteOnboardingBody } from '../validations/complete-onboarding.validation.js'
 
@@ -12,12 +13,30 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
   if (!req.authUser) throw new AppError(401, 'Unauthorized', 'UNAUTHORIZED')
 
   const body = req.body as CompleteOnboardingBody
-  const { storeId, code, wabaId, phoneNumberId } = body
+  const { storeId, code, state } = body
+  let { wabaId, phoneNumberId } = body
+
+  if (!wabaId && state) {
+    const session = consumeEmbeddedSignupSession(state)
+    if (session) {
+      wabaId = session.wabaId
+      phoneNumberId = phoneNumberId ?? session.phoneNumberId
+    }
+  }
+
+  if (!wabaId) {
+    throw new AppError(
+      400,
+      'wabaId is required — complete Embedded Signup in Meta first',
+      'EMBEDDED_SIGNUP_ASSETS_REQUIRED'
+    )
+  }
 
   console.info('[whatsapp][complete-onboarding] START', {
     storeId,
     wabaId,
     phoneNumberId: phoneNumberId ?? null,
+    hasState: Boolean(state),
     codeLength: code?.length ?? 0,
     userId: req.authUser.id,
     configuredRedirectUri: env.META.OAUTH_REDIRECT_URI ?? null,

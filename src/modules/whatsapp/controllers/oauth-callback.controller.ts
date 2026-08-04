@@ -40,27 +40,8 @@ const RETURN_HTML = `<!DOCTYPE html>
   <body>
     <div class="card">
       <h1>Return to AiShopy</h1>
-      <p>WhatsApp authorization is complete. Close this window and return to the AiShopy app to finish connecting.</p>
+      <p>WhatsApp authorization is complete. You can close this window and return to the AiShopy app.</p>
     </div>
-    <script>
-      (function () {
-        var params = new URLSearchParams(window.location.search);
-        var code = params.get('code');
-        var error = params.get('error') || params.get('error_reason');
-        if (window.ReactNativeWebView && code) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'oauth_code', code: code }));
-        }
-        if (window.ReactNativeWebView) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'debug',
-            step: 'oauth_callback_page_loaded',
-            hypothesisId: 'H8',
-            hasCode: Boolean(code),
-            hasError: Boolean(error)
-          }));
-        }
-      })();
-    </script>
   </body>
 </html>`
 
@@ -90,7 +71,7 @@ export const metaOAuthCallback = asyncHandler(async (req: Request, res: Response
   if (!code) {
     console.warn('[whatsapp][oauth-callback] no code in query — app must complete via API')
   } else {
-    console.info('[whatsapp][oauth-callback] code present — mobile WebView should intercept this')
+    console.info('[whatsapp][oauth-callback] code present — auth session or browser should complete onboarding')
   }
 
   res.status(200).type('html').send(RETURN_HTML)

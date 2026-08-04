@@ -11,32 +11,15 @@ Embedded Signup uses only:
 
 ## Connect flow (mobile app)
 
-```mermaid
-sequenceDiagram
-  participant App as AiShopyApp
-  participant WebView as EmbeddedSignupWebView
-  participant Meta as MetaEmbeddedSignup
-  participant API as Backend
-
-  App->>API: GET /api/whatsapp/connect
-  API-->>App: signup URL
-  App->>WebView: open URL
-  Meta-->>WebView: WA_EMBEDDED_SIGNUP FINISH event
-  WebView-->>App: waba_id, phone_number_id
-  Meta-->>WebView: redirect with OAuth code
-  WebView-->>App: intercept callback URL
-  App->>API: POST /api/whatsapp/complete-onboarding
-  API-->>App: connected
-```
-
 1. Merchant taps **Connect WhatsApp** in the app.
-2. In-app WebView opens Meta Embedded Signup (`META_EMBEDDED_SIGNUP_CONFIG_ID` required).
-3. WebView captures `WA_EMBEDDED_SIGNUP` finish event (`waba_id`, optional `phone_number_id`).
-4. WebView intercepts OAuth redirect to `/api/whatsapp/oauth/callback` and extracts `code`.
-5. App calls `POST /api/whatsapp/complete-onboarding` with `{ storeId, code, wabaId, phoneNumberId? }`.
-6. Backend exchanges code, resolves phone via WABA if needed, subscribes webhooks, stores credentials.
+2. App opens `expo-web-browser` auth session (Custom Tabs / ASWebAuthenticationSession) to the FB SDK bridge page on `api.aishopy.io`.
+3. Bridge page calls `FB.login()` with Embedded Signup v4 extras (`whatsapp_business_app_onboarding`).
+4. Bridge page saves `waba_id` via `POST /api/whatsapp/embedded-signup/session` when `WA_EMBEDDED_SIGNUP` fires.
+5. Meta redirects to `/api/whatsapp/oauth/callback?code=...&state=...`; auth session returns that URL to the app.
+6. App calls `POST /api/whatsapp/complete-onboarding` with `{ storeId, code, state }`; backend resolves `wabaId` from session store.
+7. Backend exchanges code, subscribes webhooks, stores credentials.
 
-The OAuth callback URL (`/api/whatsapp/oauth/callback`) returns a static HTML page only; onboarding completes via the API above.
+Do **not** navigate directly to `business.facebook.com/messaging/whatsapp/onboard/` — that bypasses the FB SDK `window.opener` handshake and lands on Hosted ES OAuth Callback without delivering results.
 
 ---
 

@@ -6,6 +6,7 @@ export const completeOnboardingSchema = z
     storeId: optionalEntityId('Invalid store id'),
     store_id: optionalEntityId('Invalid store id'),
     code: z.string().trim().min(1, 'code is required'),
+    state: z.string().trim().min(1).optional(),
     wabaId: z.string().trim().min(1).optional(),
     waba_id: z.string().trim().min(1).optional(),
     phoneNumberId: z.string().trim().min(1).optional(),
@@ -15,14 +16,15 @@ export const completeOnboardingSchema = z
     message: 'storeId is required',
     path: ['storeId'],
   })
-  .refine((v) => Boolean(v.wabaId || v.waba_id), {
-    message: 'wabaId is required',
+  .refine((v) => Boolean(v.wabaId || v.waba_id || v.state), {
+    message: 'wabaId or state is required',
     path: ['wabaId'],
   })
   .transform((v) => ({
     storeId: (v.storeId ?? v.store_id)!,
     code: v.code,
-    wabaId: (v.wabaId ?? v.waba_id)!,
+    state: v.state ?? null,
+    wabaId: v.wabaId ?? v.waba_id ?? null,
     phoneNumberId: v.phoneNumberId ?? v.phone_number_id ?? null,
   }))
 

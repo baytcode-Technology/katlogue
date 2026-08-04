@@ -2,6 +2,10 @@ import axios from 'axios'
 import { env } from '../../../config/env.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import { normalizeWhatsAppNumber } from '../../../shared/utils/phone.js'
+import {
+  isHostedEmbeddedSignupUrl,
+  logSignupUrlClassification,
+} from './signup-url-classifier.js'
 
 export type MetaTokenExchangeResult = {
   accessToken: string
@@ -35,27 +39,51 @@ const EMBEDDED_SIGNUP_EXTRAS = {
   featureType: 'whatsapp_business_app_onboarding',
 } as const
 
-/** Top-level Embedded Signup dialog URL (Custom Tabs / auth session — no FB.login popup). */
+/**
+ * Facebook Login for Business OAuth dialog with Embedded Signup v4 extras.
+ * Uses dialog/oauth (not business.facebook.com/onboard) so Meta 302s to redirect_uri
+ * with ?code= — required for Custom Tabs / openAuthSessionAsync completion.
+ */
 export function buildEmbeddedSignupDialogUrl(input: { state: string }): string {
   assertMetaOAuthConfigured()
   if (!env.META.EMBEDDED_SIGNUP_CONFIG_ID) {
     return buildLegacyMetaOAuthUrl(input)
   }
 
-  const extras = JSON.stringify(EMBEDDED_SIGNUP_EXTRAS)
   const params: Record<string, string> = {
-    app_id: env.META.APP_ID!,
+    client_id: env.META.APP_ID!,
     config_id: env.META.EMBEDDED_SIGNUP_CONFIG_ID!,
     redirect_uri: env.META.OAUTH_REDIRECT_URI!,
     response_type: 'code',
     override_default_response_type: 'true',
     state: input.state,
     scope: ['whatsapp_business_management', 'whatsapp_business_messaging'].join(','),
-    extras,
+    extras: JSON.stringify(EMBEDDED_SIGNUP_EXTRAS),
+    display: 'page',
   }
 
   const qs = new URLSearchParams(params).toString()
-  return `https://business.facebook.com/messaging/whatsapp/onboard/?${qs}`
+  const url = `https://www.facebook.com/${encodeURIComponent(env.WHATSAPP.API_VERSION)}/dialog/oauth?${qs}`
+
+  if (isHostedEmbeddedSignupUrl(url)) {
+    throw new AppError(
+      500,
+      'Internal error: generated Hosted ES URL instead of OAuth dialog',
+      'HOSTED_ES_URL_BLOCKED'
+    )
+  }
+
+  logSignupUrlClassification({ context: 'buildEmbeddedSignupDialogUrl', url })
+  return url
+}
+
+/** Same-origin launch URL — auth session opens our domain, then 302 to Meta OAuth dialog. */
+export function buildWhatsAppOAuthLaunchUrl(input: {
+  state: string
+  apiBaseUrl: string
+}): string {
+  const base = input.apiBaseUrl.replace(/\/$/, '')
+  return `${base}/api/whatsapp/oauth/launch?state=${encodeURIComponent(input.state)}`
 }
 
 export function buildMetaOAuthUrl(input: { state: string }): string {

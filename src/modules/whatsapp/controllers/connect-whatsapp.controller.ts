@@ -8,9 +8,15 @@ import { assertPremiumAccess } from '../../../shared/lib/subscription.js'
 import {
   buildEmbeddedSignupDialogUrl,
   buildMetaOAuthUrl,
+  buildWhatsAppOAuthLaunchUrl,
   WHATSAPP_APP_AUTH_REDIRECT_URI,
 } from '../services/embedded-signup.service.js'
 import { parseStoreIdFromQuery } from '../../../shared/utils/parse-store-id.js'
+import {
+  classifyWhatsAppSignupUrl,
+  describeSignupUrlType,
+  logSignupUrlClassification,
+} from '../services/signup-url-classifier.js'
 
 function buildState(payload: object): string {
   const json = JSON.stringify(payload)
@@ -31,15 +37,49 @@ export const connectWhatsApp = asyncHandler(async (req: Request, res: Response) 
   const nonce = crypto.randomBytes(12).toString('hex')
   const state = buildState({ storeId, nonce })
 
-  const url = env.META.EMBEDDED_SIGNUP_CONFIG_ID
+  const apiBaseUrl =
+    env.API_PUBLIC_URL?.replace(/\/$/, '') ??
+    `${req.protocol}://${req.get('host') ?? 'localhost'}`
+
+  const metaDialogUrl = env.META.EMBEDDED_SIGNUP_CONFIG_ID
     ? buildEmbeddedSignupDialogUrl({ state })
     : buildMetaOAuthUrl({ state })
+
+  const url = env.META.EMBEDDED_SIGNUP_CONFIG_ID
+    ? buildWhatsAppOAuthLaunchUrl({ state, apiBaseUrl })
+    : metaDialogUrl
+
+  const launchUrlType = classifyWhatsAppSignupUrl(url)
+  const metaDialogUrlType = classifyWhatsAppSignupUrl(metaDialogUrl)
+
+  logSignupUrlClassification({
+    context: 'connectWhatsApp:launchUrl',
+    url,
+    extra: { storeId },
+  })
+  logSignupUrlClassification({
+    context: 'connectWhatsApp:metaDialogUrl',
+    url: metaDialogUrl,
+    extra: { storeId },
+  })
+
+  if (metaDialogUrlType === 'hosted-embedded-signup') {
+    throw new AppError(
+      500,
+      'WhatsApp connect URL misconfigured: Hosted Embedded Signup path cannot return OAuth codes',
+      'HOSTED_ES_URL_BLOCKED'
+    )
+  }
 
   console.info('[whatsapp][connect] generated signup URL', {
     storeId,
     signupFlow: env.META.EMBEDDED_SIGNUP_CONFIG_ID
-      ? 'direct-oauth-dialog'
+      ? 'oauth-launch-redirect'
       : 'oauth-dialog',
+    launchUrlType,
+    metaDialogUrlType,
+    launchUrlDescription: describeSignupUrlType(launchUrlType),
+    metaDialogDescription: describeSignupUrlType(metaDialogUrlType),
     redirectUri: env.META.OAUTH_REDIRECT_URI ?? null,
     appRedirectUri: WHATSAPP_APP_AUTH_REDIRECT_URI,
     hasConfigId: Boolean(env.META.EMBEDDED_SIGNUP_CONFIG_ID),
@@ -59,6 +99,8 @@ export const connectWhatsApp = asyncHandler(async (req: Request, res: Response) 
       url,
       redirectUri: WHATSAPP_APP_AUTH_REDIRECT_URI,
       oauthRedirectUri: env.META.OAUTH_REDIRECT_URI ?? null,
+      signupUrlType: launchUrlType,
+      metaDialogUrlType,
     },
   })
 })

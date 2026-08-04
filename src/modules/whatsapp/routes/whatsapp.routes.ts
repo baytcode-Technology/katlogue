@@ -16,6 +16,7 @@ import { markChatRead } from '../controllers/mark-chat-read.controller.js'
 import { connectWhatsApp } from '../controllers/connect-whatsapp.controller.js'
 import { completeOnboarding } from '../controllers/complete-onboarding.controller.js'
 import { metaOAuthCallback } from '../controllers/oauth-callback.controller.js'
+import { metaOAuthLaunch } from '../controllers/oauth-launch.controller.js'
 import { connectionStatus } from '../controllers/connection-status.controller.js'
 import { triggerSync } from '../controllers/trigger-sync.controller.js'
 import { whatsappDebugSession } from '../controllers/debug-session.controller.js'
@@ -39,6 +40,7 @@ router.post(
   validateBody(completeOnboardingSchema),
   completeOnboarding
 )
+router.get('/oauth/launch', metaOAuthLaunch)
 router.get('/oauth/callback', metaOAuthCallback)
 router.post('/debug-session', requireAuth, whatsappDebugSession)
 router.get('/connection-status', requireAuth, connectionStatus)

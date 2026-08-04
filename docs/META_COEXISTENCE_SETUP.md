@@ -9,17 +9,35 @@ Embedded Signup uses only:
 
 **Do not request `business_management`.** WABA ID is resolved server-side via `debug_token` granular scopes after OAuth code exchange; phone number ID is fetched from the WABA via `GET /{waba-id}/phone_numbers`.
 
-## Connect flow (mobile app)
+## Connect flow (mobile app) — custom Embedded Signup (NOT Hosted ES)
 
+**Wrong path (what production was running before deploy):**
+`business.facebook.com/messaging/whatsapp/onboard/` — this is **Hosted Embedded Signup**. It shows the "Onboard to WhatsApp Business Platform with …" landing page, completes on Meta's domain, and delivers results via `account_update` webhooks only. It **never** redirects to `redirect_uri` with an OAuth `code`, so `openAuthSessionAsync` always ends with `{ type: 'dismiss' }`.
+
+**Correct path (current code, not yet deployed at time of investigation):**
 1. Merchant taps **Connect WhatsApp** in the app.
-2. `openAuthSessionAsync` opens Meta's **direct Embedded Signup dialog URL** (top-level redirect in Custom Tabs — no FB.login bridge page).
-3. Merchant completes coexistence flow in Meta UI.
-4. Meta redirects to `https://api.aishopy.io/api/whatsapp/oauth/callback?code=...&state=...`.
-5. Backend **302 redirects** to `aishopyapp://whatsapp-oauth?code=...&state=...`; auth session returns to the app.
-6. App calls `POST /api/whatsapp/complete-onboarding` with `{ storeId, code, state? }`.
-7. Backend exchanges code, resolves WABA ID server-side, subscribes webhooks, stores credentials.
+2. `openAuthSessionAsync` opens `https://api.aishopy.io/api/whatsapp/oauth/launch` (same-origin), which **302 redirects** to `www.facebook.com/v20.0/dialog/oauth` with `config_id`, `response_type=code`, `override_default_response_type=true`, coexistence `extras`, and `redirect_uri=https://api.aishopy.io/api/whatsapp/oauth/callback`.
+3. Merchant completes Embedded Signup in the OAuth dialog.
+4. Meta redirects to the HTTPS callback with `?code=&state=`.
+5. Backend **302 redirects** to `aishopyapp://whatsapp-oauth?code=&state=`.
+6. App calls `POST /api/whatsapp/complete-onboarding`.
+7. Backend exchanges code, resolves WABA via `debug_token`, stores credentials.
 
-Do **not** use FB.login() bridge pages or `https://` as `openAuthSessionAsync`'s `redirectUri` — only the app scheme (`aishopyapp://whatsapp-oauth`) lets Custom Tabs / ASWebAuthenticationSession hand control back to the app.
+**Env vars** (no hardcoded Hosted ES URL — only `META_EMBEDDED_SIGNUP_CONFIG_ID`):
+- `META_APP_ID`, `META_APP_SECRET`
+- `META_EMBEDDED_SIGNUP_CONFIG_ID=1512657917023774`
+- `META_OAUTH_REDIRECT_URI=https://api.aishopy.io/api/whatsapp/oauth/callback`
+
+**Logging:** `[whatsapp][signup-url] classified` includes `urlType`. If you see `hosted-embedded-signup`, the wrong URL is being generated.
+
+### Plan B — intentional Hosted ES (not implemented)
+
+If `dialog/oauth` still fails on mobile, switch to Hosted ES on purpose:
+- Subscribe to `account_update` → handle `PARTNER_ADDED`
+- Exchange system token for business token server-side
+- Map WABA to store; app polls `GET /connection-status`
+
+Current webhook code parses `account_update` but does **not** onboard on `PARTNER_ADDED`.
 
 ---
 

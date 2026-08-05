@@ -10,6 +10,22 @@ import {
 
 export type WhatsAppMediaKind = 'image' | 'audio' | 'video'
 
+export function inferMediaKind(input: {
+  kindRaw: string
+  mimeType: string
+  filename: string
+}): WhatsAppMediaKind {
+  const kind = input.kindRaw.trim().toLowerCase()
+  if (kind === 'image' || kind === 'audio' || kind === 'video') return kind
+
+  const mime = input.mimeType.toLowerCase()
+  const name = input.filename.toLowerCase()
+  if (mime.startsWith('audio/') || /\.(m4a|aac|amr|ogg|mp3|wav|3gp)$/.test(name)) return 'audio'
+  if (mime.startsWith('video/') || /\.(mp4|3gp|mov)$/.test(name)) return 'video'
+  if (mime.startsWith('image/') || /\.(jpe?g|png|webp|gif)$/.test(name)) return 'image'
+  return 'image'
+}
+
 function graphMediaUrl(credentials: WhatsAppCredentials): string {
   return `https://graph.facebook.com/${credentials.apiVersion}/${credentials.phoneNumberId}/media`
 }

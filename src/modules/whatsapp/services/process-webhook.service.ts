@@ -221,6 +221,14 @@ export async function processWhatsAppWebhook(body: unknown): Promise<void> {
 
     // Delivery statuses
     for (const status of event.statuses) {
+      if (status.status === 'failed') {
+        console.error('[whatsapp] message delivery failed', {
+          metaMessageId: status.metaMessageId,
+          recipientId: status.recipientId,
+          raw: status.raw,
+        })
+      }
+
       const updated = await chatRepository.updateMessageStatus({
         metaMessageId: status.metaMessageId,
         status: status.status,

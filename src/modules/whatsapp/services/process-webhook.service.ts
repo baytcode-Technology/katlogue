@@ -81,6 +81,7 @@ function emitNewMessage(
       media_id: message.media_id,
       mime_type: message.mime_type,
       caption: message.caption,
+      raw_payload: message.raw_payload,
       status: message.status,
       timestamp: message.timestamp,
       from_number: message.from_number,

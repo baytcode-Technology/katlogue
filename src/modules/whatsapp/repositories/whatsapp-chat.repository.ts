@@ -543,7 +543,26 @@ export async function findMessageByMediaForStore(input: {
     throw new AppError(400, error.message, 'WHATSAPP_MESSAGE_MEDIA_LOOKUP_FAILED')
   }
 
-  return (data as WhatsAppMessage) ?? null
+  if (data) return data as WhatsAppMessage
+
+  const mediaKeys = ['image', 'video', 'audio', 'document', 'sticker'] as const
+  for (const key of mediaKeys) {
+    const { data: fallback, error: fallbackError } = await supabaseAdmin
+      .from('whatsapp_messages')
+      .select('*')
+      .eq('store_id', input.storeId)
+      .filter(`raw_payload->${key}->>id`, 'eq', input.mediaId)
+      .limit(1)
+      .maybeSingle()
+
+    if (fallbackError) {
+      throw new AppError(400, fallbackError.message, 'WHATSAPP_MESSAGE_MEDIA_LOOKUP_FAILED')
+    }
+
+    if (fallback) return fallback as WhatsAppMessage
+  }
+
+  return null
 }
 
 

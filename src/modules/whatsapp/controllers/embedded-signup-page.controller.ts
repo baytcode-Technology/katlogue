@@ -90,7 +90,8 @@ function buildEmbeddedSignupBridgeHtml(input: {
       }
 
       function isFacebookOrigin(origin) {
-        return origin === 'https://www.facebook.com' || origin === 'https://facebook.com';
+        return typeof origin === 'string'
+          && (origin.endsWith('.facebook.com') || origin.endsWith('facebook.com'));
       }
 
       function isFinishEvent(eventName) {
@@ -173,11 +174,16 @@ function buildEmbeddedSignupBridgeHtml(input: {
         }
       });
 
+      var emptyCallbackCount = 0;
+
       function handleLoginResponse(response) {
         void postBridgeLog('FB.login callback', {
           status: response.status || null,
           hasAuthResponse: Boolean(response.authResponse),
-          hasCode: Boolean(response.authResponse && response.authResponse.code)
+          hasCode: Boolean(response.authResponse && response.authResponse.code),
+          loginStarted: loginStarted,
+          esInProgress: esInProgress,
+          esFinishReceived: esFinishReceived
         });
 
         if (response.authResponse && response.authResponse.code) {
@@ -191,7 +197,8 @@ function buildEmbeddedSignupBridgeHtml(input: {
           return;
         }
 
-        if (esInProgress) {
+        if (loginStarted || esInProgress) {
+          emptyCallbackCount++;
           setStatus('Complete all steps in Meta, then tap Finish.');
           return;
         }
@@ -211,10 +218,11 @@ function buildEmbeddedSignupBridgeHtml(input: {
       function startEmbeddedSignup() {
         if (!window.FB || loginStarted) return;
         loginStarted = true;
-        esInProgress = false;
+        esInProgress = true;
         esFinishReceived = false;
         authCode = null;
         completing = false;
+        emptyCallbackCount = 0;
         if (waitTimer) {
           clearInterval(waitTimer);
           waitTimer = null;
@@ -226,6 +234,7 @@ function buildEmbeddedSignupBridgeHtml(input: {
           config_id: CONFIG_ID,
           response_type: 'code',
           override_default_response_type: true,
+          redirect_uri: OAUTH_CALLBACK,
           extras: {
             setup: {},
             version: 'v4',

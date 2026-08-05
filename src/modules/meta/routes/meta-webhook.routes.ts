@@ -11,7 +11,8 @@ import { processWhatsAppWebhook } from '../../whatsapp/services/process-webhook.
 
 const router = Router()
 
-router.use(express.raw({ type: 'application/json' }))
+/** History sync webhooks can exceed 100 KB; Meta retries on 5xx until accepted. */
+router.use(express.raw({ type: 'application/json', limit: '5mb' }))
 
 function resolveWebhookVerifyToken(): string | undefined {
   return (

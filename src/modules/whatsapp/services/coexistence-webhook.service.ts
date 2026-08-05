@@ -1,3 +1,5 @@
+import crypto from 'crypto'
+
 import { normalizeWhatsAppNumber } from '../../../shared/utils/phone.js'
 import type { ParsedWebhookMessage } from './whatsapp.service.js'
 
@@ -255,5 +257,8 @@ export function buildFieldEventKey(event: WebhookFieldEvent): string | null {
   if (event.historyDeclined) parts.push('history:declined')
 
   if (parts.length <= 1) return null
-  return parts.sort().join('|')
+
+  // History batches can include hundreds of message IDs — hash to stay under btree index limits.
+  const digest = crypto.createHash('sha256').update(parts.sort().join('|')).digest('hex')
+  return `${event.field}:${digest}`
 }

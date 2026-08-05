@@ -71,7 +71,7 @@ export async function uploadWhatsAppMediaToMeta(input: {
   let filename = input.filename
   let mimeType = input.mimeType
 
-  if (input.kind === 'audio') {
+  if (input.kind === 'audio' && input.voice === true) {
     const transcoded = await transcodeVoiceNoteToOgg({
       buffer: input.buffer,
       mimeType: input.mimeType,

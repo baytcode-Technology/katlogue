@@ -327,9 +327,7 @@ export async function sendMediaMessage(
       },
     }
   } else {
-    const voiceFlag =
-      input.voice === true ||
-      input.mimeType?.toLowerCase().includes('ogg') === true
+    const voiceFlag = input.mimeType?.toLowerCase().includes('ogg') === true
     payload = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',

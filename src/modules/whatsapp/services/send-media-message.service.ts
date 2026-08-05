@@ -87,6 +87,7 @@ export async function sendWhatsAppMediaMessage(input: SendWhatsAppMediaInput) {
     mediaId: input.mediaId,
     caption: input.caption,
     voice: input.voice,
+    mimeType: input.mimeType,
   })
 
   const now = new Date().toISOString()

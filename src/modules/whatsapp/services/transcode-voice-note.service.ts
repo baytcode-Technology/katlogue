@@ -61,16 +61,26 @@ export async function transcodeVoiceNoteToOgg(input: {
       inputPath,
       '-ac',
       '1',
+      '-ar',
+      '48000',
       '-c:a',
       'libopus',
       '-b:a',
       '32k',
+      '-application',
+      'voip',
+      '-vbr',
+      'on',
       outputPath,
     ])
 
     const buffer = await readFile(outputPath)
     if (!buffer.length) {
       throw new AppError(500, 'Voice transcode produced an empty file', 'VOICE_TRANSCODE_FAILED')
+    }
+
+    if (buffer.subarray(0, 4).toString('ascii') !== 'OggS') {
+      throw new AppError(500, 'Voice transcode did not produce a valid OGG file', 'VOICE_TRANSCODE_FAILED')
     }
 
     return {

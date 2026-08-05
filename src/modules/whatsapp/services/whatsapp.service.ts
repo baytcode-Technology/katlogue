@@ -70,6 +70,7 @@ export type SendMediaMessageInput = {
   mediaId: string
   caption?: string | null
   voice?: boolean
+  mimeType?: string | null
 }
 
 type MetaErrorResponse = {
@@ -326,12 +327,15 @@ export async function sendMediaMessage(
       },
     }
   } else {
+    const voiceFlag =
+      input.voice === true ||
+      input.mimeType?.toLowerCase().includes('ogg') === true
     payload = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
       to,
       type: 'audio',
-      audio: { id: mediaId, voice: input.voice ?? false },
+      audio: { id: mediaId, voice: voiceFlag },
     }
   }
 

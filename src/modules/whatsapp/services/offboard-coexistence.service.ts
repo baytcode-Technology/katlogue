@@ -75,12 +75,12 @@ export async function offboardWhatsAppStore(input: {
       : 'No access token on store — skipped Meta unsubscribe'
   }
 
+  // Clear WABA credentials only — stores.whatsapp_number is NOT NULL (store contact at signup).
   await storeRepository.updateWhatsAppConnection({
     storeId: input.storeId,
     waPhoneNumberId: null,
     waWabaId: null,
     waAccessToken: null,
-    whatsappNumber: null,
   })
 
   await deleteStoreNumbersForStore(input.storeId)

@@ -49,3 +49,39 @@ export const paymentProofUpload = multer({
     cb(null, true)
   },
 }).single('image')
+
+const WHATSAPP_MEDIA_MIME = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'audio/ogg',
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/aac',
+  'audio/amr',
+  'video/mp4',
+  'video/3gpp',
+  'application/octet-stream',
+])
+
+function isAllowedWhatsAppMedia(file: Express.Multer.File): boolean {
+  const mime = (file.mimetype || '').toLowerCase()
+  if (WHATSAPP_MEDIA_MIME.has(mime) || mime.startsWith('image/') || mime.startsWith('audio/') || mime.startsWith('video/')) {
+    return true
+  }
+  const name = (file.originalname || '').toLowerCase()
+  return /\.(jpe?g|png|webp|mp4|3gp|ogg|mp3|m4a|aac|amr)$/.test(name)
+}
+
+export const whatsAppMediaUpload = multer({
+  storage,
+  limits: { fileSize: 16 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!isAllowedWhatsAppMedia(file)) {
+      cb(new Error('Unsupported media type for WhatsApp upload'))
+      return
+    }
+    cb(null, true)
+  },
+}).single('file')

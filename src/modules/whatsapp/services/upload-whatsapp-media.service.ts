@@ -3,6 +3,7 @@ import FormData from 'form-data'
 import { AppError } from '../../../shared/errors/app.error.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { transcodeVoiceNoteToOgg } from './transcode-voice-note.service.js'
+import { transcodeVideoToMp4 } from './transcode-video.service.js'
 import {
   resolveStoreWhatsAppCredentials,
   type WhatsAppCredentials,
@@ -74,6 +75,17 @@ export async function uploadWhatsAppMediaToMeta(input: {
     const transcoded = await transcodeVoiceNoteToOgg({
       buffer: input.buffer,
       mimeType: input.mimeType,
+    })
+    buffer = transcoded.buffer
+    filename = transcoded.filename
+    mimeType = transcoded.mimeType
+  }
+
+  if (input.kind === 'video') {
+    const transcoded = await transcodeVideoToMp4({
+      buffer: input.buffer,
+      mimeType: input.mimeType,
+      filename: input.filename,
     })
     buffer = transcoded.buffer
     filename = transcoded.filename

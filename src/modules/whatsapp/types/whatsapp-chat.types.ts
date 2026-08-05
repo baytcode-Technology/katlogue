@@ -26,6 +26,8 @@ export type WhatsAppConversation = {
 
   customer_wa_number: string
 
+  customer_name: string | null
+
   last_message_at: string | null
 
   last_message_preview: string | null

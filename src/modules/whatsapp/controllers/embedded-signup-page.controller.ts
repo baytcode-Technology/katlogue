@@ -73,14 +73,6 @@ function buildEmbeddedSignupBridgeHtml(input: {
         statusEl.className = isError ? 'status error' : 'status';
       }
 
-      function postBridgeLog(step, data) {
-        return fetch(API_BASE + '/api/whatsapp/embedded-signup/bridge-log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ state: STATE, step: step, data: data, timestamp: Date.now() })
-        }).catch(function () { /* best-effort */ });
-      }
-
       function postEsEvent(payload) {
         return fetch(API_BASE + '/api/whatsapp/embedded-signup/event', {
           method: 'POST',
@@ -110,14 +102,8 @@ function buildEmbeddedSignupBridgeHtml(input: {
       function completeWithCode(code) {
         if (completing || !code) return;
         completing = true;
-        var deepLink = buildDeepLink(code);
-        void postBridgeLog('completeWithCode', {
-          esFinishReceived: esFinishReceived,
-          esInProgress: esInProgress,
-          deepLinkPrefix: APP_REDIRECT
-        });
         setStatus('Success — returning to AiShopy…');
-        window.location.replace(deepLink);
+        window.location.replace(buildDeepLink(code));
       }
 
       function waitForAuthCode() {
@@ -140,14 +126,6 @@ function buildEmbeddedSignupBridgeHtml(input: {
       }
 
       window.addEventListener('message', function (event) {
-        void postBridgeLog('postMessage raw', {
-          origin: event.origin,
-          dataType: typeof event.data,
-          dataPreview: typeof event.data === 'string'
-            ? event.data.slice(0, 2000)
-            : String(event.data).slice(0, 500)
-        });
-
         if (!isFacebookOrigin(event.origin)) return;
 
         try {
@@ -166,26 +144,11 @@ function buildEmbeddedSignupBridgeHtml(input: {
               launchBtn.disabled = false;
               setStatus('Signup was cancelled in Meta.', true);
             }
-          } else {
-            void postBridgeLog('postMessage parsed non-ES', { keys: data ? Object.keys(data) : [] });
           }
-        } catch (e) {
-          void postBridgeLog('postMessage parse error', { message: String(e) });
-        }
+        } catch (e) { /* ignore non-JSON */ }
       });
 
-      var emptyCallbackCount = 0;
-
       function handleLoginResponse(response) {
-        void postBridgeLog('FB.login callback', {
-          status: response.status || null,
-          hasAuthResponse: Boolean(response.authResponse),
-          hasCode: Boolean(response.authResponse && response.authResponse.code),
-          loginStarted: loginStarted,
-          esInProgress: esInProgress,
-          esFinishReceived: esFinishReceived
-        });
-
         if (response.authResponse && response.authResponse.code) {
           authCode = response.authResponse.code;
           completeWithCode(authCode);
@@ -198,7 +161,6 @@ function buildEmbeddedSignupBridgeHtml(input: {
         }
 
         if (loginStarted || esInProgress) {
-          emptyCallbackCount++;
           setStatus('Complete all steps in Meta, then tap Finish.');
           return;
         }
@@ -222,7 +184,6 @@ function buildEmbeddedSignupBridgeHtml(input: {
         esFinishReceived = false;
         authCode = null;
         completing = false;
-        emptyCallbackCount = 0;
         if (waitTimer) {
           clearInterval(waitTimer);
           waitTimer = null;

@@ -258,7 +258,7 @@ export async function listConversations(storeId: number): Promise<WhatsAppConver
 
     .from('whatsapp_conversations')
 
-    .select('*')
+    .select('*, customers(name)')
 
     .eq('store_id', storeId)
 
@@ -276,7 +276,46 @@ export async function listConversations(storeId: number): Promise<WhatsAppConver
 
 
 
-  return (data as WhatsAppConversation[]) ?? []
+  type Row = WhatsAppConversation & {
+    customers?: { name: string | null } | { name: string | null }[] | null
+  }
+
+  const conversations = ((data as Row[]) ?? []).map((row) => {
+    const customer = Array.isArray(row.customers) ? row.customers[0] : row.customers
+    const { customers: _customers, ...rest } = row
+    return {
+      ...rest,
+      customer_name: customer?.name?.trim() || null,
+    } as WhatsAppConversation
+  })
+
+  const missingNames = conversations.filter((c) => !c.customer_name)
+  if (missingNames.length === 0) return conversations
+
+  const phones = [...new Set(missingNames.map((c) => c.customer_wa_number))]
+  const { data: customers, error: customerError } = await supabaseAdmin
+    .from('customers')
+    .select('whatsapp_number, name')
+    .eq('store_id', storeId)
+    .in('whatsapp_number', phones)
+
+  if (customerError) {
+    return conversations
+  }
+
+  const nameByPhone = new Map<string, string>()
+  for (const row of customers ?? []) {
+    const name = (row as { whatsapp_number: string; name: string | null }).name?.trim()
+    if (name) {
+      nameByPhone.set((row as { whatsapp_number: string }).whatsapp_number, name)
+    }
+  }
+
+  return conversations.map((c) =>
+    c.customer_name
+      ? c
+      : { ...c, customer_name: nameByPhone.get(c.customer_wa_number) ?? null }
+  )
 
 }
 

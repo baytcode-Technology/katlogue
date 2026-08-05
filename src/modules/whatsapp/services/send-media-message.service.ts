@@ -85,7 +85,7 @@ export async function sendWhatsAppMediaMessage(input: SendWhatsAppMediaInput) {
 
   const sendVoice =
     input.type === 'audio' &&
-    (input.voice === true || input.mimeType?.toLowerCase().includes('ogg') === true)
+    input.mimeType?.toLowerCase().includes('ogg') === true
 
   const metaResult = await sendMediaMessage({
     to: customerWaNumber,

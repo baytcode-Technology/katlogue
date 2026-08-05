@@ -31,8 +31,7 @@ export const uploadWhatsAppMedia = asyncHandler(async (req: Request, res: Respon
     voiceRaw === true ||
     voiceRaw === 'true' ||
     voiceRaw === '1' ||
-    voiceRaw === 1 ||
-    kind === 'audio'
+    voiceRaw === 1
 
   const result = await uploadWhatsAppMediaToMeta({
     storeId,

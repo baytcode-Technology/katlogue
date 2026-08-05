@@ -17,6 +17,13 @@ export const uploadWhatsAppMedia = asyncHandler(async (req: Request, res: Respon
     throw new AppError(400, 'Multipart field "file" is required', 'NO_FILE')
   }
 
+  const voiceRaw = req.body?.voice ?? req.query.voice
+  const voice =
+    voiceRaw === true ||
+    voiceRaw === 'true' ||
+    voiceRaw === '1' ||
+    voiceRaw === 1
+
   const result = await uploadWhatsAppMediaToMeta({
     storeId,
     ownerId: req.authUser.id,
@@ -24,6 +31,7 @@ export const uploadWhatsAppMedia = asyncHandler(async (req: Request, res: Respon
     buffer: file.buffer,
     mimeType: file.mimetype || 'application/octet-stream',
     filename: file.originalname || `${kind}.bin`,
+    voice: kind === 'audio' ? voice : false,
   })
 
   res.status(201).json({

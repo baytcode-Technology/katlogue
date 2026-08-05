@@ -19,6 +19,8 @@ import { metaOAuthCallback } from '../controllers/oauth-callback.controller.js'
 import { metaOAuthLaunch } from '../controllers/oauth-launch.controller.js'
 import { embeddedSignupPage } from '../controllers/embedded-signup-page.controller.js'
 import { embeddedSignupEvent } from '../controllers/embedded-signup-event.controller.js'
+import { embeddedSignupBridgeLog } from '../controllers/embedded-signup-bridge-log.controller.js'
+import { offboardWhatsApp } from '../controllers/offboard-whatsapp.controller.js'
 import { connectionStatus } from '../controllers/connection-status.controller.js'
 import { triggerSync } from '../controllers/trigger-sync.controller.js'
 import { whatsappSyncDiagnostics } from '../controllers/sync-diagnostics.controller.js'
@@ -28,6 +30,7 @@ import { sendTemplateSchema } from '../validations/send-template.validation.js'
 import { sendMessageSchema } from '../validations/send-message.validation.js'
 import { triggerSyncSchema } from '../validations/trigger-sync.validation.js'
 import { completeOnboardingSchema } from '../validations/complete-onboarding.validation.js'
+import { offboardWhatsAppSchema } from '../validations/offboard-whatsapp.validation.js'
 import {
   listChatsQuerySchema,
   listMessagesParamsSchema,
@@ -47,6 +50,13 @@ router.get('/oauth/launch', metaOAuthLaunch)
 router.get('/oauth/callback', metaOAuthCallback)
 router.get('/embedded-signup', embeddedSignupPage)
 router.post('/embedded-signup/event', embeddedSignupEvent)
+router.post('/embedded-signup/bridge-log', embeddedSignupBridgeLog)
+router.post(
+  '/offboard',
+  requireAuth,
+  validateBody(offboardWhatsAppSchema),
+  offboardWhatsApp
+)
 router.post('/debug-session', requireAuth, whatsappDebugSession)
 router.get('/connection-status', requireAuth, connectionStatus)
 router.get('/sync-diagnostics', requireAuth, whatsappSyncDiagnostics)

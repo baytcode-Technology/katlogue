@@ -125,8 +125,9 @@ export function recordEmbeddedSignupEvent(input: {
 
     if (
       event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING' ||
+      event === 'FINISH_ONLY_WABA' ||
       event === 'ONBOARDING_COMPLETE' ||
-      (event === 'FINISH' && Boolean(wabaFromData || phoneFromData))
+      event === 'FINISH'
     ) {
       session.onboardingComplete = true
     }

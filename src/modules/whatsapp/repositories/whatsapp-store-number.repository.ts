@@ -20,3 +20,14 @@ export async function upsertStoreNumber(input: {
     throw new AppError(400, error.message, 'WHATSAPP_STORE_NUMBER_UPSERT_FAILED')
   }
 }
+
+export async function deleteStoreNumbersForStore(storeId: number): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('whatsapp_store_numbers')
+    .delete()
+    .eq('store_id', storeId)
+
+  if (error) {
+    throw new AppError(400, error.message, 'WHATSAPP_STORE_NUMBER_DELETE_FAILED')
+  }
+}

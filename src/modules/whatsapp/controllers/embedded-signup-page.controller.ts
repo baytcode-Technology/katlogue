@@ -16,6 +16,7 @@ function buildEmbeddedSignupBridgeHtml(input: {
   state: string
   apiBaseUrl: string
   appRedirectUri: string
+  oauthCallbackUrl: string
 }): string {
   const safe = (value: string) =>
     JSON.stringify(value).replace(/<\//g, '<\\/')
@@ -55,15 +56,29 @@ function buildEmbeddedSignupBridgeHtml(input: {
       var CONFIG_ID = ${safe(input.configId)};
       var API_VERSION = ${safe(input.apiVersion)};
       var API_BASE = ${safe(input.apiBaseUrl)};
+      var OAUTH_CALLBACK = ${safe(input.oauthCallbackUrl)};
       var APP_REDIRECT = ${safe(input.appRedirectUri)};
       var statusEl = document.getElementById('status');
       var launchBtn = document.getElementById('launch');
       var sdkReady = false;
       var loginStarted = false;
+      var esInProgress = false;
+      var esFinishReceived = false;
+      var authCode = null;
+      var completing = false;
+      var waitTimer = null;
 
       function setStatus(text, isError) {
         statusEl.textContent = text;
         statusEl.className = isError ? 'status error' : 'status';
+      }
+
+      function postBridgeLog(step, data) {
+        return fetch(API_BASE + '/api/whatsapp/embedded-signup/bridge-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: STATE, step: step, data: data, timestamp: Date.now() })
+        }).catch(function () { /* best-effort */ });
       }
 
       function postEsEvent(payload) {
@@ -75,51 +90,145 @@ function buildEmbeddedSignupBridgeHtml(input: {
       }
 
       function isFacebookOrigin(origin) {
-        return typeof origin === 'string' && origin.endsWith('facebook.com');
+        return origin === 'https://www.facebook.com' || origin === 'https://facebook.com';
+      }
+
+      function isFinishEvent(eventName) {
+        return eventName === 'FINISH'
+          || eventName === 'FINISH_ONLY_WABA'
+          || eventName === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING'
+          || eventName === 'ONBOARDING_COMPLETE';
+      }
+
+      function buildDeepLink(code) {
+        return APP_REDIRECT
+          + '?code=' + encodeURIComponent(code)
+          + '&state=' + encodeURIComponent(STATE);
+      }
+
+      function completeWithCode(code) {
+        if (completing || !code) return;
+        completing = true;
+        var deepLink = buildDeepLink(code);
+        void postBridgeLog('completeWithCode', {
+          esFinishReceived: esFinishReceived,
+          esInProgress: esInProgress,
+          deepLinkPrefix: APP_REDIRECT
+        });
+        setStatus('Success — returning to AiShopy…');
+        window.location.replace(deepLink);
+      }
+
+      function waitForAuthCode() {
+        if (waitTimer) return;
+        var attempts = 0;
+        waitTimer = setInterval(function () {
+          attempts++;
+          if (authCode) {
+            clearInterval(waitTimer);
+            waitTimer = null;
+            completeWithCode(authCode);
+          } else if (attempts >= 120) {
+            clearInterval(waitTimer);
+            waitTimer = null;
+            loginStarted = false;
+            launchBtn.disabled = false;
+            setStatus('Meta signup finished but no code yet. Tap Continue with Meta once more.', true);
+          }
+        }, 500);
       }
 
       window.addEventListener('message', function (event) {
+        void postBridgeLog('postMessage raw', {
+          origin: event.origin,
+          dataType: typeof event.data,
+          dataPreview: typeof event.data === 'string'
+            ? event.data.slice(0, 2000)
+            : String(event.data).slice(0, 500)
+        });
+
         if (!isFacebookOrigin(event.origin)) return;
+
         try {
           var data = JSON.parse(event.data);
           if (data && data.type === 'WA_EMBEDDED_SIGNUP') {
+            esInProgress = true;
             setStatus('Signup step: ' + (data.event || 'unknown'));
             void postEsEvent(data);
+            if (isFinishEvent(data.event)) {
+              esFinishReceived = true;
+              setStatus('Signup complete — finishing connection…');
+              if (authCode) completeWithCode(authCode);
+              else waitForAuthCode();
+            } else if (data.event === 'CANCEL') {
+              loginStarted = false;
+              launchBtn.disabled = false;
+              setStatus('Signup was cancelled in Meta.', true);
+            }
+          } else {
+            void postBridgeLog('postMessage parsed non-ES', { keys: data ? Object.keys(data) : [] });
           }
-        } catch (e) { /* ignore non-JSON */ }
+        } catch (e) {
+          void postBridgeLog('postMessage parse error', { message: String(e) });
+        }
       });
 
-      function redirectToApp(params) {
-        var qs = new URLSearchParams(params);
-        qs.set('state', STATE);
-        window.location.href = APP_REDIRECT + '?' + qs.toString();
+      function handleLoginResponse(response) {
+        void postBridgeLog('FB.login callback', {
+          status: response.status || null,
+          hasAuthResponse: Boolean(response.authResponse),
+          hasCode: Boolean(response.authResponse && response.authResponse.code)
+        });
+
+        if (response.authResponse && response.authResponse.code) {
+          authCode = response.authResponse.code;
+          completeWithCode(authCode);
+          return;
+        }
+
+        if (esFinishReceived) {
+          waitForAuthCode();
+          return;
+        }
+
+        if (esInProgress) {
+          setStatus('Complete all steps in Meta, then tap Finish.');
+          return;
+        }
+
+        if (response.status === 'not_authorized') {
+          loginStarted = false;
+          launchBtn.disabled = false;
+          setStatus('Authorization was not granted.', true);
+          return;
+        }
+
+        loginStarted = false;
+        launchBtn.disabled = false;
+        setStatus('Signup was cancelled. Tap Continue with Meta to try again.', true);
       }
 
       function startEmbeddedSignup() {
         if (!window.FB || loginStarted) return;
         loginStarted = true;
+        esInProgress = false;
+        esFinishReceived = false;
+        authCode = null;
+        completing = false;
+        if (waitTimer) {
+          clearInterval(waitTimer);
+          waitTimer = null;
+        }
         launchBtn.disabled = true;
         setStatus('Opening Meta Embedded Signup…');
 
-        window.FB.login(function (response) {
-          if (response.authResponse && response.authResponse.code) {
-            setStatus('Success — returning to AiShopy…');
-            redirectToApp({ code: response.authResponse.code });
-            return;
-          }
-          loginStarted = false;
-          launchBtn.disabled = false;
-          var msg = response.status === 'not_authorized'
-            ? 'Authorization was not granted'
-            : 'Signup was cancelled';
-          setStatus(msg, true);
-          redirectToApp({ error: 'access_denied', error_reason: response.status || 'unknown' });
-        }, {
+        window.FB.login(handleLoginResponse, {
           config_id: CONFIG_ID,
           response_type: 'code',
           override_default_response_type: true,
           extras: {
             setup: {},
+            version: 'v4',
             featureType: 'whatsapp_business_app_onboarding',
             sessionInfoVersion: '3'
           }
@@ -193,6 +302,10 @@ export const embeddedSignupPage = asyncHandler(async (req: Request, res: Respons
     env.API_PUBLIC_URL?.replace(/\/$/, '') ??
     `${req.protocol}://${req.get('host') ?? 'localhost'}`
 
+  const oauthCallbackUrl =
+    env.META.OAUTH_REDIRECT_URI?.replace(/\/$/, '') ??
+    `${apiBaseUrl}/api/whatsapp/oauth/callback`
+
   console.info('[whatsapp][embedded-signup] bridge page served', {
     storeId: parsed.storeId,
     apiBaseUrl,
@@ -210,6 +323,7 @@ export const embeddedSignupPage = asyncHandler(async (req: Request, res: Respons
         state,
         apiBaseUrl,
         appRedirectUri: WHATSAPP_APP_AUTH_REDIRECT_URI,
+        oauthCallbackUrl,
       })
     )
 })

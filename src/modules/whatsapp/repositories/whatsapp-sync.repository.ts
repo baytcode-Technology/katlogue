@@ -77,6 +77,17 @@ export async function listSyncJobs(storeId: number): Promise<WhatsAppSyncJob[]> 
   return (data as WhatsAppSyncJob[]) ?? []
 }
 
+export async function deleteSyncJobsForStore(storeId: number): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('whatsapp_sync_jobs')
+    .delete()
+    .eq('store_id', storeId)
+
+  if (error) {
+    throw new AppError(400, error.message, 'SYNC_JOBS_DELETE_FAILED')
+  }
+}
+
 export async function findActiveSyncJob(
   storeId: number,
   syncType: SyncJobType

@@ -34,7 +34,37 @@ if (process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true') {
 setupApiDocs(app)
 
 app.use(cors())
-app.use(helmet())
+
+/** ES bridge page needs Facebook SDK scripts + inline JS; default helmet CSP blocks both. */
+app.use((req, res, next) => {
+  const isEmbeddedSignupBridge =
+    req.method === 'GET' && req.path.endsWith('/embedded-signup')
+
+  if (isEmbeddedSignupBridge) {
+    return helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", 'https://connect.facebook.net'],
+          connectSrc: [
+            "'self'",
+            'https://www.facebook.com',
+            'https://web.facebook.com',
+            'https://graph.facebook.com',
+            'https://connect.facebook.net',
+          ],
+          frameSrc: ['https://www.facebook.com', 'https://web.facebook.com'],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:', 'https:'],
+        },
+      },
+      crossOriginEmbedderPolicy: false,
+    })(req, res, next)
+  }
+
+  return helmet()(req, res, next)
+})
+
 app.use(morgan('dev'))
 
 // Meta webhooks need raw body for signature verification (router installs raw parser).

@@ -62,7 +62,6 @@ export async function sendWhatsAppMediaMessage(input: SendWhatsAppMediaInput) {
   }
 
   const credentials = resolveStoreWhatsAppCredentials(store)!
-  const customerWaNumber = normalizeWhatsAppNumber(input.to)
   const preview = previewForType(input.type, input.caption)
 
   let conversation =
@@ -74,11 +73,19 @@ export async function sendWhatsAppMediaMessage(input: SendWhatsAppMediaInput) {
       : null) ??
     (await chatRepository.findConversationByCustomer({
       storeId: input.storeId,
-      customerWaNumber,
+      customerWaNumber: normalizeWhatsAppNumber(input.to),
     }))
+
+  const customerWaNumber = conversation?.customer_wa_number
+    ? normalizeWhatsAppNumber(conversation.customer_wa_number)
+    : normalizeWhatsAppNumber(input.to)
 
   const customer = await customerRepository.findOrCreateByWhatsApp(input.storeId, customerWaNumber)
   await assertWithinSessionWindow({ storeId: input.storeId, customerWaNumber })
+
+  const sendVoice =
+    input.type === 'audio' &&
+    (input.voice === true || input.mimeType?.toLowerCase().includes('ogg') === true)
 
   const metaResult = await sendMediaMessage({
     to: customerWaNumber,
@@ -86,7 +93,7 @@ export async function sendWhatsAppMediaMessage(input: SendWhatsAppMediaInput) {
     type: input.type,
     mediaId: input.mediaId,
     caption: input.caption,
-    voice: input.voice,
+    voice: sendVoice,
     mimeType: input.mimeType,
   })
 

@@ -1,3 +1,4 @@
+/** Meta Embedded Signup JS SDK bridge page (FB.login + postMessage). */
 import type { Request, Response } from 'express'
 import { asyncHandler } from '../../../shared/helpers/async-handler.js'
 import { AppError } from '../../../shared/errors/app.error.js'

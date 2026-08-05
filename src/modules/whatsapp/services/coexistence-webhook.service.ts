@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 
 import { normalizeWhatsAppNumber } from '../../../shared/utils/phone.js'
+import { parseWhatsAppMessageContent } from './whatsapp-message-content.service.js'
 import type { ParsedWebhookMessage } from './whatsapp.service.js'
 
 export type ParsedContactSync = {
@@ -70,14 +71,19 @@ function parseMessageList(
     if (!from && defaultDirection === 'inbound') continue
 
     const type = msg.type?.trim() || 'unknown'
-    const textBody = type === 'text' ? (msg.text?.body?.trim() ?? null) : null
+    const content = parseWhatsAppMessageContent(msg)
 
     results.push({
       metaMessageId,
       from: from ?? (defaultDirection === 'outbound' ? displayPhoneNumber ?? '' : ''),
       to,
-      type,
-      textBody,
+      type: content.type,
+      textBody: content.textBody,
+      mediaId: content.mediaId,
+      mimeType: content.mimeType,
+      caption: content.caption,
+      reactionEmoji: content.reactionEmoji,
+      reactionTargetId: content.reactionTargetId,
       timestamp: parseTimestamp(msg.timestamp),
       raw: msg,
     })

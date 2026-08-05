@@ -10,6 +10,7 @@
 
 export type WhatsAppSignupUrlType =
   | 'hosted-embedded-signup'
+  | 'embedded-signup-sdk-bridge'
   | 'custom-es-oauth-dialog'
   | 'legacy-oauth-dialog'
   | 'oauth-launch-redirect'
@@ -26,6 +27,10 @@ export function classifyWhatsAppSignupUrl(url: string): WhatsAppSignupUrlType {
       parsed.pathname.includes(HOSTED_ES_PATH)
     ) {
       return 'hosted-embedded-signup'
+    }
+
+    if (parsed.pathname.includes('/api/whatsapp/embedded-signup')) {
+      return 'embedded-signup-sdk-bridge'
     }
 
     if (parsed.pathname.includes('/api/whatsapp/oauth/launch')) {
@@ -52,6 +57,8 @@ export function describeSignupUrlType(type: WhatsAppSignupUrlType): string {
   switch (type) {
     case 'hosted-embedded-signup':
       return 'Hosted ES (business.facebook.com/onboard) — NO OAuth code; webhook-only completion'
+    case 'embedded-signup-sdk-bridge':
+      return 'Embedded Signup JS SDK bridge (FB.login + WA_EMBEDDED_SIGNUP postMessage)'
     case 'custom-es-oauth-dialog':
       return 'Custom Embedded Signup OAuth dialog (facebook.com/dialog/oauth + config_id)'
     case 'legacy-oauth-dialog':

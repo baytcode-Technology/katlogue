@@ -8,6 +8,7 @@ import {
   exchangeCodeForAccessToken,
   fetchWabaFromAccessToken,
 } from '../services/embedded-signup.service.js'
+import { getEmbeddedSignupSession } from '../services/embedded-signup-session.service.js'
 import { onboardCoexistenceStore } from '../services/onboard-coexistence.service.js'
 import type { CompleteOnboardingBody } from '../validations/complete-onboarding.validation.js'
 
@@ -33,6 +34,30 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
   const store = await storeRepository.findStoreById(storeId)
   if (!store) throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
   assertPremiumAccess(store)
+
+  const esSession = getEmbeddedSignupSession(state)
+  if (esSession) {
+    console.info('[whatsapp][complete-onboarding] ES session before token exchange', {
+      storeId,
+      eventCount: esSession.events.length,
+      events: esSession.events.map((entry) => ({
+        type: entry.type,
+        event: entry.event,
+        at: entry.at,
+      })),
+      verifyOtpSeen: esSession.verifyOtpSeen,
+      onboardingComplete: esSession.onboardingComplete,
+      wabaIdFromEs: esSession.wabaId,
+      phoneNumberIdFromEs: esSession.phoneNumberId,
+      cancelled: esSession.cancelled,
+      errored: esSession.errored,
+    })
+
+    if (!wabaId && esSession.wabaId) wabaId = esSession.wabaId
+    if (!phoneNumberId && esSession.phoneNumberId) phoneNumberId = esSession.phoneNumberId
+  } else if (state) {
+    console.warn('[whatsapp][complete-onboarding] no ES session events for state', { storeId })
+  }
 
   const token = await exchangeCodeForAccessToken(code)
   console.info('[whatsapp][complete-onboarding] token exchanged', {

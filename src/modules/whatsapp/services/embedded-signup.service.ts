@@ -86,6 +86,15 @@ export function buildWhatsAppOAuthLaunchUrl(input: {
   return `${base}/api/whatsapp/oauth/launch?state=${encodeURIComponent(input.state)}`
 }
 
+/** Embedded Signup JS SDK bridge page (FB.login + WA_EMBEDDED_SIGNUP postMessage). */
+export function buildEmbeddedSignupPageUrl(input: {
+  state: string
+  apiBaseUrl: string
+}): string {
+  const base = input.apiBaseUrl.replace(/\/$/, '')
+  return `${base}/api/whatsapp/embedded-signup?state=${encodeURIComponent(input.state)}`
+}
+
 export function buildMetaOAuthUrl(input: { state: string }): string {
   return buildEmbeddedSignupDialogUrl(input)
 }

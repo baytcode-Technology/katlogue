@@ -48,6 +48,12 @@ import { triggerSync } from '../controllers/trigger-sync.controller.js'
 
 import { getWhatsAppMedia } from '../controllers/get-whatsapp-media.controller.js'
 
+import { uploadWhatsAppMedia } from '../controllers/upload-whatsapp-media.controller.js'
+
+import { sendMedia } from '../controllers/send-media.controller.js'
+
+import { forwardMessage } from '../controllers/forward-message.controller.js'
+
 
 
 import { sendTemplateSchema } from '../validations/send-template.validation.js'
@@ -59,6 +65,10 @@ import { triggerSyncSchema } from '../validations/trigger-sync.validation.js'
 import { completeOnboardingSchema } from '../validations/complete-onboarding.validation.js'
 
 import { offboardWhatsAppSchema } from '../validations/offboard-whatsapp.validation.js'
+
+import { sendMediaSchema, forwardMessageSchema } from '../validations/send-media.validation.js'
+
+import { whatsAppMediaUpload } from '../../../shared/middleware/upload.middleware.js'
 
 import {
 
@@ -114,11 +124,23 @@ router.get('/connection-status', requireAuth, connectionStatus)
 
 router.get('/media/:mediaId', requireAuth, validateQuery(listChatsQuerySchema), getWhatsAppMedia)
 
+router.post(
+  '/media/upload',
+  requireAuth,
+  validateQuery(listChatsQuerySchema),
+  whatsAppMediaUpload,
+  uploadWhatsAppMedia
+)
+
 router.post('/sync', requireAuth, validateBody(triggerSyncSchema), triggerSync)
 
 
 
 router.post('/send', requireAuth, validateBody(sendMessageSchema), sendMessage)
+
+router.post('/send-media', requireAuth, validateBody(sendMediaSchema), sendMedia)
+
+router.post('/forward', requireAuth, validateBody(forwardMessageSchema), forwardMessage)
 
 router.post('/send-template', requireAuth, validateBody(sendTemplateSchema), sendTemplate)
 

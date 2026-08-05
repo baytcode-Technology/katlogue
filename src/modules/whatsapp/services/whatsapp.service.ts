@@ -63,6 +63,15 @@ export type SendTemplateMessageInput = {
   credentials: WhatsAppCredentials
 }
 
+export type SendMediaMessageInput = {
+  to: string
+  credentials: WhatsAppCredentials
+  type: 'image' | 'audio' | 'video'
+  mediaId: string
+  caption?: string | null
+  voice?: boolean
+}
+
 type MetaErrorResponse = {
   error?: {
     message?: string
@@ -281,6 +290,67 @@ export async function sendTextMessage(
   } catch (err) {
     if (err instanceof AppError) throw err
     throw new AppError(400, metaErrorMessage(err, 'Failed to send WhatsApp message'), 'WHATSAPP_SEND_FAILED')
+  }
+}
+
+export async function sendMediaMessage(
+  input: SendMediaMessageInput
+): Promise<SendTextMessageResult> {
+  const to = normalizeWhatsAppNumber(input.to)
+  const mediaId = input.mediaId.trim()
+  if (!mediaId) {
+    throw new AppError(400, 'mediaId is required', 'WHATSAPP_MEDIA_ID_REQUIRED')
+  }
+
+  let payload: Record<string, unknown>
+  if (input.type === 'image') {
+    payload = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to,
+      type: 'image',
+      image: {
+        id: mediaId,
+        ...(input.caption?.trim() ? { caption: input.caption.trim() } : {}),
+      },
+    }
+  } else if (input.type === 'video') {
+    payload = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to,
+      type: 'video',
+      video: {
+        id: mediaId,
+        ...(input.caption?.trim() ? { caption: input.caption.trim() } : {}),
+      },
+    }
+  } else {
+    payload = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to,
+      type: 'audio',
+      audio: { id: mediaId, voice: input.voice ?? false },
+    }
+  }
+
+  try {
+    const { data } = await axios.post<{ messages?: Array<{ id?: string }> }>(
+      graphUrl(input.credentials, '/messages'),
+      payload,
+      { headers: authHeaders(input.credentials), timeout: 60_000 }
+    )
+
+    const metaMessageId = data.messages?.[0]?.id?.trim()
+    if (!metaMessageId) {
+      throw new AppError(502, 'Meta did not return a message id', 'WHATSAPP_NO_MESSAGE_ID')
+    }
+
+    return { metaMessageId, raw: data }
+  } catch (err) {
+    if (err instanceof AppError) throw err
+    throw new AppError(400, metaErrorMessage(err, 'Failed to send WhatsApp media'), 'WHATSAPP_SEND_FAILED')
   }
 }
 

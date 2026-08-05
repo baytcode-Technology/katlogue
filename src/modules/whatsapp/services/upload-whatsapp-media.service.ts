@@ -2,6 +2,7 @@ import axios from 'axios'
 import FormData from 'form-data'
 import { AppError } from '../../../shared/errors/app.error.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
+import { transcodeVoiceNoteToOgg } from './transcode-voice-note.service.js'
 import {
   resolveStoreWhatsAppCredentials,
   type WhatsAppCredentials,
@@ -38,6 +39,7 @@ export async function uploadWhatsAppMediaToMeta(input: {
   buffer: Buffer
   mimeType: string
   filename: string
+  voice?: boolean
 }): Promise<{ mediaId: string; mimeType: string }> {
   await storeRepository.assertStoreMember(input.storeId, input.ownerId)
   const store = await storeRepository.findStoreById(input.storeId)
@@ -48,11 +50,25 @@ export async function uploadWhatsAppMediaToMeta(input: {
     throw new AppError(503, 'WhatsApp is not connected for this store', 'WHATSAPP_NOT_CONNECTED')
   }
 
-  const mimeType = normalizeMime(input.mimeType, input.kind)
+  let buffer = input.buffer
+  let filename = input.filename
+  let mimeType = input.mimeType
+
+  if (input.kind === 'audio' && input.voice) {
+    const transcoded = await transcodeVoiceNoteToOgg({
+      buffer: input.buffer,
+      mimeType: input.mimeType,
+    })
+    buffer = transcoded.buffer
+    filename = transcoded.filename
+    mimeType = transcoded.mimeType
+  }
+
+  mimeType = normalizeMime(mimeType, input.kind)
   const form = new FormData()
   form.append('messaging_product', 'whatsapp')
   form.append('type', mimeType)
-  form.append('file', input.buffer, { filename: input.filename, contentType: mimeType })
+  form.append('file', buffer, { filename, contentType: mimeType })
 
   try {
     const { data } = await axios.post<{ id?: string }>(graphMediaUrl(credentials), form, {

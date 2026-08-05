@@ -1,18 +1,12 @@
+import { spawn } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import ffmpeg from 'fluent-ffmpeg'
 import { AppError } from '../../../shared/errors/app.error.js'
 
 const require = createRequire(import.meta.url)
 const ffmpegPath = require('ffmpeg-static') as string | null
-
-if (!ffmpegPath) {
-  throw new Error('ffmpeg-static binary is missing')
-}
-
-ffmpeg.setFfmpegPath(ffmpegPath)
 
 function extFromMime(mimeType: string): string {
   const lower = mimeType.toLowerCase()
@@ -22,6 +16,31 @@ function extFromMime(mimeType: string): string {
   if (lower.includes('mpeg') || lower.includes('mp3')) return 'mp3'
   if (lower.includes('3gp')) return '3gp'
   return 'm4a'
+}
+
+function runFfmpeg(args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!ffmpegPath) {
+      reject(new Error('ffmpeg-static binary is missing'))
+      return
+    }
+
+    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stderr = ''
+
+    proc.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString()
+    })
+
+    proc.on('error', (err: Error) => reject(err))
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolve()
+        return
+      }
+      reject(new Error(stderr.trim() || `ffmpeg exited with code ${String(code)}`))
+    })
+  })
 }
 
 export async function transcodeVoiceNoteToOgg(input: {
@@ -36,16 +55,18 @@ export async function transcodeVoiceNoteToOgg(input: {
   try {
     await writeFile(inputPath, input.buffer)
 
-    await new Promise<void>((resolve, reject) => {
-      ffmpeg(inputPath)
-        .audioChannels(1)
-        .audioCodec('libopus')
-        .audioBitrate('32k')
-        .format('ogg')
-        .on('end', () => resolve())
-        .on('error', (err) => reject(err))
-        .save(outputPath)
-    })
+    await runFfmpeg([
+      '-y',
+      '-i',
+      inputPath,
+      '-ac',
+      '1',
+      '-c:a',
+      'libopus',
+      '-b:a',
+      '32k',
+      outputPath,
+    ])
 
     const buffer = await readFile(outputPath)
     if (!buffer.length) {

@@ -9,7 +9,7 @@ export const uploadWhatsAppMedia = asyncHandler(async (req: Request, res: Respon
   if (!req.authUser) throw new AppError(401, 'Unauthorized', 'UNAUTHORIZED')
 
   const storeId = parseStoreIdFromQuery(req.query.store_id ?? req.query.storeId)
-  const kindRaw = String(req.body?.kind ?? req.query.kind ?? 'image').trim().toLowerCase()
+  const kindRaw = String(req.query.kind ?? req.body?.kind ?? 'image').trim().toLowerCase()
   const kind = (['image', 'audio', 'video'].includes(kindRaw) ? kindRaw : 'image') as WhatsAppMediaKind
 
   const file = req.file
@@ -17,7 +17,7 @@ export const uploadWhatsAppMedia = asyncHandler(async (req: Request, res: Respon
     throw new AppError(400, 'Multipart field "file" is required', 'NO_FILE')
   }
 
-  const voiceRaw = req.body?.voice ?? req.query.voice
+  const voiceRaw = req.query.voice ?? req.body?.voice
   const voice =
     voiceRaw === true ||
     voiceRaw === 'true' ||

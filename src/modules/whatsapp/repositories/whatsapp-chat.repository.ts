@@ -128,6 +128,12 @@ export async function insertMessage(input: {
 
   textBody: string | null
 
+  mediaId?: string | null
+
+  mimeType?: string | null
+
+  caption?: string | null
+
   status?: WhatsAppMessageStatus
 
   rawPayload: unknown
@@ -159,6 +165,12 @@ export async function insertMessage(input: {
         type: input.type,
 
         text_body: input.textBody,
+
+        media_id: input.mediaId ?? null,
+
+        mime_type: input.mimeType ?? null,
+
+        caption: input.caption ?? null,
 
         status: input.status ?? (input.direction === 'inbound' ? 'received' : 'sent'),
 
@@ -513,6 +525,25 @@ export async function resetUnreadCount(input: {
   }
 
   return data as WhatsAppConversation
+}
+
+export async function findMessageByMediaForStore(input: {
+  storeId: number
+  mediaId: string
+}): Promise<WhatsAppMessage | null> {
+  const { data, error } = await supabaseAdmin
+    .from('whatsapp_messages')
+    .select('*')
+    .eq('store_id', input.storeId)
+    .eq('media_id', input.mediaId)
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    throw new AppError(400, error.message, 'WHATSAPP_MESSAGE_MEDIA_LOOKUP_FAILED')
+  }
+
+  return (data as WhatsAppMessage) ?? null
 }
 
 

@@ -7,6 +7,7 @@ import {
 } from '../../../shared/utils/meta-webhook.js'
 import { normalizeWhatsAppNumber } from '../../../shared/utils/phone.js'
 import type { Store } from '../../stores/types/store.types.js'
+import { parseWhatsAppMessageContent } from './whatsapp-message-content.service.js'
 
 export type WhatsAppCredentials = {
   accessToken: string
@@ -20,6 +21,11 @@ export type ParsedWebhookMessage = {
   to: string | null
   type: string
   textBody: string | null
+  mediaId: string | null
+  mimeType: string | null
+  caption: string | null
+  reactionEmoji: string | null
+  reactionTargetId: string | null
   timestamp: string | null
   raw: unknown
 }
@@ -112,11 +118,6 @@ function parseTimestamp(value: string | undefined): string | null {
   return new Date(Number(value) * 1000).toISOString()
 }
 
-function extractTextBody(type: string, msg: { text?: { body?: string } }): string | null {
-  if (type !== 'text') return null
-  return msg.text?.body?.trim() ?? null
-}
-
 function normalizeStatus(value: string | undefined): ParsedWebhookStatus['status'] | null {
   const status = value?.trim().toLowerCase()
   if (status === 'sent' || status === 'delivered' || status === 'read' || status === 'failed') {
@@ -195,14 +196,20 @@ export function parseWebhookPayload(body: unknown): ParsedWebhookChange[] {
         const metaMessageId = msg.id?.trim()
         const from = msg.from ? normalizeWhatsAppNumber(msg.from) : null
         const type = msg.type?.trim() || 'unknown'
+        const content = parseWhatsAppMessageContent(msg)
         if (!metaMessageId || !from) continue
 
         messages.push({
           metaMessageId,
           from,
           to: displayPhoneNumber,
-          type,
-          textBody: extractTextBody(type, msg),
+          type: content.type,
+          textBody: content.textBody,
+          mediaId: content.mediaId,
+          mimeType: content.mimeType,
+          caption: content.caption,
+          reactionEmoji: content.reactionEmoji,
+          reactionTargetId: content.reactionTargetId,
           timestamp: parseTimestamp(msg.timestamp),
           raw: msg,
         })

@@ -62,6 +62,12 @@ export type WhatsAppMessage = {
 
   text_body: string | null
 
+  media_id: string | null
+
+  mime_type: string | null
+
+  caption: string | null
+
   status: WhatsAppMessageStatus
 
   raw_payload: unknown

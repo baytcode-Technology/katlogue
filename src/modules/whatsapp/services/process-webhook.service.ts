@@ -11,8 +11,8 @@ import {
   type WebhookFieldEvent,
 } from './coexistence-webhook.service.js'
 import { markHistorySyncDeclined } from './coexistence-sync.service.js'
-import { markAsRead, resolveStoreWhatsAppCredentials } from './whatsapp.service.js'
-import type { ParsedWebhookMessage } from './whatsapp.service.js'
+import { markAsRead, resolveStoreWhatsAppCredentials, type ParsedWebhookMessage } from './whatsapp.service.js'
+import { formatWhatsAppMessagePreview } from './whatsapp-message-content.service.js'
 
 async function persistMessage(input: {
   storeId: number
@@ -39,7 +39,10 @@ async function persistMessage(input: {
     customerWaNumber: customerPhone,
     customerId: customer.id,
     lastMessageAt: input.msg.timestamp,
-    lastMessagePreview: input.msg.textBody ?? `[${input.msg.type}]`,
+    lastMessagePreview: formatWhatsAppMessagePreview({
+      type: input.msg.type,
+      textBody: input.msg.textBody,
+    }),
     incrementUnread: input.incrementUnread,
   })
 
@@ -52,6 +55,9 @@ async function persistMessage(input: {
     toNumber: input.direction === 'inbound' ? businessNumber : customerPhone,
     type: input.msg.type,
     textBody: input.msg.textBody,
+    mediaId: input.msg.mediaId,
+    mimeType: input.msg.mimeType,
+    caption: input.msg.caption,
     status: input.direction === 'inbound' ? 'received' : 'sent',
     rawPayload: input.msg.raw,
     timestamp: input.msg.timestamp,
@@ -72,6 +78,9 @@ function emitNewMessage(
       direction: message.direction,
       type: message.type,
       text_body: message.text_body,
+      media_id: message.media_id,
+      mime_type: message.mime_type,
+      caption: message.caption,
       status: message.status,
       timestamp: message.timestamp,
       from_number: message.from_number,
@@ -176,7 +185,10 @@ export async function processWhatsAppWebhook(body: unknown): Promise<void> {
           storeId: store.id,
           storeSlug: store.slug,
           conversationId: saved.conversation_id,
-          preview: saved.text_body ?? `[${saved.type}]`,
+          preview: formatWhatsAppMessagePreview({
+            type: saved.type,
+            textBody: saved.text_body,
+          }),
           fromNumber: msg.from,
         }).catch((err) => {
           console.error('[notifications] WhatsApp push failed', err)

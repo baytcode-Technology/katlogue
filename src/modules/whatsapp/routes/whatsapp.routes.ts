@@ -17,6 +17,8 @@ import { connectWhatsApp } from '../controllers/connect-whatsapp.controller.js'
 import { completeOnboarding } from '../controllers/complete-onboarding.controller.js'
 import { metaOAuthCallback } from '../controllers/oauth-callback.controller.js'
 import { metaOAuthLaunch } from '../controllers/oauth-launch.controller.js'
+import { embeddedSignupPage } from '../controllers/embedded-signup-page.controller.js'
+import { embeddedSignupEvent } from '../controllers/embedded-signup-event.controller.js'
 import { connectionStatus } from '../controllers/connection-status.controller.js'
 import { triggerSync } from '../controllers/trigger-sync.controller.js'
 import { whatsappSyncDiagnostics } from '../controllers/sync-diagnostics.controller.js'
@@ -43,6 +45,8 @@ router.post(
 )
 router.get('/oauth/launch', metaOAuthLaunch)
 router.get('/oauth/callback', metaOAuthCallback)
+router.get('/embedded-signup', embeddedSignupPage)
+router.post('/embedded-signup/event', embeddedSignupEvent)
 router.post('/debug-session', requireAuth, whatsappDebugSession)
 router.get('/connection-status', requireAuth, connectionStatus)
 router.get('/sync-diagnostics', requireAuth, whatsappSyncDiagnostics)

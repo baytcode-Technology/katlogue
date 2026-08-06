@@ -1,8 +1,8 @@
-import { env } from '../../../config/env.js'
 import {
   buildStorefrontProductUrl,
   buildSubdomainUrl,
   formatMoney,
+  getPublicStorefrontBaseDomain,
 } from '../../../shared/utils/storefront.js'
 import * as categoryRepository from '../../categories/repositories/category.repository.js'
 import { findActiveProductsByStoreId } from '../../products/repositories/product.repository.js'
@@ -24,7 +24,12 @@ function unitPrice(product: Product, variant: ProductVariant | null): number {
 }
 
 function buildUrl(storeSlug: string, product: Product, variantId?: number | null): string {
-  return buildStorefrontProductUrl(storeSlug, env.STOREFRONT_BASE_DOMAIN, product, variantId)
+  return buildStorefrontProductUrl(
+    storeSlug,
+    getPublicStorefrontBaseDomain(),
+    product,
+    variantId
+  )
 }
 
 function scoreProduct(product: Product, query: string): number {
@@ -169,11 +174,14 @@ export function formatCatalogMatches(matches: CatalogMatch[], currency: string):
   return matches
     .map((m) => {
       const title = m.variant ? `${m.product.name} — ${m.variant.name}` : m.product.name
-      return `${title}\n${formatMoney(m.price, currency)}\n${m.url}`
+      const price = formatMoney(m.price, currency)
+      const desc = m.product.description?.trim()
+      const detail = desc ? `${title}\n${price}\n${desc.slice(0, 120)}${desc.length > 120 ? '…' : ''}` : `${title}\n${price}`
+      return `${detail}\n${m.url}`
     })
     .join('\n\n')
 }
 
 export function getStoreHomeUrl(storeSlug: string): string {
-  return buildSubdomainUrl(storeSlug, env.STOREFRONT_BASE_DOMAIN)
+  return buildSubdomainUrl(storeSlug, getPublicStorefrontBaseDomain())
 }

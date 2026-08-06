@@ -36,7 +36,7 @@ export async function buildAutoReplyText(input: {
 
   if (intent.intent === 'off_topic') {
     return {
-      text: `${refusalMessage('off_topic', store.name)}\n\n${homeUrl}`,
+      text: refusalMessage('off_topic', store.name),
       matches: [],
       wantsImage: false,
     }
@@ -47,7 +47,7 @@ export async function buildAutoReplyText(input: {
     const greeting =
       lang.toLowerCase().startsWith('hi') || lang.toLowerCase() === 'hindi'
         ? `नमस्ते! ${store.name} में आपका स्वागत है। आज आप क्या खोज रहे हैं?`
-        : `Hello! Welcome to ${store.name}. What product can I help you find today?\n\n${homeUrl}`
+        : `Hello! Welcome to ${store.name}. What product can I help you find today?`
     return { text: greeting, matches: [], wantsImage: false }
   }
 
@@ -96,8 +96,17 @@ export async function buildAutoReplyText(input: {
     { role: 'user', content: customerText },
   ])
 
+  const trimmedReply = llmReply.trim()
+  if (!trimmedReply) {
+    return {
+      text: `I couldn't find a matching product. Browse our store here: ${homeUrl}`,
+      matches: [],
+      wantsImage: intent.wantsImage,
+    }
+  }
+
   return {
-    text: `${llmReply}\n\n${homeUrl}`,
+    text: trimmedReply,
     matches: [],
     wantsImage: intent.wantsImage,
   }

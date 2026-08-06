@@ -171,6 +171,23 @@ export async function updateInstagramConnection(input: {
   igUsername: string | null
   igAccessToken: string | null
 }): Promise<Store> {
+  if (input.igUserId) {
+    const { error: disconnectError } = await supabaseAdmin
+      .from('stores')
+      .update({
+        ig_user_id: null,
+        ig_username: null,
+        ig_access_token: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('ig_user_id', input.igUserId)
+      .neq('id', input.storeId)
+
+    if (disconnectError) {
+      throw new AppError(400, disconnectError.message, 'STORE_UPDATE_FAILED')
+    }
+  }
+
   const { data, error } = await supabaseAdmin
     .from('stores')
     .update({

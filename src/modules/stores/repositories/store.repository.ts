@@ -88,6 +88,7 @@ export async function updateStore(storeId: number, patch: UpdateStoreInput): Pro
   if (patch.industry !== undefined) row.industry = patch.industry
   if (patch.ai_system_prompt !== undefined) row.ai_system_prompt = patch.ai_system_prompt
   if (patch.ai_language !== undefined) row.ai_language = patch.ai_language
+  if (patch.ai_auto_reply_enabled !== undefined) row.ai_auto_reply_enabled = patch.ai_auto_reply_enabled
   if (patch.is_active !== undefined) row.is_active = patch.is_active
   if (patch.theme_config !== undefined) row.theme_config = patch.theme_config
 

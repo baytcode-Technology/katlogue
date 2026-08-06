@@ -12,6 +12,12 @@ import { listInstagramChats } from '../controllers/list-chats.controller.js'
 import { listInstagramChatMessages } from '../controllers/list-messages.controller.js'
 import { markInstagramChatRead } from '../controllers/mark-chat-read.controller.js'
 import { sendInstagramMessage } from '../controllers/send-message.controller.js'
+import { createSetReplyModeController } from '../../inbox-ai/controllers/set-reply-mode.controller.js'
+import {
+  setReplyModeParamsSchema,
+  setReplyModeQuerySchema,
+  setReplyModeSchema,
+} from '../../inbox-ai/validations/inbox-ai.validation.js'
 import { subscribeInstagramWebhooksHandler } from '../controllers/subscribe-webhooks.controller.js'
 import { sendMessageSchema } from '../validations/send-message.validation.js'
 import {
@@ -28,6 +34,14 @@ router.get('/connection-status', requireAuth, instagramConnectionStatus)
 router.post('/subscribe-webhooks', requireAuth, subscribeInstagramWebhooksHandler)
 
 router.post('/send', requireAuth, validateBody(sendMessageSchema), sendInstagramMessage)
+router.post(
+  '/chats/:conversationId/reply-mode',
+  requireAuth,
+  validateParams(setReplyModeParamsSchema),
+  validateQuery(setReplyModeQuerySchema),
+  validateBody(setReplyModeSchema),
+  createSetReplyModeController('instagram')
+)
 router.get('/chats', requireAuth, validateQuery(listChatsQuerySchema), listInstagramChats)
 router.post(
   '/chats/:conversationId/mark-read',

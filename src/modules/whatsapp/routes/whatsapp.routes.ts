@@ -53,6 +53,12 @@ import { uploadWhatsAppMedia } from '../controllers/upload-whatsapp-media.contro
 import { sendMedia } from '../controllers/send-media.controller.js'
 
 import { forwardMessage } from '../controllers/forward-message.controller.js'
+import { createSetReplyModeController } from '../../inbox-ai/controllers/set-reply-mode.controller.js'
+import {
+  setReplyModeParamsSchema,
+  setReplyModeQuerySchema,
+  setReplyModeSchema,
+} from '../../inbox-ai/validations/inbox-ai.validation.js'
 
 
 
@@ -141,6 +147,15 @@ router.post('/send', requireAuth, validateBody(sendMessageSchema), sendMessage)
 router.post('/send-media', requireAuth, validateBody(sendMediaSchema), sendMedia)
 
 router.post('/forward', requireAuth, validateBody(forwardMessageSchema), forwardMessage)
+
+router.post(
+  '/chats/:conversationId/reply-mode',
+  requireAuth,
+  validateParams(setReplyModeParamsSchema),
+  validateQuery(setReplyModeQuerySchema),
+  validateBody(setReplyModeSchema),
+  createSetReplyModeController('whatsapp')
+)
 
 router.post('/send-template', requireAuth, validateBody(sendTemplateSchema), sendTemplate)
 

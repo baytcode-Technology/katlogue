@@ -11,6 +11,7 @@ import * as customerRepository from '../../customers/repositories/customer.repos
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 
 import * as chatRepository from '../repositories/whatsapp-chat.repository.js'
+import { pauseInboxAiForConversation } from '../../inbox-ai/index.js'
 
 import {
 
@@ -270,6 +271,14 @@ export async function sendWhatsAppTextMessage(input: SendWhatsAppTextInput) {
 
     },
 
+  })
+
+
+
+  void pauseInboxAiForConversation({
+    channel: 'whatsapp',
+    storeId: input.storeId,
+    conversationId: conversation.id,
   })
 
 

@@ -1,3 +1,4 @@
+import { env } from '../../config/env.js'
 import { RESERVED_SUBDOMAINS } from '../constants/reserved-subdomains.js'
 
 const SUBDOMAIN_SLUG_REGEX = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
@@ -9,6 +10,18 @@ export function isValidSubdomainSlug(slug: string): boolean {
     SUBDOMAIN_SLUG_REGEX.test(slug) &&
     !RESERVED_SUBDOMAINS.has(slug)
   )
+}
+
+/** Domain for links sent to customers (WhatsApp, Instagram, emails). Never localhost. */
+export function getPublicStorefrontBaseDomain(): string {
+  const override = process.env.STOREFRONT_PUBLIC_BASE_DOMAIN?.trim()
+  if (override) return override
+
+  const base = env.STOREFRONT_BASE_DOMAIN
+  if (!base || base === 'localhost' || base.includes('localhost')) {
+    return 'aishopy.io'
+  }
+  return base
 }
 
 export function buildSubdomainUrl(slug: string, baseDomain: string): string {

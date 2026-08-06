@@ -31,6 +31,7 @@ type InstagramWebhookBody = {
 }
 
 function parseMessagingEvents(body: unknown): Array<{
+  entryIgId: string | null
   recipientIgId: string
   senderIgId: string
   metaMessageId: string
@@ -40,6 +41,7 @@ function parseMessagingEvents(body: unknown): Array<{
 }> {
   const payload = body as InstagramWebhookBody
   const results: Array<{
+    entryIgId: string | null
     recipientIgId: string
     senderIgId: string
     metaMessageId: string
@@ -77,6 +79,7 @@ function parseMessagingEvents(body: unknown): Array<{
       const ts = ms > 0 ? new Date(ms).toISOString() : new Date().toISOString()
 
       results.push({
+        entryIgId: entryIgId ?? null,
         recipientIgId,
         senderIgId,
         metaMessageId,
@@ -129,9 +132,39 @@ function emitConversationUpdated(
   })
 }
 
-async function resolveStoreForRecipient(recipientIgId: string) {
-  const store = await storeRepository.findStoreByInstagramUserId(recipientIgId)
-  if (store) return store
+async function resolveStoreForRecipient(input: {
+  recipientIgId: string
+  entryIgId?: string | null
+}) {
+  const candidates = [input.recipientIgId, input.entryIgId?.trim()].filter(
+    (id): id is string => Boolean(id)
+  )
+  const seen = new Set<string>()
+
+  for (const igUserId of candidates) {
+    if (seen.has(igUserId)) continue
+    seen.add(igUserId)
+
+    const store = await storeRepository.findStoreByInstagramUserId(igUserId)
+    if (!store) continue
+
+    if (igUserId !== input.recipientIgId) {
+      console.info(
+        '[instagram webhook] store resolved via entry.id=%s (recipient=%s) store=%s',
+        igUserId,
+        input.recipientIgId,
+        store.id
+      )
+    }
+
+    return store
+  }
+
+  console.info(
+    '[instagram webhook] no store for recipient=%s entry=%s',
+    input.recipientIgId,
+    input.entryIgId ?? 'n/a'
+  )
   return null
 }
 
@@ -155,14 +188,22 @@ export async function processInstagramWebhook(body: unknown): Promise<void> {
   }
 
   for (const event of events) {
+    console.info(
+      '[instagram webhook] event recipient=%s entry=%s sender=%s mid=%s',
+      event.recipientIgId,
+      event.entryIgId ?? 'n/a',
+      event.senderIgId,
+      event.metaMessageId
+    )
+
     const isNew = await chatRepository.claimWebhookEvent(event.metaMessageId)
     if (!isNew) continue
 
-    const store = await resolveStoreForRecipient(event.recipientIgId)
-    if (!store) {
-      console.info('[instagram webhook] no store for recipient=%s', event.recipientIgId)
-      continue
-    }
+    const store = await resolveStoreForRecipient({
+      recipientIgId: event.recipientIgId,
+      entryIgId: event.entryIgId,
+    })
+    if (!store) continue
 
     const customer = await customerRepository.findOrCreateByInstagram(
       store.id,

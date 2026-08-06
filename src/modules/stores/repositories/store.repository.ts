@@ -198,6 +198,8 @@ export async function findStoreByInstagramUserId(igUserId: string): Promise<Stor
     .from('stores')
     .select('*')
     .eq('ig_user_id', normalized)
+    .order('updated_at', { ascending: false })
+    .limit(1)
     .maybeSingle()
 
   if (error) {

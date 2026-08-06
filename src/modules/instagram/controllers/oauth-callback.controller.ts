@@ -2,6 +2,7 @@ import type { Request, Response } from 'express'
 import { asyncHandler } from '../../../shared/helpers/async-handler.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import { onboardInstagramFromCode } from '../services/onboard-instagram.service.js'
+import { buildInstagramAppRedirect } from '../services/instagram-app-redirect.service.js'
 
 function parseState(state: string | undefined): { storeId: number } | null {
   if (!state) return null
@@ -21,7 +22,14 @@ export const instagramOAuthCallback = asyncHandler(async (req: Request, res: Res
   const error = typeof req.query.error === 'string' ? req.query.error : undefined
 
   if (error) {
-    res.status(400).send(`Instagram connection failed: ${error}`)
+    res.redirect(
+      302,
+      buildInstagramAppRedirect({
+        connected: '0',
+        channel: 'instagram',
+        error,
+      })
+    )
     return
   }
 
@@ -32,18 +40,13 @@ export const instagramOAuthCallback = asyncHandler(async (req: Request, res: Res
 
   const result = await onboardInstagramFromCode({ storeId: state.storeId, code })
 
-  const deepLink = process.env.MOBILE_DEEP_LINK_URL?.trim()
-  if (deepLink) {
-    const qs = new URLSearchParams({
-      connected: result.igUserId ? '1' : '0',
-      channel: 'instagram',
-    }).toString()
-    res.redirect(`${deepLink}?${qs}`)
-    return
+  const redirectParams: Record<string, string> = {
+    connected: result.igUserId ? '1' : '0',
+    channel: 'instagram',
+  }
+  if (result.igUsername) {
+    redirectParams.username = result.igUsername
   }
 
-  const handle = result.igUsername ? `@${result.igUsername}` : result.igUserId
-  res.status(200).send(
-    `Instagram connected successfully as ${handle}. You can close this window and return to the app.`
-  )
+  res.redirect(302, buildInstagramAppRedirect(redirectParams))
 })

@@ -1,6 +1,7 @@
 import * as customerRepository from '../../customers/repositories/customer.repository.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { notifyWhatsAppChat } from '../../notifications/services/send-store-notification.service.js'
+import { handleInboundInboxAi } from '../../inbox-ai/index.js'
 import { emitToStore } from '../../../websocket/index.js'
 import { SOCKET_EVENTS } from '../../../websocket/events.js'
 import * as chatRepository from '../repositories/whatsapp-chat.repository.js'
@@ -194,6 +195,17 @@ export async function processWhatsAppWebhook(body: unknown): Promise<void> {
         }).catch((err) => {
           console.error('[notifications] WhatsApp push failed', err)
         })
+
+        if (msg.type === 'text' && msg.textBody?.trim() && saved.id) {
+          handleInboundInboxAi({
+            channel: 'whatsapp',
+            storeId: store.id,
+            conversationId: saved.conversation_id,
+            messageId: saved.id,
+            textBody: msg.textBody,
+            customerKey: msg.from,
+          })
+        }
       }
 
       if (credentials && msg.type === 'text') {

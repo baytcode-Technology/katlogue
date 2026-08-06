@@ -8,6 +8,7 @@ import {
   removeStoreStaff,
 } from '../controllers/store-staff.controller.js'
 import { updateMyStore } from '../controllers/update-my-store.controller.js'
+import inboxAiRoutes from '../../inbox-ai/routes/inbox-ai.routes.js'
 import { requireAuth } from '../../../shared/middleware/auth.middleware.js'
 import {
   validateBody,
@@ -41,6 +42,8 @@ router.patch(
   updateMyStore
 )
 router.post('/', validateBody(createStoreSchema), requireAuth, createStore)
+
+router.use('/:storeId/inbox-ai', inboxAiRoutes)
 
 router.get(
   '/staff',

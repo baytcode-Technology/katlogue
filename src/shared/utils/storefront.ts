@@ -16,6 +16,44 @@ export function buildSubdomainUrl(slug: string, baseDomain: string): string {
   return `${protocol}://${slug}.${baseDomain}`
 }
 
+export function slugifyProductName(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+export function buildProductSlug(product: { id: number; name: string }): string {
+  return `${slugifyProductName(product.name)}${product.id ? `-${product.id}` : ''}`
+}
+
+export function buildStorefrontProductUrl(
+  storeSlug: string,
+  baseDomain: string,
+  product: { id: number; name: string },
+  variantId?: number | null
+): string {
+  const base = `${buildSubdomainUrl(storeSlug, baseDomain)}/product/${buildProductSlug(product)}`
+  if (variantId != null) {
+    return `${base}?variant=${variantId}`
+  }
+  return base
+}
+
+export function formatMoney(amount: number, currency?: string): string {
+  const code = currency?.trim() || 'INR'
+  try {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: code,
+      maximumFractionDigits: 0,
+    }).format(amount)
+  } catch {
+    return `${code} ${amount.toFixed(0)}`
+  }
+}
+
 export function extractStoreSlugFromHost(
   host: string,
   baseDomain: string

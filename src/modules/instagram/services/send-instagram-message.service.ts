@@ -4,6 +4,7 @@ import { SOCKET_EVENTS } from '../../../websocket/events.js'
 import * as customerRepository from '../../customers/repositories/customer.repository.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import * as chatRepository from '../repositories/instagram-chat.repository.js'
+import { pauseInboxAiForConversation } from '../../inbox-ai/index.js'
 import {
   isInstagramReadyForStore,
   resolveStoreInstagramCredentials,
@@ -138,6 +139,12 @@ export async function sendInstagramTextMessageService(input: SendInstagramTextIn
       last_message_preview: conversation.last_message_preview,
       unread_count: conversation.unread_count,
     },
+  })
+
+  void pauseInboxAiForConversation({
+    channel: 'instagram',
+    storeId: input.storeId,
+    conversationId: conversation.id,
   })
 
   return {

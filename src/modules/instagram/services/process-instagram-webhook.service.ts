@@ -1,6 +1,7 @@
 import * as customerRepository from '../../customers/repositories/customer.repository.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { notifyInstagramChat } from '../../notifications/services/send-store-notification.service.js'
+import { handleInboundInboxAi } from '../../inbox-ai/index.js'
 import { emitToStore } from '../../../websocket/index.js'
 import { SOCKET_EVENTS } from '../../../websocket/events.js'
 import * as chatRepository from '../repositories/instagram-chat.repository.js'
@@ -253,5 +254,16 @@ export async function processInstagramWebhook(body: unknown): Promise<void> {
     }).catch((err) => {
       console.error('[notifications] Instagram push failed', err)
     })
+
+    if (event.textBody?.trim() && saved.id) {
+      handleInboundInboxAi({
+        channel: 'instagram',
+        storeId: store.id,
+        conversationId: conversation.id,
+        messageId: saved.id,
+        textBody: event.textBody,
+        customerKey: event.senderIgId,
+      })
+    }
   }
 }

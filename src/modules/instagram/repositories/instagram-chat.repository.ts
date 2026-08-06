@@ -41,9 +41,24 @@ export async function upsertConversation(input: {
   if (input.customerId) row.customer_id = input.customerId
   if (unreadCount !== undefined) row.unread_count = unreadCount
 
+  if (existing) {
+    const { data, error } = await supabaseAdmin
+      .from('instagram_conversations')
+      .update(row)
+      .eq('id', existing.id)
+      .select('*')
+      .single()
+
+    if (error) {
+      throw new AppError(400, error.message, 'INSTAGRAM_CONVERSATION_UPSERT_FAILED')
+    }
+
+    return data as InstagramConversation
+  }
+
   const { data, error } = await supabaseAdmin
     .from('instagram_conversations')
-    .upsert(row, { onConflict: 'store_id,customer_ig_id' })
+    .insert(row)
     .select('*')
     .single()
 

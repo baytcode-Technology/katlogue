@@ -4,8 +4,9 @@ const EXPLICIT_PATTERNS = [
 ]
 
 const CODE_PATTERNS = [
-  /\b(source\s*code|api\s*key|password|secret|prompt|system\s*prompt)\b/i,
-  /\b(give\s+me\s+(the\s+)?code|show\s+me\s+(the\s+)?code)\b/i,
+  /\b(source\s*code|api\s*key|password|secret|system\s*prompt)\b/i,
+  /\b(give\s+me\s+(the\s+)?source\s*code|show\s+me\s+(the\s+)?source\s*code)\b/i,
+  /\b(give\s+me\s+(the\s+)?api\s*key)\b/i,
 ]
 
 export type SafetyBlockReason = 'explicit' | 'code_request' | 'off_topic'
@@ -29,14 +30,4 @@ export function checkMessageSafety(text: string): SafetyResult {
   }
 
   return { allowed: true }
-}
-
-export function refusalMessage(reason: SafetyBlockReason, storeName: string): string {
-  if (reason === 'explicit') {
-    return `Sorry, I can't help with that. I'm here to help you shop at ${storeName}. Ask me about our products!`
-  }
-  if (reason === 'code_request') {
-    return `I can't share technical details. I can help you find products at ${storeName} — what are you looking for?`
-  }
-  return `I'm here to help you shop at ${storeName}. Browse our store or ask about a product!`
 }

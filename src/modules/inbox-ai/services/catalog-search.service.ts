@@ -9,12 +9,20 @@ import { findActiveProductsByStoreId } from '../../products/repositories/product
 import { findVariantsByProductIds } from '../../products/repositories/product-variant.repository.js'
 import type { Product } from '../../products/types/product.types.js'
 import type { ProductVariant } from '../../products/types/product-variant.types.js'
+import type { ParsedCustomerIntent } from './parse-customer-intent.service.js'
 
 export type CatalogMatch = {
   product: Product
   variant: ProductVariant | null
   price: number
   url: string
+  score: number
+}
+
+export type CatalogSearchFilters = {
+  query: string
+  color?: string | null
+  size?: string | null
 }
 
 const MAX_RESULTS = 5
@@ -32,8 +40,28 @@ function buildUrl(storeSlug: string, product: Product, variantId?: number | null
   )
 }
 
+function normalizeOptionValue(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase()
+}
+
+function getVariantOptions(variant: ProductVariant): { color: string | null; size: string | null } {
+  const opts = variant.options ?? {}
+  let color: string | null = null
+  let size: string | null = null
+
+  for (const [key, value] of Object.entries(opts)) {
+    const k = key.toLowerCase()
+    const v = String(value).trim()
+    if (k.includes('color') || k.includes('colour')) color = v
+    if (k.includes('size')) size = v.toUpperCase()
+  }
+
+  return { color, size }
+}
+
 function scoreProduct(product: Product, query: string): number {
   const q = query.toLowerCase()
+  if (!q) return 10
   const name = product.name.toLowerCase()
   const desc = (product.description ?? '').toLowerCase()
   if (name === q) return 100
@@ -48,52 +76,143 @@ function scoreProduct(product: Product, query: string): number {
   return score
 }
 
-function variantMatchesQuery(variant: ProductVariant, query: string): boolean {
-  const q = query.toLowerCase()
-  if (variant.name.toLowerCase().includes(q)) return true
-  return Object.values(variant.options ?? {}).some((v) =>
-    String(v).toLowerCase().includes(q)
-  )
+function scoreVariant(
+  variant: ProductVariant,
+  filters: CatalogSearchFilters
+): number {
+  let score = 0
+  const q = filters.query.toLowerCase()
+  const { color, size } = getVariantOptions(variant)
+
+  if (filters.color) {
+    const want = filters.color.toLowerCase()
+    const variantColor = color?.toLowerCase() ?? ''
+    const name = variant.name.toLowerCase()
+    if (variantColor === want || variantColor.includes(want) || name.includes(want)) {
+      score += 50
+    } else if (Object.values(variant.options ?? {}).some((v) => normalizeOptionValue(v).includes(want))) {
+      score += 40
+    } else {
+      score -= 30
+    }
+  }
+
+  if (filters.size) {
+    const want = filters.size.toUpperCase()
+    const variantSize = size?.toUpperCase() ?? ''
+    const name = variant.name.toUpperCase()
+    if (variantSize === want || name.includes(want)) {
+      score += 40
+    } else {
+      score -= 20
+    }
+  }
+
+  if (q && variant.name.toLowerCase().includes(q)) score += 15
+  if (q) {
+    for (const v of Object.values(variant.options ?? {})) {
+      if (normalizeOptionValue(v).includes(q)) score += 10
+    }
+  }
+
+  return score
 }
 
 function pickBestVariant(
   variants: ProductVariant[],
-  query: string
+  filters: CatalogSearchFilters
 ): ProductVariant | null {
   const active = variants.filter((v) => v.is_active)
   if (active.length === 0) return null
-  const matched = active.find((v) => variantMatchesQuery(v, query))
-  return matched ?? active[0] ?? null
+
+  const scored = active
+    .map((variant) => ({ variant, score: scoreVariant(variant, filters) }))
+    .sort((a, b) => b.score - a.score)
+
+  if (scored[0] && scored[0].score > 0) return scored[0].variant
+  return active[0] ?? null
+}
+
+function toMatch(
+  storeSlug: string,
+  product: Product,
+  variant: ProductVariant | null,
+  score: number
+): CatalogMatch {
+  return {
+    product,
+    variant,
+    price: unitPrice(product, variant),
+    url: buildUrl(storeSlug, product, variant?.id ?? null),
+    score,
+  }
+}
+
+function searchProducts(
+  products: Product[],
+  variantMap: Map<number, ProductVariant[]>,
+  storeSlug: string,
+  filters: CatalogSearchFilters
+): CatalogMatch[] {
+  const scored = products
+    .map((product) => {
+      const productScore = scoreProduct(product, filters.query)
+      const variants = variantMap.get(product.id) ?? []
+      const variant = pickBestVariant(variants, filters)
+      const variantScore = variant ? scoreVariant(variant, filters) : 0
+      const total = productScore + variantScore
+      return { product, variant, total }
+    })
+    .filter((row) => row.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, MAX_RESULTS)
+
+  return scored.map(({ product, variant, total }) =>
+    toMatch(storeSlug, product, variant, total)
+  )
 }
 
 export async function searchCatalog(
   storeId: number,
   storeSlug: string,
   currency: string,
-  query: string
+  filters: CatalogSearchFilters | string
 ): Promise<CatalogMatch[]> {
-  const trimmed = query.trim()
-  if (!trimmed) return []
+  const normalized: CatalogSearchFilters =
+    typeof filters === 'string' ? { query: filters.trim() } : filters
+  const trimmed = normalized.query.trim()
+  if (!trimmed && !normalized.color && !normalized.size) return []
 
   const products = await findActiveProductsByStoreId(storeId)
   const variantMap = await findVariantsByProductIds(products.map((p) => p.id))
 
-  const scored = products
-    .map((product) => ({ product, score: scoreProduct(product, trimmed) }))
-    .filter((row) => row.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_RESULTS)
+  if (!trimmed && (normalized.color || normalized.size)) {
+    const all = products.map((product) => {
+      const variants = variantMap.get(product.id) ?? []
+      const variant = pickBestVariant(variants, normalized)
+      const variantScore = variant ? scoreVariant(variant, normalized) : 0
+      return { product, variant, total: variantScore }
+    })
+    return all
+      .filter((row) => row.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, MAX_RESULTS)
+      .map(({ product, variant, total }) => toMatch(storeSlug, product, variant, total))
+  }
 
-  return scored.map(({ product }) => {
-    const variants = variantMap.get(product.id) ?? []
-    const variant = pickBestVariant(variants, trimmed)
-    const price = unitPrice(product, variant)
-    return {
-      product,
-      variant,
-      price,
-      url: buildUrl(storeSlug, product, variant?.id ?? null),
-    }
+  return searchProducts(products, variantMap, storeSlug, normalized)
+}
+
+export async function searchCatalogFromIntent(
+  storeId: number,
+  storeSlug: string,
+  currency: string,
+  intent: Pick<ParsedCustomerIntent, 'searchQuery' | 'color' | 'size'>
+): Promise<CatalogMatch[]> {
+  return searchCatalog(storeId, storeSlug, currency, {
+    query: intent.searchQuery,
+    color: intent.color,
+    size: intent.size,
   })
 }
 
@@ -113,24 +232,14 @@ export async function findBySku(
     if (product.sku?.trim().toLowerCase() === normalized) {
       const variants = variantMap.get(product.id) ?? []
       const variant = variants.find((v) => v.is_active) ?? null
-      return {
-        product,
-        variant,
-        price: unitPrice(product, variant),
-        url: buildUrl(storeSlug, product, variant?.id ?? null),
-      }
+      return toMatch(storeSlug, product, variant, 100)
     }
     const variants = variantMap.get(product.id) ?? []
     const variant = variants.find(
       (v) => v.is_active && v.sku?.trim().toLowerCase() === normalized
     )
     if (variant) {
-      return {
-        product,
-        variant,
-        price: unitPrice(product, variant),
-        url: buildUrl(storeSlug, product, variant.id),
-      }
+      return toMatch(storeSlug, product, variant, 100)
     }
   }
 
@@ -151,35 +260,60 @@ export async function findByCategoryName(
   if (!category) return []
 
   const products = await findActiveProductsByStoreId(storeId)
-  const inCategory = products.filter((p) => p.category_id === category.id).slice(0, MAX_RESULTS)
+  const inCategory = products.filter((p) => p.category_id === category.id)
   const variantMap = await findVariantsByProductIds(inCategory.map((p) => p.id))
 
-  return inCategory.map((product) => {
-    const variants = variantMap.get(product.id) ?? []
-    const variant = variants.find((v) => v.is_active) ?? null
-    return {
-      product,
-      variant,
-      price: unitPrice(product, variant),
-      url: buildUrl(storeSlug, product, variant?.id ?? null),
-    }
-  })
+  return inCategory
+    .slice(0, MAX_RESULTS)
+    .map((product, index) => {
+      const variants = variantMap.get(product.id) ?? []
+      const variant = variants.find((v) => v.is_active) ?? null
+      return toMatch(storeSlug, product, variant, 50 - index)
+    })
 }
 
-export function formatCatalogMatches(matches: CatalogMatch[], currency: string): string {
-  if (matches.length === 0) {
-    return ''
-  }
+export function getMatchImageUrl(match: CatalogMatch): string | null {
+  return (
+    match.variant?.image_url?.trim() ||
+    match.product.thumbnail_url?.trim() ||
+    match.product.images?.[0]?.trim() ||
+    null
+  )
+}
 
-  return matches
-    .map((m) => {
-      const title = m.variant ? `${m.product.name} — ${m.variant.name}` : m.product.name
-      const price = formatMoney(m.price, currency)
-      const desc = m.product.description?.trim()
-      const detail = desc ? `${title}\n${price}\n${desc.slice(0, 120)}${desc.length > 120 ? '…' : ''}` : `${title}\n${price}`
-      return `${detail}\n${m.url}`
-    })
-    .join('\n\n')
+function formatVariantDetails(match: CatalogMatch): string {
+  const parts: string[] = []
+  const { color, size } = match.variant ? getVariantOptions(match.variant) : { color: null, size: null }
+  if (color) parts.push(`Color: ${color}`)
+  if (size) parts.push(`Size: ${size}`)
+  return parts.join(' | ')
+}
+
+export function formatProductCaption(match: CatalogMatch, currency: string): string {
+  const title = match.variant
+    ? `${match.product.name} — ${match.variant.name}`
+    : match.product.name
+  const lines = [title, formatMoney(match.price, currency)]
+
+  const variantDetails = formatVariantDetails(match)
+  if (variantDetails) lines.push(variantDetails)
+
+  const sku = match.variant?.sku?.trim() || match.product.sku?.trim()
+  if (sku) lines.push(`SKU: ${sku}`)
+
+  lines.push('', match.url)
+  return lines.join('\n')
+}
+
+export function formatOtherMatches(matches: CatalogMatch[], currency: string): string {
+  if (matches.length === 0) return ''
+
+  const lines = matches.map((m) => {
+    const title = m.variant ? `${m.product.name} — ${m.variant.name}` : m.product.name
+    return `• ${title} — ${formatMoney(m.price, currency)}\n  ${m.url}`
+  })
+
+  return `I also found these:\n\n${lines.join('\n\n')}`
 }
 
 export function getStoreHomeUrl(storeSlug: string): string {

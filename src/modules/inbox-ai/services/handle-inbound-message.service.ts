@@ -5,7 +5,7 @@ import * as instagramChatRepository from '../../instagram/repositories/instagram
 import { scheduleDebouncedInboxAi } from '../debounce.js'
 import { checkInboxAiRateLimit } from '../rate-limit.js'
 import { isAiPaused } from '../repositories/conversation-ai.repository.js'
-import { buildAutoReplyText } from './build-auto-reply.service.js'
+import { buildProductReply } from './build-product-reply.service.js'
 import { parseCustomerIntent } from './parse-customer-intent.service.js'
 import { sendAutoReplyInstagramText } from './send-auto-reply-instagram.service.js'
 import {
@@ -60,13 +60,13 @@ async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
   if (!store) return
 
   const intent = await parseCustomerIntent(text)
-  const { text: replyText, matches, wantsImage } = await buildAutoReplyText({
+  const reply = await buildProductReply({
     store,
     customerText: text,
     intent,
   })
 
-  if (!replyText.trim()) return
+  if (!reply.primaryText.trim()) return
 
   if (input.channel === 'whatsapp') {
     const conversation = await whatsappChatRepository.findConversationById({
@@ -75,29 +75,41 @@ async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
     })
     if (!conversation) return
 
-    if (wantsImage && matches.length === 1) {
-      const imageUrl =
-        matches[0].variant?.image_url ??
-        matches[0].product.thumbnail_url ??
-        matches[0].product.images?.[0]
-      if (imageUrl) {
-        await sendAutoReplyWhatsAppImage({
+    if (reply.imageUrl && reply.primaryMatch) {
+      await sendAutoReplyWhatsAppImage({
+        storeId: input.storeId,
+        conversationId: input.conversationId,
+        customerWaNumber: conversation.customer_wa_number,
+        imageUrl: reply.imageUrl,
+        caption: reply.primaryText.slice(0, 900),
+      })
+
+      if (reply.followUpText?.trim()) {
+        await sendAutoReplyWhatsAppText({
           storeId: input.storeId,
           conversationId: input.conversationId,
           customerWaNumber: conversation.customer_wa_number,
-          imageUrl,
-          caption: replyText.slice(0, 900),
+          message: reply.followUpText,
         })
-        return
       }
+      return
     }
 
     await sendAutoReplyWhatsAppText({
       storeId: input.storeId,
       conversationId: input.conversationId,
       customerWaNumber: conversation.customer_wa_number,
-      message: replyText,
+      message: reply.primaryText,
     })
+
+    if (reply.followUpText?.trim()) {
+      await sendAutoReplyWhatsAppText({
+        storeId: input.storeId,
+        conversationId: input.conversationId,
+        customerWaNumber: conversation.customer_wa_number,
+        message: reply.followUpText,
+      })
+    }
     return
   }
 
@@ -107,11 +119,15 @@ async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
   })
   if (!igConversation) return
 
+  const igText = reply.followUpText
+    ? `${reply.primaryText}\n\n${reply.followUpText}`
+    : reply.primaryText
+
   await sendAutoReplyInstagramText({
     storeId: input.storeId,
     conversationId: input.conversationId,
     customerIgId: igConversation.customer_ig_id,
-    message: replyText,
+    message: igText,
   })
 }
 

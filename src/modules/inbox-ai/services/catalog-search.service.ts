@@ -26,6 +26,43 @@ export type CatalogSearchFilters = {
 }
 
 const MAX_RESULTS = 5
+export const MIN_MATCH_SCORE = 25
+const CATALOG_SUMMARY_LIMIT = 12
+
+export type StoreCatalogSummary = {
+  productNames: string[]
+  categoryNames: string[]
+}
+
+export function filterMatchesByScore(matches: CatalogMatch[]): CatalogMatch[] {
+  return matches.filter((m) => m.score >= MIN_MATCH_SCORE)
+}
+
+export async function getStoreCatalogSummary(storeId: number): Promise<StoreCatalogSummary> {
+  const [products, categories] = await Promise.all([
+    findActiveProductsByStoreId(storeId),
+    categoryRepository.findCategoriesByStoreId(storeId),
+  ])
+
+  const productNames = products
+    .slice(0, CATALOG_SUMMARY_LIMIT)
+    .map((p) => p.name.trim())
+    .filter(Boolean)
+
+  const categoryNames = categories
+    .filter((c) => c.is_active)
+    .map((c) => c.name.trim())
+    .filter(Boolean)
+
+  return { productNames, categoryNames }
+}
+
+export function formatAvailableProducts(summary: StoreCatalogSummary): string[] {
+  const names = new Set<string>()
+  for (const name of summary.productNames) names.add(name)
+  for (const name of summary.categoryNames) names.add(name)
+  return [...names]
+}
 
 function unitPrice(product: Product, variant: ProductVariant | null): number {
   return Number(product.base_price) + Number(variant?.price_delta ?? 0)
@@ -305,7 +342,11 @@ export function formatProductCaption(match: CatalogMatch, currency: string): str
   return lines.join('\n')
 }
 
-export function formatOtherMatches(matches: CatalogMatch[], currency: string): string {
+export function formatOtherMatches(
+  matches: CatalogMatch[],
+  currency: string,
+  header = 'I also found these:'
+): string {
   if (matches.length === 0) return ''
 
   const lines = matches.map((m) => {
@@ -313,7 +354,7 @@ export function formatOtherMatches(matches: CatalogMatch[], currency: string): s
     return `• ${title} — ${formatMoney(m.price, currency)}\n  ${m.url}`
   })
 
-  return `I also found these:\n\n${lines.join('\n\n')}`
+  return `${header}\n\n${lines.join('\n\n')}`
 }
 
 export function getStoreHomeUrl(storeSlug: string): string {

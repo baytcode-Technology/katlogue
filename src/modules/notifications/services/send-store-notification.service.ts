@@ -76,14 +76,14 @@ export async function notifyWhatsAppChat(input: {
   storeSlug: string
   conversationId: number
   preview: string
-  fromNumber: string
+  senderLabel: string
 }): Promise<void> {
   const body = input.preview.trim() || 'New message'
   await sendStoreNotification({
     storeId: input.storeId,
     kind: 'chat_whatsapp',
     title: 'WhatsApp',
-    body: `${input.fromNumber}: ${body}`,
+    body: `${input.senderLabel}: ${body}`,
     data: {
       type: 'chat',
       channel: 'whatsapp',

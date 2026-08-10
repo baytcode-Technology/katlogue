@@ -1,54 +1,43 @@
 import { completeWithFallback } from '../../../shared/llm/index.js'
+import {
+  buildShopOwnerSystemPrompt,
+  type ShopOwnerTemplateTask,
+} from '../prompts/shop-owner-persona.js'
 
-export type LocalizedReplyTemplate =
-  | 'greeting'
-  | 'not_found'
-  | 'refusal'
-  | 'product_intro'
-  | 'also_found_header'
+export type LocalizedReplyTemplate = ShopOwnerTemplateTask
 
 export type LocalizedReplyFacts = {
   storeName: string
   homeUrl: string
   requestedItem?: string | null
   availableProducts?: string[]
-  refusalReason?: 'explicit' | 'code_request' | 'off_topic'
-}
-
-const TEMPLATE_INSTRUCTIONS: Record<LocalizedReplyTemplate, string> = {
-  greeting:
-    'Welcome them briefly. Share the store link. Ask what product they need (name, color, size). Be direct — no long stories.',
-  not_found:
-    'Say clearly we do NOT have the requested item. List the products we DO have. Share the store link. Be direct and helpful — do NOT comment on their personal situation (wedding, party, etc.).',
-  refusal:
-    'Politely refuse and redirect to ask about products at this store only. Be brief.',
-  product_intro:
-    'One very short line before product details (e.g. "Here it is:"). Do NOT repeat product name, price, or link.',
-  also_found_header:
-    'One very short line before a list of more options. Do NOT list products.',
+  refusalReason?: 'explicit' | 'code_request' | 'off_topic' | 'language_meta'
 }
 
 const FALLBACK_ENGLISH: Record<LocalizedReplyTemplate, (facts: LocalizedReplyFacts) => string> = {
   greeting: (f) =>
-    `Hey! Welcome to ${f.storeName}.\n\nOur store: ${f.homeUrl}\n\nWhat product are you looking for?`,
+    `Hey! Welcome to ${f.storeName}.\n\nOur store: ${f.homeUrl}\n\nWhat are you looking for?`,
   not_found: (f) => {
     const item = f.requestedItem ? f.requestedItem : 'that'
     const list = f.availableProducts?.length
       ? `We have: ${f.availableProducts.join(', ')}.`
       : 'Check our store for all products.'
-    return `Sorry, we don't have ${item}. ${list}\n\nBrowse here: ${f.homeUrl}`
+    return `Sorry, we don't have ${item} here. ${list}\n\nBrowse here: ${f.homeUrl}`
   },
   refusal: (f) => {
     if (f.refusalReason === 'explicit') {
-      return `Sorry, I can't help with that. Ask me about products at ${f.storeName}.`
+      return `Sorry, can't help with that. What product do you need from ${f.storeName}?`
     }
     if (f.refusalReason === 'code_request') {
-      return `I can only help with shopping. What product do you need from ${f.storeName}?`
+      return `I only help with shopping here. What product do you need from ${f.storeName}?`
     }
-    return `I help with shopping at ${f.storeName}. Ask about a product or visit: ${f.homeUrl}`
+    if (f.refusalReason === 'language_meta') {
+      return `What product are you looking for? Check our store: ${f.homeUrl}`
+    }
+    return `What can I help you find at ${f.storeName}? Browse here: ${f.homeUrl}`
   },
   product_intro: () => `Here it is:`,
-  also_found_header: () => `More options:`,
+  also_found_header: () => `We have more options too:`,
 }
 
 function buildFactsBlock(template: LocalizedReplyTemplate, facts: LocalizedReplyFacts): string {
@@ -65,6 +54,8 @@ export async function buildLocalizedReply(input: {
   customerLanguage: string
   customerMessage?: string
   fallbackLanguage?: string | null
+  customPrompt?: string | null
+  conversationHistory?: string | null
   template: LocalizedReplyTemplate
   facts: LocalizedReplyFacts
 }): Promise<string> {
@@ -73,31 +64,20 @@ export async function buildLocalizedReply(input: {
       ? input.customerLanguage.trim()
       : input.fallbackLanguage?.trim() || 'English'
 
-  const task = TEMPLATE_INSTRUCTIONS[input.template]
   const factsBlock = buildFactsBlock(input.template, input.facts)
-  const messageContext = input.customerMessage?.trim()
-    ? `\nCustomer's original message (write your reply in the SAME language as this message):\n"${input.customerMessage.trim()}"\n`
-    : ''
 
-  const systemPrompt = `You are a casual shop assistant on WhatsApp for "${input.facts.storeName}".
-
-LANGUAGE RULE (most important):
-- The customer wrote in ${lang}.
-- You MUST reply ONLY in ${lang}.
-- Do NOT reply in English if they wrote in Mongolian, Malayalam, Punjabi, Hindi, Tamil, or any other language.
-- Do NOT reply in Malayalam if they wrote in Mongolian. Match their language exactly.
-${messageContext}
-STYLE:
-- Short, direct, friendly — like texting back from a shop.
-- Only talk about this store's products. No outside topics.
-- Do NOT comment on personal stories (wedding, party, birthday, tomorrow, etc.) — only answer about products.
-- Do NOT invent product names, prices, or URLs — use ONLY the facts below.
-- Under 400 characters. No markdown.
-
-Task: ${task}
-
-Facts (use exactly):
-${factsBlock}`
+  const systemPrompt = buildShopOwnerSystemPrompt(
+    {
+      storeName: input.facts.storeName,
+      homeUrl: input.facts.homeUrl,
+      customerLanguage: lang,
+      customerMessage: input.customerMessage,
+      customPrompt: input.customPrompt,
+      conversationHistory: input.conversationHistory,
+    },
+    input.template,
+    factsBlock
+  )
 
   try {
     const reply = await completeWithFallback(systemPrompt, [

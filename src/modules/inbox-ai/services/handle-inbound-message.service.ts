@@ -6,6 +6,11 @@ import { scheduleDebouncedInboxAi } from '../debounce.js'
 import { checkInboxAiRateLimit } from '../rate-limit.js'
 import { isAiPaused } from '../repositories/conversation-ai.repository.js'
 import { buildProductReply } from './build-product-reply.service.js'
+import {
+  fetchRecentConversationHistory,
+  formatConversationHistory,
+  type InboxAiChannel,
+} from './conversation-history.service.js'
 import { parseCustomerIntent } from './parse-customer-intent.service.js'
 import { sendAutoReplyInstagramText } from './send-auto-reply-instagram.service.js'
 import {
@@ -13,7 +18,7 @@ import {
   sendAutoReplyWhatsAppText,
 } from './send-auto-reply-whatsapp.service.js'
 
-export type InboxAiChannel = 'whatsapp' | 'instagram'
+export type { InboxAiChannel } from './conversation-history.service.js'
 
 export type HandleInboundInboxAiInput = {
   channel: InboxAiChannel
@@ -59,11 +64,19 @@ async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
   const store = await storeRepository.findStoreById(input.storeId)
   if (!store) return
 
-  const intent = await parseCustomerIntent(text)
+  const recentMessages = await fetchRecentConversationHistory({
+    channel: input.channel,
+    storeId: input.storeId,
+    conversationId: input.conversationId,
+  })
+  const conversationHistory = formatConversationHistory(recentMessages)
+
+  const intent = await parseCustomerIntent(text, { recentMessages })
   const reply = await buildProductReply({
     store,
     customerText: text,
     intent,
+    conversationHistory,
   })
 
   if (!reply.primaryText.trim()) return

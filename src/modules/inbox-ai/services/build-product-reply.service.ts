@@ -24,6 +24,11 @@ export type ProductReplyResult = {
   imageUrl: string | null
 }
 
+type ReplyContext = {
+  customPrompt?: string | null
+  conversationHistory?: string | null
+}
+
 async function resolveMatches(
   store: Store,
   customerText: string,
@@ -69,7 +74,8 @@ export async function buildProductReplyFromMatches(
   currency: string,
   customerLanguage: string,
   customerMessage: string,
-  fallbackLanguage?: string | null
+  store: Store,
+  ctx: ReplyContext = {}
 ): Promise<ProductReplyResult> {
   if (matches.length === 0) {
     return {
@@ -81,26 +87,31 @@ export async function buildProductReplyFromMatches(
     }
   }
 
+  const homeUrl = getStoreHomeUrl(store.slug)
   const [best, ...rest] = matches
   const caption = formatProductCaption(best, currency)
   const imageUrl = getMatchImageUrl(best)
 
-  const intro = await buildLocalizedReply({
+  const replyBase = {
     customerLanguage,
     customerMessage,
-    fallbackLanguage,
+    fallbackLanguage: store.ai_language,
+    customPrompt: ctx.customPrompt ?? store.ai_system_prompt,
+    conversationHistory: ctx.conversationHistory,
+  }
+
+  const intro = await buildLocalizedReply({
+    ...replyBase,
     template: 'product_intro',
-    facts: { storeName: '', homeUrl: '' },
+    facts: { storeName: store.name, homeUrl },
   })
 
   const alsoFoundHeader =
     rest.length > 0
       ? await buildLocalizedReply({
-          customerLanguage,
-          customerMessage,
-          fallbackLanguage,
+          ...replyBase,
           template: 'also_found_header',
-          facts: { storeName: '', homeUrl: '' },
+          facts: { storeName: store.name, homeUrl },
         })
       : null
 
@@ -120,7 +131,8 @@ async function buildNotFoundReply(
   store: Store,
   intent: ParsedCustomerIntent,
   homeUrl: string,
-  customerMessage: string
+  customerMessage: string,
+  ctx: ReplyContext
 ): Promise<string> {
   const summary = await getStoreCatalogSummary(store.id)
   const availableProducts = formatAvailableProducts(summary)
@@ -129,6 +141,8 @@ async function buildNotFoundReply(
     customerLanguage: intent.customerLanguage,
     customerMessage,
     fallbackLanguage: store.ai_language,
+    customPrompt: ctx.customPrompt ?? store.ai_system_prompt,
+    conversationHistory: ctx.conversationHistory,
     template: 'not_found',
     facts: {
       storeName: store.name,
@@ -143,13 +157,16 @@ async function buildRefusalReply(
   store: Store,
   intent: ParsedCustomerIntent,
   homeUrl: string,
-  reason: 'explicit' | 'code_request' | 'off_topic',
-  customerMessage: string
+  reason: 'explicit' | 'code_request' | 'off_topic' | 'language_meta',
+  customerMessage: string,
+  ctx: ReplyContext
 ): Promise<string> {
   return buildLocalizedReply({
     customerLanguage: intent.customerLanguage,
     customerMessage,
     fallbackLanguage: store.ai_language,
+    customPrompt: ctx.customPrompt ?? store.ai_system_prompt,
+    conversationHistory: ctx.conversationHistory,
     template: 'refusal',
     facts: {
       storeName: store.name,
@@ -163,10 +180,15 @@ export async function buildProductReply(input: {
   store: Store
   customerText: string
   intent: ParsedCustomerIntent
+  conversationHistory?: string | null
 }): Promise<ProductReplyResult> {
   const { store, customerText, intent } = input
   const homeUrl = getStoreHomeUrl(store.slug)
   const currency = store.currency
+  const ctx: ReplyContext = {
+    customPrompt: store.ai_system_prompt,
+    conversationHistory: input.conversationHistory,
+  }
   const empty: ProductReplyResult = {
     primaryText: '',
     followUpText: null,
@@ -179,14 +201,21 @@ export async function buildProductReply(input: {
   if (!safety.allowed) {
     return {
       ...empty,
-      primaryText: await buildRefusalReply(store, intent, homeUrl, safety.reason, customerText),
+      primaryText: await buildRefusalReply(
+        store,
+        intent,
+        homeUrl,
+        safety.reason,
+        customerText,
+        ctx
+      ),
     }
   }
 
   if (intent.intent === 'explicit') {
     return {
       ...empty,
-      primaryText: await buildRefusalReply(store, intent, homeUrl, 'explicit', customerText),
+      primaryText: await buildRefusalReply(store, intent, homeUrl, 'explicit', customerText, ctx),
     }
   }
 
@@ -195,6 +224,8 @@ export async function buildProductReply(input: {
       customerLanguage: intent.customerLanguage,
       customerMessage: customerText,
       fallbackLanguage: store.ai_language,
+      customPrompt: ctx.customPrompt,
+      conversationHistory: ctx.conversationHistory,
       template: 'greeting',
       facts: { storeName: store.name, homeUrl },
     })
@@ -208,9 +239,11 @@ export async function buildProductReply(input: {
     !intent.categoryName &&
     !intent.sku
   ) {
+    const reason =
+      intent.offTopicReason === 'language_meta' ? 'language_meta' : 'off_topic'
     return {
       ...empty,
-      primaryText: await buildRefusalReply(store, intent, homeUrl, 'off_topic', customerText),
+      primaryText: await buildRefusalReply(store, intent, homeUrl, reason, customerText, ctx),
     }
   }
 
@@ -222,12 +255,13 @@ export async function buildProductReply(input: {
       currency,
       intent.customerLanguage,
       customerText,
-      store.ai_language
+      store,
+      ctx
     )
   }
 
   return {
     ...empty,
-    primaryText: await buildNotFoundReply(store, intent, homeUrl, customerText),
+    primaryText: await buildNotFoundReply(store, intent, homeUrl, customerText, ctx),
   }
 }

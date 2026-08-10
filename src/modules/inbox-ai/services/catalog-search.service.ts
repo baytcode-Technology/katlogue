@@ -113,6 +113,32 @@ function scoreProduct(product: Product, query: string): number {
   return score
 }
 
+function variantMatchesColor(variant: ProductVariant, wantColor: string): boolean {
+  const want = wantColor.toLowerCase()
+  const { color } = getVariantOptions(variant)
+  const variantColor = color?.toLowerCase() ?? ''
+  const name = variant.name.toLowerCase()
+  if (variantColor === want || variantColor.includes(want) || name.includes(want)) {
+    return true
+  }
+  return Object.values(variant.options ?? {}).some((v) =>
+    normalizeOptionValue(v).includes(want)
+  )
+}
+
+function productMatchesColor(
+  product: Product,
+  variants: ProductVariant[],
+  wantColor: string
+): boolean {
+  const want = wantColor.toLowerCase()
+  const name = product.name.toLowerCase()
+  const desc = (product.description ?? '').toLowerCase()
+  if (name.includes(want) || desc.includes(want)) return true
+  const active = variants.filter((v) => v.is_active)
+  return active.some((v) => variantMatchesColor(v, wantColor))
+}
+
 function scoreVariant(
   variant: ProductVariant,
   filters: CatalogSearchFilters
@@ -162,12 +188,21 @@ function pickBestVariant(
   const active = variants.filter((v) => v.is_active)
   if (active.length === 0) return null
 
-  const scored = active
+  const eligible = filters.color
+    ? active.filter((v) => variantMatchesColor(v, filters.color!))
+    : active
+
+  if (filters.color && eligible.length === 0) return null
+
+  const pool = eligible.length > 0 ? eligible : active
+
+  const scored = pool
     .map((variant) => ({ variant, score: scoreVariant(variant, filters) }))
     .sort((a, b) => b.score - a.score)
 
   if (scored[0] && scored[0].score > 0) return scored[0].variant
-  return active[0] ?? null
+  if (filters.color) return eligible[0] ?? null
+  return pool[0] ?? null
 }
 
 function toMatch(
@@ -193,14 +228,20 @@ function searchProducts(
 ): CatalogMatch[] {
   const scored = products
     .map((product) => {
-      const productScore = scoreProduct(product, filters.query)
       const variants = variantMap.get(product.id) ?? []
+      if (filters.color && !productMatchesColor(product, variants, filters.color)) {
+        return null
+      }
+      const productScore = scoreProduct(product, filters.query)
       const variant = pickBestVariant(variants, filters)
+      if (filters.color && !variant) return null
       const variantScore = variant ? scoreVariant(variant, filters) : 0
       const total = productScore + variantScore
       return { product, variant, total }
     })
-    .filter((row) => row.total > 0)
+    .filter((row): row is { product: Product; variant: ProductVariant | null; total: number } =>
+      row !== null && row.total > 0
+    )
     .sort((a, b) => b.total - a.total)
     .slice(0, MAX_RESULTS)
 
@@ -224,12 +265,20 @@ export async function searchCatalog(
   const variantMap = await findVariantsByProductIds(products.map((p) => p.id))
 
   if (!trimmed && (normalized.color || normalized.size)) {
-    const all = products.map((product) => {
-      const variants = variantMap.get(product.id) ?? []
-      const variant = pickBestVariant(variants, normalized)
-      const variantScore = variant ? scoreVariant(variant, normalized) : 0
-      return { product, variant, total: variantScore }
-    })
+    const all = products
+      .map((product) => {
+        const variants = variantMap.get(product.id) ?? []
+        if (normalized.color && !productMatchesColor(product, variants, normalized.color)) {
+          return null
+        }
+        const variant = pickBestVariant(variants, normalized)
+        if (normalized.color && !variant) return null
+        const variantScore = variant ? scoreVariant(variant, normalized) : 0
+        return variantScore > 0 ? { product, variant, total: variantScore } : null
+      })
+      .filter((row): row is { product: Product; variant: ProductVariant | null; total: number } =>
+        row !== null
+      )
     return all
       .filter((row) => row.total > 0)
       .sort((a, b) => b.total - a.total)

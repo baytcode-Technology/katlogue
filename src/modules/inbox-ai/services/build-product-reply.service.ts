@@ -68,6 +68,7 @@ export async function buildProductReplyFromMatches(
   matches: CatalogMatch[],
   currency: string,
   customerLanguage: string,
+  customerMessage: string,
   fallbackLanguage?: string | null
 ): Promise<ProductReplyResult> {
   if (matches.length === 0) {
@@ -86,6 +87,7 @@ export async function buildProductReplyFromMatches(
 
   const intro = await buildLocalizedReply({
     customerLanguage,
+    customerMessage,
     fallbackLanguage,
     template: 'product_intro',
     facts: { storeName: '', homeUrl: '' },
@@ -95,6 +97,7 @@ export async function buildProductReplyFromMatches(
     rest.length > 0
       ? await buildLocalizedReply({
           customerLanguage,
+          customerMessage,
           fallbackLanguage,
           template: 'also_found_header',
           facts: { storeName: '', homeUrl: '' },
@@ -116,13 +119,15 @@ export async function buildProductReplyFromMatches(
 async function buildNotFoundReply(
   store: Store,
   intent: ParsedCustomerIntent,
-  homeUrl: string
+  homeUrl: string,
+  customerMessage: string
 ): Promise<string> {
   const summary = await getStoreCatalogSummary(store.id)
   const availableProducts = formatAvailableProducts(summary)
 
   return buildLocalizedReply({
     customerLanguage: intent.customerLanguage,
+    customerMessage,
     fallbackLanguage: store.ai_language,
     template: 'not_found',
     facts: {
@@ -138,10 +143,12 @@ async function buildRefusalReply(
   store: Store,
   intent: ParsedCustomerIntent,
   homeUrl: string,
-  reason: 'explicit' | 'code_request' | 'off_topic'
+  reason: 'explicit' | 'code_request' | 'off_topic',
+  customerMessage: string
 ): Promise<string> {
   return buildLocalizedReply({
     customerLanguage: intent.customerLanguage,
+    customerMessage,
     fallbackLanguage: store.ai_language,
     template: 'refusal',
     facts: {
@@ -172,20 +179,21 @@ export async function buildProductReply(input: {
   if (!safety.allowed) {
     return {
       ...empty,
-      primaryText: await buildRefusalReply(store, intent, homeUrl, safety.reason),
+      primaryText: await buildRefusalReply(store, intent, homeUrl, safety.reason, customerText),
     }
   }
 
   if (intent.intent === 'explicit') {
     return {
       ...empty,
-      primaryText: await buildRefusalReply(store, intent, homeUrl, 'explicit'),
+      primaryText: await buildRefusalReply(store, intent, homeUrl, 'explicit', customerText),
     }
   }
 
   if (intent.intent === 'greeting') {
     const greeting = await buildLocalizedReply({
       customerLanguage: intent.customerLanguage,
+      customerMessage: customerText,
       fallbackLanguage: store.ai_language,
       template: 'greeting',
       facts: { storeName: store.name, homeUrl },
@@ -202,7 +210,7 @@ export async function buildProductReply(input: {
   ) {
     return {
       ...empty,
-      primaryText: await buildRefusalReply(store, intent, homeUrl, 'off_topic'),
+      primaryText: await buildRefusalReply(store, intent, homeUrl, 'off_topic', customerText),
     }
   }
 
@@ -213,12 +221,13 @@ export async function buildProductReply(input: {
       matches,
       currency,
       intent.customerLanguage,
+      customerText,
       store.ai_language
     )
   }
 
   return {
     ...empty,
-    primaryText: await buildNotFoundReply(store, intent, homeUrl),
+    primaryText: await buildNotFoundReply(store, intent, homeUrl, customerText),
   }
 }

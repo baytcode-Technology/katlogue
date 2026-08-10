@@ -15,69 +15,84 @@ export type LocalizedReplyFacts = {
   refusalReason?: 'explicit' | 'code_request' | 'off_topic'
 }
 
-const TEMPLATE_FACTS: Record<LocalizedReplyTemplate, string> = {
-  greeting: `Welcome the customer to the store casually. Share the store link. Ask what product they are looking for (name, color, size, or SKU).`,
-  not_found: `Tell them we don't have the requested item. List what we DO have in the store. Share the store link so they can browse all products.`,
-  refusal: `Politely refuse and redirect them to ask about products at this store only.`,
-  product_intro: `One short casual line introducing the product you found. Do NOT repeat product name, price, or link — those come in the next message.`,
-  also_found_header: `One short casual line saying you found more options. Do NOT list products — the list comes next.`,
+const TEMPLATE_INSTRUCTIONS: Record<LocalizedReplyTemplate, string> = {
+  greeting:
+    'Welcome them briefly. Share the store link. Ask what product they need (name, color, size). Be direct — no long stories.',
+  not_found:
+    'Say clearly we do NOT have the requested item. List the products we DO have. Share the store link. Be direct and helpful — do NOT comment on their personal situation (wedding, party, etc.).',
+  refusal:
+    'Politely refuse and redirect to ask about products at this store only. Be brief.',
+  product_intro:
+    'One very short line before product details (e.g. "Here it is:"). Do NOT repeat product name, price, or link.',
+  also_found_header:
+    'One very short line before a list of more options. Do NOT list products.',
 }
 
 const FALLBACK_ENGLISH: Record<LocalizedReplyTemplate, (facts: LocalizedReplyFacts) => string> = {
   greeting: (f) =>
-    `Hey! Welcome to ${f.storeName} 👋\n\nCheck out our store: ${f.homeUrl}\n\nWhat are you looking for? Tell me a product, color, size, or SKU.`,
+    `Hey! Welcome to ${f.storeName}.\n\nOur store: ${f.homeUrl}\n\nWhat product are you looking for?`,
   not_found: (f) => {
-    const item = f.requestedItem ? `"${f.requestedItem}"` : 'that'
+    const item = f.requestedItem ? f.requestedItem : 'that'
     const list = f.availableProducts?.length
       ? `We have: ${f.availableProducts.join(', ')}.`
-      : 'Browse our catalog to see everything we sell.'
-    return `Sorry, we don't have ${item} right now. ${list}\n\nSee all products here: ${f.homeUrl}`
+      : 'Check our store for all products.'
+    return `Sorry, we don't have ${item}. ${list}\n\nBrowse here: ${f.homeUrl}`
   },
   refusal: (f) => {
     if (f.refusalReason === 'explicit') {
-      return `Sorry, I can't help with that. I'm here to help you shop at ${f.storeName} — ask me about our products!`
+      return `Sorry, I can't help with that. Ask me about products at ${f.storeName}.`
     }
     if (f.refusalReason === 'code_request') {
-      return `I can't share technical stuff. Tell me what product you're looking for at ${f.storeName}!`
+      return `I can only help with shopping. What product do you need from ${f.storeName}?`
     }
-    return `I'm here to help you shop at ${f.storeName}. Ask me about our products or check: ${f.homeUrl}`
+    return `I help with shopping at ${f.storeName}. Ask about a product or visit: ${f.homeUrl}`
   },
-  product_intro: () => `Here's what I found for you:`,
-  also_found_header: () => `I also found these:`,
+  product_intro: () => `Here it is:`,
+  also_found_header: () => `More options:`,
 }
 
 function buildFactsBlock(template: LocalizedReplyTemplate, facts: LocalizedReplyFacts): string {
-  const lines = [
-    `Store name: ${facts.storeName}`,
-    `Store link: ${facts.homeUrl}`,
-  ]
-  if (facts.requestedItem) lines.push(`Requested item (not available): ${facts.requestedItem}`)
+  const lines = [`Store name: ${facts.storeName}`, `Store link: ${facts.homeUrl}`]
+  if (facts.requestedItem) lines.push(`Item NOT available: ${facts.requestedItem}`)
   if (facts.availableProducts?.length) {
-    lines.push(`Products we DO have: ${facts.availableProducts.join(', ')}`)
+    lines.push(`Items we DO have: ${facts.availableProducts.join(', ')}`)
   }
-  if (facts.refusalReason) lines.push(`Refusal reason: ${facts.refusalReason}`)
+  if (facts.refusalReason) lines.push(`Reason: ${facts.refusalReason}`)
   return lines.join('\n')
 }
 
 export async function buildLocalizedReply(input: {
   customerLanguage: string
+  customerMessage?: string
   fallbackLanguage?: string | null
   template: LocalizedReplyTemplate
   facts: LocalizedReplyFacts
 }): Promise<string> {
   const lang =
     input.customerLanguage?.trim() && input.customerLanguage !== 'Unknown'
-      ? input.customerLanguage
+      ? input.customerLanguage.trim()
       : input.fallbackLanguage?.trim() || 'English'
 
-  const task = TEMPLATE_FACTS[input.template]
+  const task = TEMPLATE_INSTRUCTIONS[input.template]
   const factsBlock = buildFactsBlock(input.template, input.facts)
+  const messageContext = input.customerMessage?.trim()
+    ? `\nCustomer's original message (write your reply in the SAME language as this message):\n"${input.customerMessage.trim()}"\n`
+    : ''
 
   const systemPrompt = `You are a casual shop assistant on WhatsApp for "${input.facts.storeName}".
-Reply ONLY in ${lang}. Sound friendly and natural — like a real shop person, not a robot.
-Only talk about this store and its products. Do not discuss the outside world, news, politics, or technical topics.
-Do NOT invent product names, prices, or URLs — use ONLY the facts below.
-Keep under 400 characters. No markdown.
+
+LANGUAGE RULE (most important):
+- The customer wrote in ${lang}.
+- You MUST reply ONLY in ${lang}.
+- Do NOT reply in English if they wrote in Mongolian, Malayalam, Punjabi, Hindi, Tamil, or any other language.
+- Do NOT reply in Malayalam if they wrote in Mongolian. Match their language exactly.
+${messageContext}
+STYLE:
+- Short, direct, friendly — like texting back from a shop.
+- Only talk about this store's products. No outside topics.
+- Do NOT comment on personal stories (wedding, party, birthday, tomorrow, etc.) — only answer about products.
+- Do NOT invent product names, prices, or URLs — use ONLY the facts below.
+- Under 400 characters. No markdown.
 
 Task: ${task}
 
@@ -86,14 +101,14 @@ ${factsBlock}`
 
   try {
     const reply = await completeWithFallback(systemPrompt, [
-      { role: 'user', content: 'Write the reply now.' },
+      { role: 'user', content: `Write the reply in ${lang} only.` },
     ])
     const trimmed = reply.trim()
     if (trimmed && !trimmed.includes('could not reach our AI')) {
       return trimmed
     }
   } catch {
-    // fall through to English template
+    // fall through
   }
 
   return FALLBACK_ENGLISH[input.template](input.facts)

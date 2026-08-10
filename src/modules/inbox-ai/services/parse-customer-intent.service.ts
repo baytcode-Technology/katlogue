@@ -34,25 +34,40 @@ type LlmIntentResult = {
 }
 
 const INTENT_SCHEMA = `You classify customer messages for a store WhatsApp/Instagram inbox.
-Detect the language the customer is writing in and normalize product search terms to English for database lookup.
+
+CRITICAL — Language:
+- Detect the EXACT language the customer wrote in.
+- If they write in Mongolian → customerLanguage: "Mongolian"
+- If they write in Malayalam → customerLanguage: "Malayalam"
+- If they write in Punjabi → customerLanguage: "Punjabi"
+- If they write in Hindi → customerLanguage: "Hindi"
+- If they write in English → customerLanguage: "English"
+- NEVER assign a different language than what the customer used.
+
+CRITICAL — Extract product only:
+- IGNORE personal stories, events, reasons (wedding, party, tomorrow, gift, birthday, etc.)
+- "I have a wedding tomorrow, I need a white shirt" → product_search, searchQuery: "shirt", color: "white", requestedItem: "white shirt"
+- Only extract what product they want to buy.
+
+Normalize product search terms to English for database lookup.
 
 Return JSON only:
 {
   "intent": "greeting" | "product_search" | "sku_lookup" | "category_search" | "image_request" | "off_topic" | "explicit",
-  "customerLanguage": "language name e.g. English, Hindi, Malayalam, Tamil, Mongolian",
-  "requestedItem": "what product they want in English e.g. white shirt, black benny, t-shirt, or null",
-  "searchQuery": "English product search terms without color/size e.g. shirt, benny",
-  "color": "English color if mentioned e.g. black, white, or null",
-  "size": "size if mentioned e.g. S, M, L, XL, or null",
-  "sku": "SKU code if mentioned or null",
-  "categoryName": "English category if mentioned e.g. shirts, pants, or null",
-  "wantsImage": true if they ask for photo/image/picture
+  "customerLanguage": "exact language name e.g. English, Hindi, Malayalam, Tamil, Mongolian, Punjabi, Arabic",
+  "requestedItem": "product they want in English e.g. white shirt, or null",
+  "searchQuery": "English product terms without color/size e.g. shirt",
+  "color": "English color e.g. white, black, or null",
+  "size": "S, M, L, XL, or null",
+  "sku": "SKU if mentioned or null",
+  "categoryName": "English category e.g. shirts, pants, or null",
+  "wantsImage": true if they ask for photo/image
 }
 
 Rules:
-- Any question about products, prices, availability, colors, sizes, or shopping = product_search (NOT off_topic).
-- Messages in Malayalam, Hindi, Tamil, Mongolian, Arabic, etc. asking about products = product_search.
-- off_topic only for messages completely unrelated to shopping at this store.
+- Any product availability, price, or shopping question = product_search (NOT off_topic), even with personal context.
+- Messages in any language about products = product_search.
+- off_topic only for messages with NO shopping intent at all.
 - explicit only for sexual/violent/harassing content.`
 
 const GREETING_PATTERN =
@@ -73,53 +88,15 @@ const SIZE_MAP: Record<string, string> = {
 }
 
 const COLOR_WORDS = [
-  'black',
-  'white',
-  'blue',
-  'red',
-  'green',
-  'yellow',
-  'pink',
-  'purple',
-  'orange',
-  'brown',
-  'grey',
-  'gray',
-  'navy',
-  'beige',
-  'maroon',
-  'cream',
-  'gold',
-  'silver',
+  'black', 'white', 'blue', 'red', 'green', 'yellow', 'pink', 'purple',
+  'orange', 'brown', 'grey', 'gray', 'navy', 'beige', 'maroon', 'cream', 'gold', 'silver',
 ]
 
 const CATEGORY_WORDS = [
-  'shirt',
-  'shirts',
-  'pant',
-  'pants',
-  'trouser',
-  'trousers',
-  'jeans',
-  'dress',
-  'dresses',
-  'kurta',
-  'saree',
-  'sari',
-  'top',
-  'tops',
-  'jacket',
-  'jackets',
-  'shoe',
-  'shoes',
-  'benny',
-  'beanie',
-  't-shirt',
-  'tshirt',
-  'innerwear',
+  'shirt', 'shirts', 'pant', 'pants', 'trouser', 'trousers', 'jeans',
+  'dress', 'dresses', 'kurta', 'saree', 'sari', 'top', 'tops',
+  'jacket', 'jackets', 'shoe', 'shoes', 'benny', 'beanie', 't-shirt', 'tshirt', 'innerwear',
 ]
-
-const NON_LATIN = /[^\u0000-\u024F\u1E00-\u1EFF]/
 
 function isGreeting(text: string): boolean {
   return GREETING_PATTERN.test(text.trim())
@@ -161,14 +138,10 @@ function extractCategory(text: string): string | null {
 
 function stripExtractedTerms(text: string, color: string | null, size: string | null): string {
   let q = text
-  if (color) {
-    q = q.replace(new RegExp(`\\b${color}\\b`, 'gi'), ' ')
-  }
-  if (size) {
-    q = q.replace(SIZE_PATTERN, ' ')
-  }
+  if (color) q = q.replace(new RegExp(`\\b${color}\\b`, 'gi'), ' ')
+  if (size) q = q.replace(SIZE_PATTERN, ' ')
   q = q.replace(
-    /\b(photo|image|picture|pic|send|show|want|need|looking\s+for|do\s+you\s+have|price|how\s+much)\b/gi,
+    /\b(photo|image|picture|pic|send|show|want|need|looking\s+for|do\s+you\s+have|price|how\s+much|wedding|party|tomorrow|birthday|gift)\b/gi,
     ' '
   )
   return q.replace(/\s+/g, ' ').trim()
@@ -189,8 +162,7 @@ function buildRequestedItem(
   if (searchQuery.trim()) parts.push(searchQuery.trim())
   else if (categoryName) parts.push(categoryName)
   if (size) parts.push(`size ${size}`)
-  const item = parts.join(' ').trim()
-  return item || null
+  return parts.join(' ').trim() || null
 }
 
 function normalizeIntent(intent: CustomerIntent, hasProductSignals: boolean): CustomerIntent {
@@ -200,7 +172,7 @@ function normalizeIntent(intent: CustomerIntent, hasProductSignals: boolean): Cu
 
 function finalizeIntent(
   partial: Omit<ParsedCustomerIntent, 'requestedItem'> & { requestedItem?: string | null },
-  trimmed: string
+  _trimmed: string
 ): ParsedCustomerIntent {
   const requestedItem =
     partial.requestedItem?.trim() ||
@@ -232,38 +204,48 @@ function finalizeIntent(
   }
 }
 
-export async function parseCustomerIntent(text: string): Promise<ParsedCustomerIntent> {
-  const trimmed = text.trim()
+function fromLlmResult(parsed: LlmIntentResult, trimmed: string): ParsedCustomerIntent {
+  const colorFromText = extractColor(trimmed)
+  const sizeFromText = extractSize(trimmed)
+  const categoryFromText = extractCategory(trimmed)
+  const skuFromText = extractSku(trimmed)
+
+  const color = parsed.color?.trim() || colorFromText
+  const size = parsed.size?.trim()?.toUpperCase() || sizeFromText
+  const categoryName = parsed.categoryName?.trim() || categoryFromText
+  const searchQuery =
+    parsed.searchQuery?.trim() ||
+    stripExtractedTerms(trimmed, color, size) ||
+    categoryName ||
+    ''
+
+  return finalizeIntent(
+    {
+      intent: parsed.intent ?? 'product_search',
+      customerLanguage: parsed.customerLanguage ?? 'English',
+      requestedItem: parsed.requestedItem ?? null,
+      searchQuery,
+      color,
+      size,
+      sku: parsed.sku?.trim() || skuFromText,
+      categoryName,
+      wantsImage: parsed.wantsImage === true || wantsImageFromText(trimmed),
+    },
+    trimmed
+  )
+}
+
+function englishFallback(trimmed: string): ParsedCustomerIntent {
   const skuFromText = extractSku(trimmed)
   const colorFromText = extractColor(trimmed)
   const sizeFromText = extractSize(trimmed)
   const categoryFromText = extractCategory(trimmed)
-  const isNonLatin = NON_LATIN.test(trimmed)
 
   if (isGreeting(trimmed)) {
-    if (isNonLatin) {
-      const parsed = await completeJson<LlmIntentResult>(INTENT_SCHEMA, trimmed)
-      if (parsed?.customerLanguage) {
-        return finalizeIntent(
-          {
-            intent: 'greeting',
-            customerLanguage: parsed.customerLanguage,
-            searchQuery: '',
-            color: null,
-            size: null,
-            sku: skuFromText,
-            categoryName: null,
-            wantsImage: false,
-          },
-          trimmed
-        )
-      }
-    }
-
     return finalizeIntent(
       {
         intent: 'greeting',
-        customerLanguage: isNonLatin ? 'Unknown' : 'English',
+        customerLanguage: 'English',
         searchQuery: '',
         color: null,
         size: null,
@@ -275,38 +257,11 @@ export async function parseCustomerIntent(text: string): Promise<ParsedCustomerI
     )
   }
 
-  const parsed = await completeJson<LlmIntentResult>(INTENT_SCHEMA, trimmed)
-  if (parsed?.intent) {
-    const color = parsed.color?.trim() || colorFromText
-    const size = parsed.size?.trim()?.toUpperCase() || sizeFromText
-    const categoryName = parsed.categoryName?.trim() || categoryFromText
-    const searchQuery =
-      parsed.searchQuery?.trim() ||
-      stripExtractedTerms(trimmed, color, size) ||
-      categoryName ||
-      ''
-
-    return finalizeIntent(
-      {
-        intent: parsed.intent,
-        customerLanguage: parsed.customerLanguage ?? (isNonLatin ? 'Unknown' : 'English'),
-        requestedItem: parsed.requestedItem ?? null,
-        searchQuery,
-        color,
-        size,
-        sku: parsed.sku?.trim() || skuFromText,
-        categoryName,
-        wantsImage: parsed.wantsImage === true || wantsImageFromText(trimmed),
-      },
-      trimmed
-    )
-  }
-
   if (skuFromText) {
     return finalizeIntent(
       {
         intent: 'sku_lookup',
-        customerLanguage: isNonLatin ? 'Unknown' : 'English',
+        customerLanguage: 'English',
         searchQuery: '',
         color: colorFromText,
         size: sizeFromText,
@@ -318,47 +273,13 @@ export async function parseCustomerIntent(text: string): Promise<ParsedCustomerI
     )
   }
 
-  if (wantsImageFromText(trimmed)) {
-    const searchQuery = stripExtractedTerms(trimmed, colorFromText, sizeFromText) || categoryFromText || trimmed
-    return finalizeIntent(
-      {
-        intent: 'image_request',
-        customerLanguage: isNonLatin ? 'Unknown' : 'English',
-        searchQuery,
-        color: colorFromText,
-        size: sizeFromText,
-        sku: null,
-        categoryName: categoryFromText,
-        wantsImage: true,
-      },
-      trimmed
-    )
-  }
+  const searchQuery =
+    stripExtractedTerms(trimmed, colorFromText, sizeFromText) || categoryFromText || trimmed
 
-  if (categoryFromText && !colorFromText && !sizeFromText) {
-    const productTerms = stripExtractedTerms(trimmed, null, null)
-    if (!productTerms || productTerms === categoryFromText) {
-      return finalizeIntent(
-        {
-          intent: 'category_search',
-          customerLanguage: isNonLatin ? 'Unknown' : 'English',
-          searchQuery: categoryFromText,
-          color: null,
-          size: null,
-          sku: null,
-          categoryName: categoryFromText,
-          wantsImage: false,
-        },
-        trimmed
-      )
-    }
-  }
-
-  const searchQuery = stripExtractedTerms(trimmed, colorFromText, sizeFromText) || categoryFromText || trimmed
   return finalizeIntent(
     {
       intent: 'product_search',
-      customerLanguage: isNonLatin ? 'Unknown' : 'English',
+      customerLanguage: 'English',
       searchQuery,
       color: colorFromText,
       size: sizeFromText,
@@ -368,4 +289,34 @@ export async function parseCustomerIntent(text: string): Promise<ParsedCustomerI
     },
     trimmed
   )
+}
+
+export async function parseCustomerIntent(text: string): Promise<ParsedCustomerIntent> {
+  const trimmed = text.trim()
+  if (!trimmed) {
+    return finalizeIntent(
+      {
+        intent: 'off_topic',
+        customerLanguage: 'English',
+        searchQuery: '',
+        color: null,
+        size: null,
+        sku: null,
+        categoryName: null,
+        wantsImage: false,
+      },
+      trimmed
+    )
+  }
+
+  const parsed = await completeJson<LlmIntentResult>(INTENT_SCHEMA, trimmed)
+  if (parsed?.intent && parsed.customerLanguage) {
+    return fromLlmResult(parsed, trimmed)
+  }
+
+  if (parsed?.intent) {
+    return fromLlmResult({ ...parsed, customerLanguage: parsed.customerLanguage ?? 'English' }, trimmed)
+  }
+
+  return englishFallback(trimmed)
 }

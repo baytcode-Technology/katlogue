@@ -1,7 +1,9 @@
+import type { Customer } from '../../customers/types/customer.types.js'
 import * as customerRepository from '../../customers/repositories/customer.repository.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { notifyWhatsAppChat } from '../../notifications/services/send-store-notification.service.js'
 import { handleInboundInboxAi } from '../../inbox-ai/index.js'
+import { formatWhatsAppDisplayNumber } from '../../../shared/utils/phone.js'
 import { emitToStore } from '../../../websocket/index.js'
 import { SOCKET_EVENTS } from '../../../websocket/events.js'
 import * as chatRepository from '../repositories/whatsapp-chat.repository.js'
@@ -15,6 +17,12 @@ import { markHistorySyncDeclined } from './coexistence-sync.service.js'
 import { markAsRead, resolveStoreWhatsAppCredentials, type ParsedWebhookMessage } from './whatsapp.service.js'
 import { formatWhatsAppMessagePreview } from './whatsapp-message-content.service.js'
 
+function whatsAppSenderLabel(customer: Customer, phone: string): string {
+  const name = customer.name?.trim()
+  if (name) return name
+  return formatWhatsAppDisplayNumber(phone)
+}
+
 async function persistMessage(input: {
   storeId: number
   store: Awaited<ReturnType<typeof storeRepository.findStoreByWhatsAppWebhookTarget>>
@@ -22,7 +30,10 @@ async function persistMessage(input: {
   msg: ParsedWebhookMessage
   direction: 'inbound' | 'outbound'
   incrementUnread?: boolean
-}) {
+}): Promise<{
+  saved: NonNullable<Awaited<ReturnType<typeof chatRepository.insertMessage>>>
+  customer: Customer
+} | null> {
   const store = input.store
   if (!store) return null
 
@@ -47,7 +58,7 @@ async function persistMessage(input: {
     incrementUnread: input.incrementUnread,
   })
 
-  return chatRepository.insertMessage({
+  const saved = await chatRepository.insertMessage({
     storeId: store.id,
     conversationId: conversation.id,
     metaMessageId: input.msg.metaMessageId,
@@ -63,6 +74,10 @@ async function persistMessage(input: {
     rawPayload: input.msg.raw,
     timestamp: input.msg.timestamp,
   })
+
+  if (!saved) return null
+
+  return { saved, customer }
 }
 
 function emitNewMessage(
@@ -131,14 +146,14 @@ export async function processWhatsAppWebhook(body: unknown): Promise<void> {
     }
 
     for (const msg of event.historyMessages) {
-      const saved = await persistMessage({
+      const result = await persistMessage({
         storeId: store.id,
         store,
         event,
         msg,
         direction: 'inbound',
       })
-      if (saved) emitNewMessage(store.id, saved.conversation_id, saved)
+      if (result) emitNewMessage(store.id, result.saved.conversation_id, result.saved)
     }
 
     if (event.historyMessages.length > 0 || event.historyDeclined) {
@@ -153,7 +168,7 @@ export async function processWhatsAppWebhook(body: unknown): Promise<void> {
 
     // Inbound messages
     for (const msg of event.messages) {
-      const saved = await persistMessage({
+      const result = await persistMessage({
         storeId: store.id,
         store,
         event,
@@ -162,7 +177,8 @@ export async function processWhatsAppWebhook(body: unknown): Promise<void> {
         incrementUnread: true,
       })
 
-      if (saved) {
+      if (result) {
+        const { saved, customer } = result
         emitNewMessage(store.id, saved.conversation_id, saved)
 
         const conversation = await chatRepository.findConversationById({
@@ -191,7 +207,7 @@ export async function processWhatsAppWebhook(body: unknown): Promise<void> {
             type: saved.type,
             textBody: saved.text_body,
           }),
-          fromNumber: msg.from,
+          senderLabel: whatsAppSenderLabel(customer, msg.from),
         }).catch((err) => {
           console.error('[notifications] WhatsApp push failed', err)
         })
@@ -220,7 +236,7 @@ export async function processWhatsAppWebhook(body: unknown): Promise<void> {
       const customerPhone = msg.to ?? msg.from
       if (!customerPhone) continue
 
-      const saved = await persistMessage({
+      const result = await persistMessage({
         storeId: store.id,
         store,
         event,
@@ -228,7 +244,7 @@ export async function processWhatsAppWebhook(body: unknown): Promise<void> {
         direction: 'outbound',
       })
 
-      if (saved) emitNewMessage(store.id, saved.conversation_id, saved)
+      if (result) emitNewMessage(store.id, result.saved.conversation_id, result.saved)
     }
 
     // Delivery statuses

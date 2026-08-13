@@ -7,15 +7,15 @@ export class GroqProvider implements LlmProvider {
   private model: string
 
   constructor() {
-    const apiKey = process.env.GROQ_API_KEY
+    const apiKey = process.env.LLM_API_KEY
     if (!apiKey) {
-      throw new AppError(500, 'GROQ_API_KEY is not configured', 'LLM_NOT_CONFIGURED')
+      throw new AppError(500, 'LLM_API_KEY is not configured', 'LLM_NOT_CONFIGURED')
     }
     this.client = new OpenAI({
       apiKey,
       baseURL: 'https://api.groq.com/openai/v1',
     })
-    this.model = process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile'
+    this.model = process.env.LLM_MODEL ?? 'llama-3.3-70b-versatile'
   }
 
   async complete(systemPrompt: string, history: LlmChatMessage[]): Promise<string> {

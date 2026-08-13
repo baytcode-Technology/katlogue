@@ -1,7 +1,10 @@
 import { AppError } from '../errors/app.error.js'
-import { FALLBACK_MESSAGE, GeminiProvider } from './gemini.provider.js'
 import { GroqProvider } from './groq.provider.js'
+import { TokenBeeProvider } from './tokenbee.provider.js'
 import type { LlmChatMessage, LlmProvider } from './types.js'
+
+export const FALLBACK_MESSAGE =
+  'Sorry, I could not reach our AI assistant right now. Please try again in a moment.'
 
 let cachedProvider: LlmProvider | null = null
 
@@ -9,8 +12,8 @@ export function getLlmProvider(): LlmProvider {
   if (cachedProvider) return cachedProvider
 
   const provider = (process.env.LLM_PROVIDER ?? 'groq').toLowerCase()
-  if (provider === 'gemini') {
-    cachedProvider = new GeminiProvider()
+  if (provider === 'tokenbee') {
+    cachedProvider = new TokenBeeProvider()
   } else if (provider === 'groq') {
     cachedProvider = new GroqProvider()
   } else {
@@ -59,4 +62,3 @@ export async function completeJson<T>(
 }
 
 export type { LlmChatMessage, LlmProvider } from './types.js'
-export { FALLBACK_MESSAGE }

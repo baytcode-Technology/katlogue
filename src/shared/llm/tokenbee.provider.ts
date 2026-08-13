@@ -2,6 +2,7 @@ import {
   CompressionRate,
   CompressionStrategy,
   TokenBee,
+  TokenBeeModel,
   TokenBeeContext,
 } from '@tokenbee/sdk'
 import { AppError } from '../errors/app.error.js'
@@ -13,7 +14,6 @@ type ChatCompletionResponse = {
 
 export class TokenBeeProvider implements LlmProvider {
   private client: TokenBee
-  private model: string
 
   constructor() {
     const apiKey = process.env.AISHOPY_TOKENBEE?.trim()
@@ -26,9 +26,6 @@ export class TokenBeeProvider implements LlmProvider {
       throw new AppError(500, 'LLM_API_KEY is not configured', 'LLM_NOT_CONFIGURED')
     }
 
-    const model = process.env.LLM_MODEL?.trim() || 'llama-3.3-70b-versatile'
-    this.model = model.includes('/') ? model : `groq/${model}`
-
     this.client = new TokenBee({
       apiKey,
       llmKey,
@@ -38,7 +35,7 @@ export class TokenBeeProvider implements LlmProvider {
   async complete(systemPrompt: string, history: LlmChatMessage[]): Promise<string> {
     try {
       const res = (await this.client.send({
-        model: this.model,
+        model: TokenBeeModel.GroqLlama3_3_70b,
         input: {
           messages: [
             { role: 'system', content: systemPrompt },
@@ -48,11 +45,8 @@ export class TokenBeeProvider implements LlmProvider {
             })),
           ],
           strategy: CompressionStrategy.Smart,
-          context: TokenBeeContext.Conversation,
-          rate: CompressionRate.Low,
-          privacy: true,
-          temperature: 0.4,
-          max_tokens: 1024,
+          context: TokenBeeContext.Auto,
+          rate: CompressionRate.Medium,
         },
       })) as ChatCompletionResponse
 

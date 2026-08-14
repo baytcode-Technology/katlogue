@@ -22,6 +22,9 @@ export const updateCategorySchema = z
     image_url: z.union([z.string().url(), z.null()]).optional(),
     is_active: z.boolean().optional(),
     description: z.string().max(5000).nullable().optional(),
+    parent_id: z
+      .union([entityId('Invalid parent category id'), z.null()])
+      .optional(),
   })
   .refine((body) => Object.keys(body).length > 0, {
     message: 'At least one field is required',

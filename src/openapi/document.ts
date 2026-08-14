@@ -2103,7 +2103,7 @@ export function buildOpenApiDocument() {
             '- **products**: all active products, including sold-out items. Each product has **sold_out** (boolean) and a **variants** array (all active variants, each with **sold_out**). Sold out when `mark_as_sold` is true or tracked inventory has `stock_qty` &lt; 1 (zero or negative). Non-inventory items are never sold out.',
             '',
             '**Filters (products only):**',
-            '- `category_id` — only products in that category.',
+            '- `category_id` — products in that category and all nested subcategories.',
             '- `product_id` — only that one product (array length 1).',
             '',
             'Requires store via subdomain or `X-Store-Slug` header.',
@@ -2120,7 +2120,8 @@ export function buildOpenApiDocument() {
               name: 'category_id',
               in: 'query',
               schema: { $ref: '#/components/schemas/EntityId' },
-              description: 'Filter products to this category only',
+              description:
+                'Filter products to this category and all nested subcategories',
             },
             {
               name: 'product_id',

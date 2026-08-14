@@ -46,3 +46,23 @@ export function collectCategoryIds(tree: CatalogCategory[]): Set<number> {
   walk(tree)
   return ids
 }
+
+/** Category id plus all nested subcategory ids (for parent catalog filters). */
+export function collectSubtreeCategoryIds(
+  tree: CatalogCategory[],
+  rootId: number
+): Set<number> | null {
+  const find = (nodes: CatalogCategory[]): CatalogCategory | null => {
+    for (const node of nodes) {
+      if (node.id === rootId) return node
+      const nested = find(node.subcategories)
+      if (nested) return nested
+    }
+    return null
+  }
+
+  const root = find(tree)
+  if (!root) return null
+
+  return collectCategoryIds([root])
+}

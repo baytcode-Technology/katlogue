@@ -72,7 +72,7 @@ Primary endpoint for product listing pages. Returns categories and products in o
 
 | Param | Description |
 |-------|-------------|
-| `category_id` | Filter products to one category |
+| `category_id` | Filter products to that category **and all nested subcategories** |
 | `product_id` | Return a single product (`products` length 1) |
 | `sort` | `default` \| `name_asc` \| `name_desc` \| `price_asc` \| `price_desc` |
 | `min_price` | Minimum `base_price` |

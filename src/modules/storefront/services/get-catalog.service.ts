@@ -6,7 +6,7 @@ import type { Product } from '../../products/types/product.types.js'
 import type { ProductVariant } from '../../products/types/product-variant.types.js'
 import {
   buildCatalogCategoryTree,
-  collectCategoryIds,
+  collectSubtreeCategoryIds,
 } from '../lib/build-category-tree.js'
 import {
   isCatalogProductSoldOut,
@@ -98,7 +98,6 @@ export async function getCatalog(
     findActiveProductsByStoreId(storeId),
   ])
   const categories = buildCatalogCategoryTree(flatCategories)
-  const categoryIds = collectCategoryIds(categories)
 
   let products = filterByPrice(allProducts, query.min_price, query.max_price)
   products = sortProducts(products, query.sort)
@@ -116,11 +115,13 @@ export async function getCatalog(
   }
 
   if (query.category_id) {
-    const categoryExists = categoryIds.has(query.category_id)
-    if (!categoryExists) {
+    const allowed = collectSubtreeCategoryIds(categories, query.category_id)
+    if (!allowed) {
       throw new AppError(404, 'Category not found', 'CATEGORY_NOT_FOUND')
     }
-    products = products.filter((p) => p.category_id === query.category_id)
+    products = products.filter(
+      (p) => p.category_id != null && allowed.has(p.category_id)
+    )
   }
 
   return {

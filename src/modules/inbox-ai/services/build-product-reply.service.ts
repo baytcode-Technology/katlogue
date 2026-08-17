@@ -15,6 +15,8 @@ import {
   searchCatalogFromIntent,
 } from './catalog-search.service.js'
 import { checkMessageSafety } from './safety-filter.service.js'
+import { buildOrderReply } from './build-order-reply.service.js'
+import type { InboxAiChannel } from './conversation-history.service.js'
 
 export type ProductReplyResult = {
   primaryText: string
@@ -181,6 +183,8 @@ export async function buildProductReply(input: {
   customerText: string
   intent: ParsedCustomerIntent
   conversationHistory?: string | null
+  channel?: InboxAiChannel
+  customerPhone?: string | null
 }): Promise<ProductReplyResult> {
   const { store, customerText, intent } = input
   const homeUrl = getStoreHomeUrl(store.slug)
@@ -230,6 +234,30 @@ export async function buildProductReply(input: {
       facts: { storeName: store.name, homeUrl },
     })
     return { ...empty, primaryText: greeting }
+  }
+
+  if (intent.intent === 'order_status') {
+    if (input.channel !== 'whatsapp' || !input.customerPhone?.trim()) {
+      const whatsappRequired = await buildLocalizedReply({
+        customerLanguage: intent.customerLanguage,
+        customerMessage: customerText,
+        fallbackLanguage: store.ai_language,
+        customPrompt: ctx.customPrompt,
+        conversationHistory: ctx.conversationHistory,
+        template: 'order_whatsapp_required',
+        facts: { storeName: store.name, homeUrl },
+      })
+      return { ...empty, primaryText: whatsappRequired }
+    }
+
+    const orderReply = await buildOrderReply({
+      store,
+      intent,
+      customerPhone: input.customerPhone.trim(),
+      customerMessage: customerText,
+      conversationHistory: ctx.conversationHistory,
+    })
+    return { ...empty, primaryText: orderReply }
   }
 
   if (

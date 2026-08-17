@@ -6,8 +6,11 @@ export type CustomerIntent =
   | 'sku_lookup'
   | 'category_search'
   | 'image_request'
+  | 'order_status'
   | 'off_topic'
   | 'explicit'
+
+export type OrderScope = 'latest' | 'specific' | 'product' | null
 
 export type ParsedCustomerIntent = {
   intent: CustomerIntent
@@ -19,6 +22,9 @@ export type ParsedCustomerIntent = {
   sku: string | null
   categoryName: string | null
   wantsImage: boolean
+  orderNumber: string | null
+  orderProductHint: string | null
+  orderScope: OrderScope
   /** Set when message is off-topic due to language-capability questions */
   offTopicReason?: 'language_meta' | 'general' | null
 }
@@ -42,6 +48,9 @@ type LlmIntentResult = {
   sku?: string | null
   categoryName?: string | null
   wantsImage?: boolean
+  orderNumber?: string | null
+  orderProductHint?: string | null
+  orderScope?: OrderScope
 }
 
 const INTENT_SCHEMA = `You classify customer messages for a store WhatsApp/Instagram inbox.
@@ -64,7 +73,7 @@ Normalize product search terms to English for database lookup.
 
 Return JSON only:
 {
-  "intent": "greeting" | "product_search" | "sku_lookup" | "category_search" | "image_request" | "off_topic" | "explicit",
+  "intent": "greeting" | "product_search" | "sku_lookup" | "category_search" | "image_request" | "order_status" | "off_topic" | "explicit",
   "customerLanguage": "exact language name e.g. English, Hindi, Malayalam, Tamil, Punjabi, Arabic",
   "requestedItem": "product they want in English e.g. white shirt, or null",
   "searchQuery": "English product terms without color/size e.g. shirt",
@@ -72,12 +81,19 @@ Return JSON only:
   "size": "S, M, L, XL, or null",
   "sku": "SKU if mentioned or null",
   "categoryName": "English category e.g. shirts, pants, or null",
-  "wantsImage": true if they ask for photo/image
+  "wantsImage": true if they ask for photo/image,
+  "orderNumber": "order number e.g. JAN26-3 if mentioned, or null",
+  "orderProductHint": "product name in an order question e.g. shirt, or null",
+  "orderScope": "latest" | "specific" | "product" | null
 }
 
 Rules:
 - Any product availability, price, or shopping question = product_search (NOT off_topic), even with personal context.
-- Messages in any language about products = product_search.
+- order_status for: my/last/recent order, order status, tracking, shipped, delivery, payment status, where is my order — NOT product_search or off_topic.
+- "where is my shirt order" → order_status, orderScope: "product", orderProductHint: "shirt", searchQuery: "".
+- "status of order JAN26-5" → order_status, orderScope: "specific", orderNumber: "JAN26-5".
+- "my last order" → order_status, orderScope: "latest".
+- Messages in any language about products = product_search (unless clearly about an existing order).
 - off_topic for: "do you know Malayalam?", "can you speak Hindi?", reading PDFs/files, general knowledge, app/code questions, unrelated chat — NO shopping intent.
 - explicit only for sexual/violent/harassing content.`
 
@@ -89,6 +105,14 @@ const LANGUAGE_META_PATTERN =
 
 const OFF_TOPIC_PATTERN =
   /\b(read\s+(this\s+)?pdf|read\s+this\s+file|open\s+this\s+link|who\s+(built|made|created)\s+(this|the)\s+(app|website|bot)|what\s+is\s+ai|tell\s+me\s+a\s+joke|news\s+today)\b/i
+
+const ORDER_NUMBER_PATTERN = /\b([A-Z]{3}\d{2}-\d+)\b/i
+
+const ORDER_STATUS_PATTERN =
+  /\b(my\s+order|last\s+order|recent\s+order|order\s+status|order\s+update|where\s+is\s+(my\s+)?order|track(ing)?(\s+my\s+order|\s+number|\s+id)?|shipped|delivery\s+status|payment\s+status|order\s+number|order\s+no\.?|order\s+#)\b/i
+
+const ORDER_PRODUCT_PATTERN =
+  /\b(?:my|the|where\s+is)\s+(?:\w+\s+){0,3}order\b|\border\s+(?:for|with|of)\s+/i
 
 const MALAYALAM_SCRIPT = /[\u0D00-\u0D7F]/
 const TAMIL_SCRIPT = /[\u0B80-\u0BFF]/
@@ -207,6 +231,50 @@ function wantsImageFromText(text: string): boolean {
   return /\b(photo|image|picture|pic|send\s+me|show\s+me)\b/i.test(text)
 }
 
+export function extractOrderNumber(text: string): string | null {
+  const explicit = text.match(
+    /\b(?:order\s*(?:#|no\.?|number)?\s*[:#-]?\s*)([A-Z]{3}\d{2}-\d+)\b/i
+  )
+  if (explicit?.[1]) return explicit[1].toUpperCase()
+  const bare = text.match(ORDER_NUMBER_PATTERN)
+  return bare?.[1]?.toUpperCase() ?? null
+}
+
+export function isOrderStatusMessage(text: string): boolean {
+  return ORDER_STATUS_PATTERN.test(text.trim()) || extractOrderNumber(text) !== null
+}
+
+export function extractOrderProductHint(text: string): string | null {
+  const stripped = text
+    .replace(ORDER_NUMBER_PATTERN, ' ')
+    .replace(
+      /\b(my|last|recent|the|where|is|order|status|tracking|track|shipped|delivery|payment|update|number|no|for|with|of|a|an)\b/gi,
+      ' '
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  const category = extractCategory(stripped)
+  if (category) return category.replace(/s$/, '') || category
+
+  const words = stripped
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !/^\d+$/.test(w))
+  return words.length > 0 ? words.join(' ') : null
+}
+
+export function resolveOrderScope(
+  text: string,
+  orderNumber: string | null,
+  orderProductHint: string | null
+): OrderScope {
+  if (orderNumber) return 'specific'
+  if (/\b(last|recent|my)\s+order\b/i.test(text) && !orderProductHint) return 'latest'
+  if (orderProductHint && ORDER_PRODUCT_PATTERN.test(text)) return 'product'
+  if (isOrderStatusMessage(text)) return 'latest'
+  return null
+}
+
 function buildRequestedItem(
   searchQuery: string,
   color: string | null,
@@ -222,6 +290,7 @@ function buildRequestedItem(
 }
 
 function normalizeIntent(intent: CustomerIntent, hasProductSignals: boolean): CustomerIntent {
+  if (intent === 'order_status') return 'order_status'
   if (intent === 'off_topic' && hasProductSignals) return 'product_search'
   return intent
 }
@@ -257,11 +326,14 @@ function finalizeIntent(
         ? partial.customerLanguage.trim()
         : detectedLang,
     requestedItem,
-    searchQuery: partial.searchQuery.trim(),
+    searchQuery: partial.intent === 'order_status' ? '' : partial.searchQuery.trim(),
     color: partial.color?.trim() || null,
     size: partial.size?.trim()?.toUpperCase() || null,
     sku: partial.sku?.trim() || null,
     categoryName: partial.categoryName?.trim() || null,
+    orderNumber: partial.orderNumber?.trim()?.toUpperCase() || null,
+    orderProductHint: partial.orderProductHint?.trim() || null,
+    orderScope: partial.orderScope ?? null,
   }
 }
 
@@ -270,19 +342,32 @@ function fromLlmResult(parsed: LlmIntentResult, trimmed: string): ParsedCustomer
   const sizeFromText = extractSize(trimmed)
   const categoryFromText = extractCategory(trimmed)
   const skuFromText = extractSku(trimmed)
+  const orderNumberFromText = extractOrderNumber(trimmed)
+  const orderProductHintFromText = extractOrderProductHint(trimmed)
 
   const color = parsed.color?.trim() || colorFromText
   const size = parsed.size?.trim()?.toUpperCase() || sizeFromText
   const categoryName = parsed.categoryName?.trim() || categoryFromText
+  const orderNumber = parsed.orderNumber?.trim()?.toUpperCase() || orderNumberFromText
+  const orderProductHint = parsed.orderProductHint?.trim() || orderProductHintFromText
+  const intent = parsed.intent ?? 'product_search'
   const searchQuery =
-    parsed.searchQuery?.trim() ||
-    stripExtractedTerms(trimmed, color, size) ||
-    categoryName ||
-    ''
+    intent === 'order_status'
+      ? ''
+      : parsed.searchQuery?.trim() ||
+        stripExtractedTerms(trimmed, color, size) ||
+        categoryName ||
+        ''
+
+  const orderScope =
+    parsed.orderScope ??
+    (intent === 'order_status'
+      ? resolveOrderScope(trimmed, orderNumber, orderProductHint)
+      : null)
 
   return finalizeIntent(
     {
-      intent: parsed.intent ?? 'product_search',
+      intent,
       customerLanguage: parsed.customerLanguage ?? detectLanguageFromText(trimmed),
       requestedItem: parsed.requestedItem ?? null,
       searchQuery,
@@ -291,6 +376,9 @@ function fromLlmResult(parsed: LlmIntentResult, trimmed: string): ParsedCustomer
       sku: parsed.sku?.trim() || skuFromText,
       categoryName,
       wantsImage: parsed.wantsImage === true || wantsImageFromText(trimmed),
+      orderNumber,
+      orderProductHint,
+      orderScope,
     },
     trimmed
   )
@@ -314,6 +402,9 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         sku: null,
         categoryName: null,
         wantsImage: false,
+        orderNumber: null,
+        orderProductHint: null,
+        orderScope: null,
         offTopicReason: 'language_meta',
       },
       trimmed
@@ -331,6 +422,9 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         sku: null,
         categoryName: null,
         wantsImage: false,
+        orderNumber: null,
+        orderProductHint: null,
+        orderScope: null,
         offTopicReason: 'general',
       },
       trimmed
@@ -348,6 +442,31 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         sku: skuFromText,
         categoryName: null,
         wantsImage: false,
+        orderNumber: null,
+        orderProductHint: null,
+        orderScope: null,
+      },
+      trimmed
+    )
+  }
+
+  const orderNumberFromText = extractOrderNumber(trimmed)
+  if (isOrderStatusMessage(trimmed)) {
+    const orderProductHint = extractOrderProductHint(trimmed)
+    const orderScope = resolveOrderScope(trimmed, orderNumberFromText, orderProductHint)
+    return finalizeIntent(
+      {
+        intent: 'order_status',
+        customerLanguage: detectedLang,
+        searchQuery: '',
+        color: null,
+        size: null,
+        sku: null,
+        categoryName: null,
+        wantsImage: false,
+        orderNumber: orderNumberFromText,
+        orderProductHint,
+        orderScope,
       },
       trimmed
     )
@@ -364,6 +483,9 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         sku: skuFromText,
         categoryName: categoryFromText,
         wantsImage: wantsImageFromText(trimmed),
+        orderNumber: null,
+        orderProductHint: null,
+        orderScope: null,
       },
       trimmed
     )
@@ -382,6 +504,9 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
       sku: null,
       categoryName: categoryFromText,
       wantsImage: wantsImageFromText(trimmed),
+      orderNumber: null,
+      orderProductHint: null,
+      orderScope: null,
     },
     trimmed
   )
@@ -411,6 +536,9 @@ export async function parseCustomerIntent(
         sku: null,
         categoryName: null,
         wantsImage: false,
+        orderNumber: null,
+        orderProductHint: null,
+        orderScope: null,
         offTopicReason: 'general',
       },
       trimmed

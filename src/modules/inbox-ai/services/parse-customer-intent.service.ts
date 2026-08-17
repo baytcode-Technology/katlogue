@@ -7,8 +7,11 @@ export type CustomerIntent =
   | 'category_search'
   | 'image_request'
   | 'order_status'
+  | 'order_status'
   | 'off_topic'
   | 'explicit'
+
+export type OrderScope = 'latest' | 'specific' | 'product' | null
 
 export type OrderScope = 'latest' | 'specific' | 'product' | null
 
@@ -77,6 +80,7 @@ Normalize product search terms to English for database lookup.
 
 Return JSON only:
 {
+  "intent": "greeting" | "product_search" | "sku_lookup" | "category_search" | "image_request" | "order_status" | "off_topic" | "explicit",
   "intent": "greeting" | "product_search" | "sku_lookup" | "category_search" | "image_request" | "order_status" | "off_topic" | "explicit",
   "customerLanguage": "exact language name e.g. English, Hindi, Malayalam, Tamil, Punjabi, Arabic",
   "requestedItem": "product they want in English e.g. white shirt, or null",
@@ -314,6 +318,7 @@ function buildRequestedItem(
 
 function normalizeIntent(intent: CustomerIntent, hasProductSignals: boolean): CustomerIntent {
   if (intent === 'order_status') return 'order_status'
+  if (intent === 'order_status') return 'order_status'
   if (intent === 'off_topic' && hasProductSignals) return 'product_search'
   return intent
 }
@@ -354,6 +359,7 @@ function finalizeIntent(
         : detectedLang,
     requestedItem,
     searchQuery: partial.intent === 'order_status' ? '' : partial.searchQuery.trim(),
+    searchQuery: partial.intent === 'order_status' ? '' : partial.searchQuery.trim(),
     color: partial.color?.trim() || null,
     size: partial.size?.trim()?.toUpperCase() || null,
     sku: partial.sku?.trim() || null,
@@ -391,6 +397,18 @@ function fromLlmResult(parsed: LlmIntentResult, trimmed: string): ParsedCustomer
         stripExtractedTerms(trimmed, color, size) ||
         categoryName ||
         ''
+    intent === 'order_status'
+      ? ''
+      : parsed.searchQuery?.trim() ||
+        stripExtractedTerms(trimmed, color, size) ||
+        categoryName ||
+        ''
+
+  const orderScope =
+    parsed.orderScope ??
+    (intent === 'order_status'
+      ? resolveOrderScope(trimmed, orderNumber, orderProductHint)
+      : null)
 
   const orderScope =
     parsed.orderScope ??
@@ -400,6 +418,7 @@ function fromLlmResult(parsed: LlmIntentResult, trimmed: string): ParsedCustomer
 
   return finalizeIntent(
     {
+      intent,
       intent,
       customerLanguage: parsed.customerLanguage ?? detectLanguageFromText(trimmed),
       requestedItem: parsed.requestedItem ?? null,
@@ -440,6 +459,9 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         orderNumber: null,
         orderProductHint: null,
         orderScope: null,
+        orderNumber: null,
+        orderProductHint: null,
+        orderScope: null,
         offTopicReason: 'language_meta',
       },
       trimmed
@@ -457,6 +479,9 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         sku: null,
         categoryName: null,
         wantsImage: false,
+        orderNumber: null,
+        orderProductHint: null,
+        orderScope: null,
         orderNumber: null,
         orderProductHint: null,
         orderScope: null,
@@ -523,6 +548,9 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         orderNumber: null,
         orderProductHint: null,
         orderScope: null,
+        orderNumber: null,
+        orderProductHint: null,
+        orderScope: null,
       },
       trimmed
     )
@@ -541,6 +569,9 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
       sku: null,
       categoryName: categoryFromText,
       wantsImage: wantsImageFromText(trimmed),
+      orderNumber: null,
+      orderProductHint: null,
+      orderScope: null,
       orderNumber: null,
       orderProductHint: null,
       orderScope: null,
@@ -573,6 +604,9 @@ export async function parseCustomerIntent(
         sku: null,
         categoryName: null,
         wantsImage: false,
+        orderNumber: null,
+        orderProductHint: null,
+        orderScope: null,
         orderNumber: null,
         orderProductHint: null,
         orderScope: null,

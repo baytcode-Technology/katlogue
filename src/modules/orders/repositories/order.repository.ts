@@ -429,3 +429,87 @@ export async function findOrderByIdAndCheckoutToken(
   return (data as Order | null) ?? null
 }
 
+export type OrderWithDetails = Order & { items: OrderItem[]; payment: Payment | null }
+
+async function attachOrderDetails(orders: Order[]): Promise<OrderWithDetails[]> {
+  if (orders.length === 0) return []
+
+  const orderIds = orders.map((order) => order.id)
+  const items = await findOrderItemsByOrderIds(orderIds)
+  const itemsByOrder = new Map<number, OrderItem[]>()
+  for (const item of items) {
+    const list = itemsByOrder.get(item.order_id) ?? []
+    list.push(item)
+    itemsByOrder.set(item.order_id, list)
+  }
+
+  const { data: paymentRows, error: paymentError } = await supabaseAdmin
+    .from('payments')
+    .select('*')
+    .in('order_id', orderIds)
+    .order('created_at', { ascending: false })
+
+  if (paymentError) {
+    throw new AppError(400, paymentError.message, 'PAYMENT_LOOKUP_FAILED')
+  }
+
+  const paymentByOrder = new Map<number, Payment>()
+  for (const row of paymentRows ?? []) {
+    const payment = row as Payment
+    if (!paymentByOrder.has(payment.order_id)) {
+      paymentByOrder.set(payment.order_id, payment)
+    }
+  }
+
+  return orders.map((order) => ({
+    ...order,
+    items: itemsByOrder.get(order.id) ?? [],
+    payment: paymentByOrder.get(order.id) ?? null,
+  }))
+}
+
+export async function findRecentOrdersForCustomer(
+  storeId: number,
+  customerId: number,
+  limit = 5
+): Promise<OrderWithDetails[]> {
+  const { data, error } = await supabaseAdmin
+    .from('orders')
+    .select('*')
+    .eq('store_id', storeId)
+    .eq('customer_id', customerId)
+    .neq('source', 'razorpay_setup_test')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    throw new AppError(400, error.message, 'ORDER_LIST_FAILED')
+  }
+
+  return attachOrderDetails((data ?? []) as Order[])
+}
+
+export async function findOrderByNumberForCustomer(
+  storeId: number,
+  customerId: number,
+  orderNumber: string
+): Promise<OrderWithDetails | null> {
+  const { data, error } = await supabaseAdmin
+    .from('orders')
+    .select('*')
+    .eq('store_id', storeId)
+    .eq('customer_id', customerId)
+    .eq('order_number', orderNumber)
+    .neq('source', 'razorpay_setup_test')
+    .maybeSingle()
+
+  if (error) {
+    throw new AppError(400, error.message, 'ORDER_LOOKUP_FAILED')
+  }
+
+  if (!data) return null
+
+  const [withDetails] = await attachOrderDetails([data as Order])
+  return withDetails ?? null
+}
+

@@ -7,9 +7,11 @@ function multerErrorMessage(err: multer.MulterError): string {
     case 'LIMIT_FILE_SIZE':
       return 'Each image must be 5MB or smaller'
     case 'LIMIT_FILE_COUNT':
-      return 'Maximum 10 images per upload'
+      return 'Maximum 15 images per upload'
     case 'LIMIT_UNEXPECTED_FILE':
-      return 'Use field name "images" for file uploads'
+      return err.field === 'images'
+        ? 'Maximum 15 images per upload'
+        : 'Use field name "images" for file uploads'
     default:
       return err.message
   }

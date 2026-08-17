@@ -25,6 +25,19 @@ export type Product = {
 
 import type { CreateProductVariantInput, ProductVariant } from './product-variant.types.js'
 
+/** Aggregated variant stock for product list cards. */
+export type VariantStockSummary = {
+  count: number
+  non_inventory_count: number
+  sold_out_count: number
+  min_qty: number
+  max_qty: number
+}
+
+export type ProductListItem = Product & {
+  variant_summary: VariantStockSummary | null
+}
+
 export type CreateProductInput = {
   store_id: number
   name: string

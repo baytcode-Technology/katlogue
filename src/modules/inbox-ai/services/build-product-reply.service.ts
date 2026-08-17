@@ -17,8 +17,6 @@ import {
 import { checkMessageSafety } from './safety-filter.service.js'
 import { buildOrderReply } from './build-order-reply.service.js'
 import type { InboxAiChannel } from './conversation-history.service.js'
-import { buildOrderReply } from './build-order-reply.service.js'
-import type { InboxAiChannel } from './conversation-history.service.js'
 
 export type ProductReplyResult = {
   primaryText: string

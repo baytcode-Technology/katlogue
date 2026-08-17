@@ -145,8 +145,10 @@ export function buildOpenApiDocument() {
             images: {
               type: 'array',
               minItems: 1,
+              maxItems: 15,
               items: { type: 'string', format: 'uri' },
-              description: 'At least one image URL (from POST /api/uploads/product-images)',
+              description:
+                '1 to 15 image URLs (from POST /api/uploads/product-images)',
             },
             thumbnail_url: {
               type: 'string',
@@ -1325,8 +1327,10 @@ export function buildOpenApiDocument() {
                     store_id: { $ref: '#/components/schemas/EntityId' },
                     images: {
                       type: 'array',
+                      maxItems: 15,
                       items: { type: 'string', format: 'binary' },
-                      description: 'One or more image files (JPEG, PNG, WebP, GIF; max 5MB each)',
+                      description:
+                        'One to 15 image files (JPEG, PNG, WebP, GIF; max 5MB each)',
                     },
                   },
                 },

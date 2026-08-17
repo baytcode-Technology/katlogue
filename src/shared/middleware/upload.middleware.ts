@@ -36,7 +36,7 @@ export const productImagesUpload = multer({
     }
     cb(null, true)
   },
-}).array('images', 10)
+}).array('images', 15)
 
 export const paymentProofUpload = multer({
   storage,

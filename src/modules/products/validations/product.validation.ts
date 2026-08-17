@@ -40,7 +40,8 @@ export const createProductSchema = z.object({
   mark_as_non_inventory: z.boolean().default(false),
   images: z
     .array(z.string().url('Each image must be a valid URL'))
-    .min(1, 'At least one product image is required'),
+    .min(1, 'At least one product image is required')
+    .max(15, 'Maximum 15 product images'),
   thumbnail_url: z.string().url('Thumbnail URL is required'),
   status: productStatusSchema.default('active'),
   is_active: z.boolean().optional(),
@@ -77,7 +78,11 @@ export const updateProductSchema = z
     stock_qty: z.coerce.number().int().min(0, 'Stock quantity must be 0 or greater').optional(),
     mark_as_sold: z.boolean().optional(),
     mark_as_non_inventory: z.boolean().optional(),
-    images: z.array(z.string().url('Each image must be a valid URL')).optional(),
+    images: z
+      .array(z.string().url('Each image must be a valid URL'))
+      .min(1, 'At least one product image is required')
+      .max(15, 'Maximum 15 product images')
+      .optional(),
     thumbnail_url: optionalUrl.optional(),
     status: productStatusSchema.optional(),
     is_active: z.boolean().optional(),

@@ -13,6 +13,11 @@ export type ShopOwnerTemplateTask =
   | 'refusal'
   | 'product_intro'
   | 'also_found_header'
+  | 'order_found'
+  | 'order_clarify'
+  | 'order_not_found'
+  | 'order_unverified'
+  | 'order_whatsapp_required'
 
 const TEMPLATE_TASKS: Record<ShopOwnerTemplateTask, string> = {
   greeting:
@@ -25,6 +30,16 @@ const TEMPLATE_TASKS: Record<ShopOwnerTemplateTask, string> = {
     'One very short human line before product details (e.g. "Here it is" / "ഇതാ"). Do NOT repeat product name, price, color, or link — those come after your line.',
   also_found_header:
     'One very short line before a list of more products (e.g. "We have more options" / "കൂടുതൽ ഉണ്ട്"). Do NOT list products yourself.',
+  order_found:
+    'Share the order status from facts in a friendly, concise way. Include order number, items, total, payment, fulfillment, and tracking if present. Do NOT change any numbers, dates, statuses, or tracking values.',
+  order_clarify:
+    'Ask which order they mean. List the order numbers from facts only. Keep it short.',
+  order_not_found:
+    'Say we could not find any order linked to this WhatsApp number. Suggest they contact the store or place an order. Do NOT invent order details.',
+  order_unverified:
+    'Say you could not verify that order for this WhatsApp number. Do NOT confirm whether the order exists. Do NOT share any order details.',
+  order_whatsapp_required:
+    'Say order status can only be checked on WhatsApp using the phone number used when placing the order. Ask them to message from that number.',
 }
 
 export function buildShopOwnerSystemPrompt(
@@ -54,8 +69,9 @@ LANGUAGE (most important):
 ${messageContext}${historyContext}
 SCOPE — store shopping only:
 - Help find products, colors, sizes, prices, SKUs at THIS store.
+- Help with order status when order facts are provided below — use ONLY those facts, never invent orders.
 - If asked about PDFs, files, news, politics, app/code, or anything unrelated — briefly redirect: "What product do you need from our shop?"
-- Never invent product names, prices, or URLs — use ONLY the facts below.
+- Never invent product names, prices, URLs, order numbers, or statuses — use ONLY the facts below.
 
 STYLE:
 - Short, casual, friendly — like texting a customer back from the shop counter.

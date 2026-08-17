@@ -12,6 +12,8 @@ export type LocalizedReplyFacts = {
   requestedItem?: string | null
   availableProducts?: string[]
   refusalReason?: 'explicit' | 'code_request' | 'off_topic' | 'language_meta'
+  orderFacts?: string | null
+  clarifyOrderNumbers?: string[]
 }
 
 const FALLBACK_ENGLISH: Record<LocalizedReplyTemplate, (facts: LocalizedReplyFacts) => string> = {
@@ -38,6 +40,17 @@ const FALLBACK_ENGLISH: Record<LocalizedReplyTemplate, (facts: LocalizedReplyFac
   },
   product_intro: () => `Here it is:`,
   also_found_header: () => `We have more options too:`,
+  order_found: (f) => f.orderFacts?.trim() || `Here is your order status.`,
+  order_clarify: (f) => {
+    const nums = f.clarifyOrderNumbers?.join(', ') ?? 'your recent orders'
+    return `Which order do you mean? We found multiple: ${nums}. Please share the order number.`
+  },
+  order_not_found: (f) =>
+    `We couldn't find any order linked to this WhatsApp number. Browse or place an order here: ${f.homeUrl}`,
+  order_unverified: () =>
+    `Sorry, I couldn't verify that order for this WhatsApp number. Please check the order number or contact us.`,
+  order_whatsapp_required: (f) =>
+    `Order status can only be checked on WhatsApp using the phone number you used when placing the order. Please message us from that number, or browse here: ${f.homeUrl}`,
 }
 
 function buildFactsBlock(template: LocalizedReplyTemplate, facts: LocalizedReplyFacts): string {
@@ -47,6 +60,10 @@ function buildFactsBlock(template: LocalizedReplyTemplate, facts: LocalizedReply
     lines.push(`Items we DO have: ${facts.availableProducts.join(', ')}`)
   }
   if (facts.refusalReason) lines.push(`Reason: ${facts.refusalReason}`)
+  if (facts.orderFacts?.trim()) lines.push(`Order facts:\n${facts.orderFacts.trim()}`)
+  if (facts.clarifyOrderNumbers?.length) {
+    lines.push(`Order numbers to mention: ${facts.clarifyOrderNumbers.join(', ')}`)
+  }
   return lines.join('\n')
 }
 

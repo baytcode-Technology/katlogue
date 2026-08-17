@@ -4,8 +4,14 @@
  */
 import assert from 'node:assert/strict'
 import {
+  phoneTail,
+  toCanonicalWhatsAppNumber,
+} from '../../../shared/utils/phone.js'
+import {
   extractOrderNumber,
+  extractOrderNumberHint,
   extractOrderProductHint,
+  extractPhoneFromText,
   isOrderStatusMessage,
   resolveOrderScope,
 } from '../services/parse-customer-intent.service.js'
@@ -14,7 +20,6 @@ import {
   formatOrderStatusLabel,
   formatPaymentProviderLabel,
   parseOrderItemSnapshot,
-  scoreOrderForHint,
 } from '../services/build-order-reply.service.js'
 import type { OrderWithDetails } from '../../orders/repositories/order.repository.js'
 
@@ -30,6 +35,18 @@ function test(name: string, fn: () => void): void {
   }
 }
 
+console.log('\n=== Phone identity ===')
+
+test('country-code and local numbers share the same tail', () => {
+  assert.equal(phoneTail('917736230788'), phoneTail('7736230788'))
+  assert.equal(phoneTail('+91 77362 30788'), '7736230788')
+})
+
+test('canonicalizes 10-digit Indian numbers', () => {
+  assert.equal(toCanonicalWhatsAppNumber('7736230788', 'India'), '917736230788')
+  assert.equal(toCanonicalWhatsAppNumber('917736230788', 'India'), '917736230788')
+})
+
 console.log('\n=== Order intent extraction ===')
 
 test('extracts monthly order number', () => {
@@ -37,8 +54,15 @@ test('extracts monthly order number', () => {
   assert.equal(extractOrderNumber('order #FEB26-12'), 'FEB26-12')
 })
 
-test('detects order status phrases', () => {
+test('extracts bare order suffix', () => {
+  assert.equal(extractOrderNumberHint('order 88'), '88')
+  assert.equal(extractOrderNumberHint('order 10 please'), '10')
+  assert.equal(extractOrderNumberHint('status of order JAN26-5'), null)
+})
+
+test('detects order status phrases including Manglish', () => {
   assert.equal(isOrderStatusMessage('where is my order'), true)
+  assert.equal(isOrderStatusMessage('order evide'), true)
   assert.equal(isOrderStatusMessage('do you have blue shirts'), false)
 })
 
@@ -51,6 +75,12 @@ test('resolves order scope', () => {
 test('extracts product hint from order question', () => {
   const hint = extractOrderProductHint('where is my shirt order')
   assert.ok(hint?.includes('shirt'))
+})
+
+test('extracts typed phone and ignores order numbers', () => {
+  assert.equal(extractPhoneFromText('I ordered on 7736230788'), '7736230788')
+  assert.equal(extractPhoneFromText('status of order JAN26-5'), null)
+  assert.equal(extractPhoneFromText('order 88'), null)
 })
 
 console.log('\n=== Status and provider formatting ===')
@@ -66,7 +96,7 @@ test('formats payment provider labels', () => {
   assert.equal(formatPaymentProviderLabel('razorpay'), 'Razorpay')
 })
 
-console.log('\n=== Snapshot parsing and product-hint scoring ===')
+console.log('\n=== Snapshot parsing ===')
 
 test('parses order item snapshot', () => {
   const parsed = parseOrderItemSnapshot({
@@ -105,7 +135,14 @@ function mockOrder(overrides: Partial<OrderWithDetails> & Pick<OrderWithDetails,
     total: 500,
     coupon_id: null,
     coupon_code: null,
-    shipping_address: {},
+    shipping_address: {
+      name: 'Nuaim Panackal',
+      address: 'Mannancherry',
+      city: 'Alappuzha',
+      district: 'Alappuzha',
+      state: 'kerala',
+      postcode: '688538',
+    },
     shipping_method: 'Standard',
     tracking_number: 'TRK123',
     notes: null,
@@ -133,31 +170,11 @@ function mockOrder(overrides: Partial<OrderWithDetails> & Pick<OrderWithDetails,
   }
 }
 
-test('scores product hint against orders', () => {
-  const order = mockOrder({
-    order_number: 'JAN26-1',
-    items: [
-      {
-        id: 1,
-        order_id: 1,
-        product_id: 1,
-        variant_id: null,
-        quantity: 1,
-        unit_price: 500,
-        total_price: 500,
-        snapshot: { product: { name: 'White T-Shirt' } },
-      },
-    ],
-  })
-  assert.ok(scoreOrderForHint(order, 't-shirt') > 0)
-  assert.equal(scoreOrderForHint(order, 'jeans'), 0)
-})
+console.log('\n=== Facts block redaction and details ===')
 
-console.log('\n=== Facts block redaction ===')
-
-test('facts block excludes secrets', () => {
+test('facts block includes name, address, qty, prices and excludes secrets', () => {
   const order = mockOrder({
-    order_number: 'JAN26-9',
+    order_number: 'AUG26-10',
     items: [
       {
         id: 1,
@@ -173,7 +190,10 @@ test('facts block excludes secrets', () => {
   })
 
   const facts = formatOrderFactsBlock(order, 'INR')
-  assert.match(facts, /JAN26-9/)
+  assert.match(facts, /AUG26-10/)
+  assert.match(facts, /Recipient: Nuaim Panackal/)
+  assert.match(facts, /Address: Mannancherry/)
+  assert.match(facts, /x2/)
   assert.match(facts, /Tracking: TRK123/)
   assert.match(facts, /Payment method: COD/)
   assert.doesNotMatch(facts, /secret-token/)
@@ -181,16 +201,6 @@ test('facts block excludes secrets', () => {
   assert.doesNotMatch(facts, /secret-payment-id/)
   assert.doesNotMatch(facts, /secret\/proof/)
   assert.doesNotMatch(facts, /admin_notes/)
-})
-
-console.log('\n=== Privacy messaging (static copy) ===')
-
-test('unverified and not-found use distinct safe messages', () => {
-  const unverified =
-    "Sorry, I couldn't verify that order for this WhatsApp number. Please check the order number or contact us."
-  const notFoundPrefix = "We couldn't find any order linked to this WhatsApp number"
-  assert.ok(unverified.includes('verify'))
-  assert.ok(notFoundPrefix.includes('linked to this WhatsApp'))
 })
 
 if (failed > 0) {

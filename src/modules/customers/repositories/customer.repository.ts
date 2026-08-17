@@ -1,6 +1,11 @@
 import { supabaseAdmin } from '../../../config/supabase.js'
 import { AppError } from '../../../shared/errors/app.error.js'
-import { normalizeWhatsAppNumber } from '../../../shared/utils/phone.js'
+import {
+  isPlaceholderNumber,
+  normalizeWhatsAppNumber,
+  phoneTail,
+  toCanonicalWhatsAppNumber,
+} from '../../../shared/utils/phone.js'
 import type { StorefrontShippingAddress } from '../../../shared/validations/shipping-address.validation.js'
 import {
   mergeShippingAddressIfNew,
@@ -36,7 +41,37 @@ export async function findCustomerByPhone(
     throw new AppError(400, error.message, 'CUSTOMER_LOOKUP_FAILED')
   }
 
-  return data ? mapCustomerRow(data as Record<string, unknown>) : null
+  if (data) return mapCustomerRow(data as Record<string, unknown>)
+
+  const variants = await findCustomersByPhoneVariants(storeId, phone)
+  return variants[0] ?? null
+}
+
+export async function findCustomersByPhoneVariants(
+  storeId: number,
+  phone: string
+): Promise<Customer[]> {
+  if (isPlaceholderNumber(phone)) return []
+  const tail = phoneTail(phone)
+  if (tail.length < 8) return []
+
+  const { data, error } = await supabaseAdmin
+    .from('customers')
+    .select('*')
+    .eq('store_id', storeId)
+    .like('whatsapp_number', `%${tail}`)
+
+  if (error) {
+    throw new AppError(400, error.message, 'CUSTOMER_LOOKUP_FAILED')
+  }
+
+  return (data ?? [])
+    .map((row) => mapCustomerRow(row as Record<string, unknown>))
+    .filter((customer) => {
+      if (isPlaceholderNumber(customer.whatsapp_number)) return false
+      return phoneTail(customer.whatsapp_number) === tail
+    })
+    .sort((a, b) => b.total_orders - a.total_orders || a.id - b.id)
 }
 
 export async function resolveStorefrontCustomer(input: {
@@ -46,11 +81,12 @@ export async function resolveStorefrontCustomer(input: {
   email?: string
   name?: string
 }): Promise<Customer> {
-  const normalizedPhone = normalizeWhatsAppNumber(input.phone)
+  const normalizedPhone = toCanonicalWhatsAppNumber(input.phone)
   const savedAddress = toSavedShippingAddress(input.shippingAddress, normalizedPhone)
   const displayName = input.name?.trim() || input.shippingAddress.name.trim()
 
-  const existing = await findCustomerByPhone(input.storeId, normalizedPhone)
+  const existing =
+    (await findCustomersByPhoneVariants(input.storeId, normalizedPhone))[0] ?? null
 
   if (existing) {
     const shipping_addresses = mergeShippingAddressIfNew(
@@ -60,6 +96,7 @@ export async function resolveStorefrontCustomer(input: {
     const updates: Record<string, unknown> = {
       last_seen_at: new Date().toISOString(),
       shipping_addresses,
+      whatsapp_number: normalizedPhone,
     }
     if (displayName) updates.name = displayName
     if (input.email !== undefined) updates.email = input.email
@@ -136,47 +173,29 @@ export async function findOrCreateByWhatsApp(
   whatsappNumber: string,
   profile: UpsertCustomerInput = {}
 ): Promise<Customer> {
-  const normalized = normalizeWhatsAppNumber(whatsappNumber)
-
-  const { data: existing, error: findError } = await supabaseAdmin
-    .from('customers')
-    .select('*')
-    .eq('store_id', storeId)
-    .eq('whatsapp_number', normalized)
-    .maybeSingle()
-
-  if (findError) {
-    throw new AppError(400, findError.message, 'CUSTOMER_LOOKUP_FAILED')
-  }
+  const normalized = toCanonicalWhatsAppNumber(whatsappNumber)
+  const existing = (await findCustomersByPhoneVariants(storeId, normalized))[0] ?? null
 
   if (existing) {
     const updates: Record<string, unknown> = {
       last_seen_at: new Date().toISOString(),
+      whatsapp_number: normalized,
     }
     if (profile.name !== undefined) updates.name = profile.name
     if (profile.email !== undefined) updates.email = profile.email
     if (profile.address !== undefined) updates.address = profile.address
 
-    if (Object.keys(updates).length > 1) {
-      const { data: updated, error: updateError } = await supabaseAdmin
-        .from('customers')
-        .update(updates)
-        .eq('id', existing.id)
-        .select()
-        .single()
-
-      if (updateError) {
-        throw new AppError(400, updateError.message, 'CUSTOMER_UPDATE_FAILED')
-      }
-      return mapCustomerRow(updated as Record<string, unknown>)
-    }
-
-    await supabaseAdmin
+    const { data: updated, error: updateError } = await supabaseAdmin
       .from('customers')
-      .update({ last_seen_at: updates.last_seen_at })
+      .update(updates)
       .eq('id', existing.id)
+      .select()
+      .single()
 
-    return mapCustomerRow(existing as Record<string, unknown>)
+    if (updateError) {
+      throw new AppError(400, updateError.message, 'CUSTOMER_UPDATE_FAILED')
+    }
+    return mapCustomerRow(updated as Record<string, unknown>)
   }
 
   const { data: created, error: insertError } = await supabaseAdmin

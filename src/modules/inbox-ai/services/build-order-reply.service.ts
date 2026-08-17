@@ -1,12 +1,17 @@
 import * as customerRepository from '../../customers/repositories/customer.repository.js'
 import {
-  findOrderByNumberForCustomer,
-  findRecentOrdersForCustomer,
+  findOrderByNumberForCustomers,
+  findOrdersByNumberSuffixForCustomers,
+  findRecentOrdersByShippingPhone,
+  findRecentOrdersForCustomers,
+  mergeOrderDetails,
   type OrderWithDetails,
 } from '../../orders/repositories/order.repository.js'
 import type { OrderItem } from '../../orders/types/order.types.js'
 import type { Store } from '../../stores/types/store.types.js'
 import { formatMoney } from '../../../shared/utils/storefront.js'
+import { phoneLookupVariants, phoneTail } from '../../../shared/utils/phone.js'
+import { allowTypedPhoneLookup } from '../typed-phone-limit.js'
 import { buildLocalizedReply } from './build-localized-reply.service.js'
 import { getStoreHomeUrl } from './catalog-search.service.js'
 import type { ParsedCustomerIntent } from './parse-customer-intent.service.js'
@@ -84,7 +89,25 @@ function formatOrderDate(iso: string): string {
   return `${date} ${time}`
 }
 
+function readAddressField(addr: Record<string, unknown>, key: string): string | null {
+  const value = addr[key]
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+export function formatRecipientAddress(addr: Record<string, unknown> | null | undefined): {
+  name: string | null
+  address: string | null
+} {
+  if (!addr || typeof addr !== 'object') return { name: null, address: null }
+  const name = readAddressField(addr, 'name')
+  const parts = ['address', 'city', 'district', 'state', 'postcode']
+    .map((key) => readAddressField(addr, key))
+    .filter((part): part is string => Boolean(part))
+  return { name, address: parts.length ? parts.join(', ') : null }
+}
+
 export function formatOrderFactsBlock(order: OrderWithDetails, currency: string): string {
+  const { name, address } = formatRecipientAddress(order.shipping_address)
   const lines: string[] = [
     `Order number: ${order.order_number}`,
     `Placed: ${formatOrderDate(order.created_at)}`,
@@ -105,12 +128,15 @@ export function formatOrderFactsBlock(order: OrderWithDetails, currency: string)
     lines.push(`Tracking: ${order.tracking_number.trim()}`)
   }
 
+  if (name) lines.push(`Recipient: ${name}`)
+  if (address) lines.push(`Address: ${address}`)
+
   lines.push('Items:')
   for (const item of order.items) {
     const { productName, variantName } = parseOrderItemSnapshot(item)
     const title = variantName ? `${productName} (${variantName})` : productName
     lines.push(
-      `- ${title} x${item.quantity} — ${formatMoney(item.total_price, currency)}`
+      `- ${title} x${item.quantity} @ ${formatMoney(item.unit_price, currency)} = ${formatMoney(item.total_price, currency)}`
     )
   }
 
@@ -118,85 +144,77 @@ export function formatOrderFactsBlock(order: OrderWithDetails, currency: string)
   return lines.join('\n')
 }
 
-export function scoreOrderForHint(order: OrderWithDetails, hint: string): number {
-  const normalizedHint = hint.toLowerCase().trim()
-  if (!normalizedHint) return 0
-
-  let score = 0
-  for (const item of order.items) {
-    const { productName, variantName } = parseOrderItemSnapshot(item)
-    const haystack = `${productName} ${variantName ?? ''}`.toLowerCase()
-    if (haystack.includes(normalizedHint)) score += 10
-    for (const word of normalizedHint.split(/\s+/)) {
-      if (word.length > 2 && haystack.includes(word)) score += 3
-    }
-  }
-  return score
+function formatOrdersFacts(orders: OrderWithDetails[], currency: string): string {
+  if (orders.length === 0) return 'No matching orders found for this WhatsApp number.'
+  return orders
+    .map((order, index) => `--- Order ${index + 1} ---\n${formatOrderFactsBlock(order, currency)}`)
+    .join('\n\n')
 }
 
-function pickOrderByProductHint(
-  orders: OrderWithDetails[],
-  hint: string
-): { kind: 'found'; order: OrderWithDetails } | { kind: 'clarify'; orderNumbers: string[] } | { kind: 'none' } {
-  const scored = orders
-    .map((order) => ({ order, score: scoreOrderForHint(order, hint) }))
-    .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score)
+async function collectOrders(input: {
+  store: Store
+  customerPhone: string
+  intent: ParsedCustomerIntent
+  conversationId?: number | null
+}): Promise<OrderWithDetails[]> {
+  const { store, customerPhone, intent } = input
+  const phones = [customerPhone]
+  const trustedTail = phoneTail(customerPhone)
 
-  if (scored.length === 0) return { kind: 'none' }
-
-  const topScore = scored[0].score
-  const topMatches = scored.filter((entry) => entry.score === topScore)
-
-  if (topMatches.length === 1 && topScore >= 3) {
-    return { kind: 'found', order: topMatches[0].order }
-  }
-
-  if (topMatches.length > 1) {
-    return {
-      kind: 'clarify',
-      orderNumbers: topMatches.map((entry) => entry.order.order_number),
+  if (intent.typedPhone) {
+    const typedTail = phoneTail(intent.typedPhone)
+    const allowed =
+      input.conversationId == null
+        ? Boolean(typedTail)
+        : allowTypedPhoneLookup(store.id, input.conversationId, typedTail, trustedTail)
+    if (allowed && typedTail && typedTail !== trustedTail) {
+      phones.push(intent.typedPhone)
     }
   }
 
-  return { kind: 'none' }
-}
+  const customers = (
+    await Promise.all(
+      phones.map((phone) => customerRepository.findCustomersByPhoneVariants(store.id, phone))
+    )
+  ).flat()
 
-type ReplyContext = {
-  customerMessage?: string
-  conversationHistory?: string | null
-  customPrompt?: string | null
-}
+  const seenCustomer = new Set<number>()
+  const customerIds: number[] = []
+  for (const customer of customers) {
+    if (seenCustomer.has(customer.id)) continue
+    seenCustomer.add(customer.id)
+    customerIds.push(customer.id)
+  }
 
-async function buildOrderTemplateReply(
-  store: Store,
-  intent: ParsedCustomerIntent,
-  template:
-    | 'order_found'
-    | 'order_clarify'
-    | 'order_not_found'
-    | 'order_unverified',
-  facts: {
-    orderFacts?: string
-    clarifyOrderNumbers?: string[]
-  },
-  ctx: ReplyContext
-): Promise<string> {
-  const homeUrl = getStoreHomeUrl(store.slug)
-  return buildLocalizedReply({
-    customerLanguage: intent.customerLanguage,
-    customerMessage: ctx.customerMessage,
-    fallbackLanguage: store.ai_language,
-    customPrompt: ctx.customPrompt ?? store.ai_system_prompt,
-    conversationHistory: ctx.conversationHistory,
-    template,
-    facts: {
-      storeName: store.name,
-      homeUrl,
-      orderFacts: facts.orderFacts ?? null,
-      clarifyOrderNumbers: facts.clarifyOrderNumbers,
-    },
-  })
+  const variants = phones.flatMap((phone) => phoneLookupVariants(phone, store.country))
+  const groups: OrderWithDetails[][] = []
+
+  if (customerIds.length > 0) {
+    groups.push(await findRecentOrdersForCustomers(store.id, customerIds, 8))
+
+    if (intent.orderNumber) {
+      const exact = await findOrderByNumberForCustomers(
+        store.id,
+        customerIds,
+        intent.orderNumber
+      )
+      if (exact) groups.push([exact])
+    }
+
+    if (intent.orderNumberHint) {
+      groups.push(
+        await findOrdersByNumberSuffixForCustomers(
+          store.id,
+          customerIds,
+          intent.orderNumberHint
+        )
+      )
+    }
+  }
+
+  groups.push(await findRecentOrdersByShippingPhone(store.id, variants, 8))
+
+  return mergeOrderDetails(groups)
 }
 
 export async function buildOrderReply(input: {
@@ -205,78 +223,42 @@ export async function buildOrderReply(input: {
   customerPhone: string
   customerMessage?: string
   conversationHistory?: string | null
+  conversationId?: number | null
 }): Promise<string> {
   const { store, intent, customerPhone } = input
-  const ctx: ReplyContext = {
-    customerMessage: input.customerMessage,
-    conversationHistory: input.conversationHistory,
-    customPrompt: store.ai_system_prompt,
-  }
-
-  const customer = await customerRepository.findCustomerByPhone(store.id, customerPhone)
-  if (!customer) {
-    return buildOrderTemplateReply(store, intent, 'order_not_found', {}, ctx)
-  }
-
-  const scope = intent.orderScope ?? 'latest'
-  const currency = store.currency
-
-  if (scope === 'specific' && intent.orderNumber) {
-    const order = await findOrderByNumberForCustomer(
-      store.id,
-      customer.id,
-      intent.orderNumber
-    )
-    if (!order) {
-      return buildOrderTemplateReply(store, intent, 'order_unverified', {}, ctx)
-    }
-    return buildOrderTemplateReply(
-      store,
-      intent,
-      'order_found',
-      { orderFacts: formatOrderFactsBlock(order, currency) },
-      ctx
-    )
-  }
-
-  if (scope === 'product' && intent.orderProductHint) {
-    const recent = await findRecentOrdersForCustomer(store.id, customer.id, 5)
-    if (recent.length === 0) {
-      return buildOrderTemplateReply(store, intent, 'order_not_found', {}, ctx)
-    }
-
-    const match = pickOrderByProductHint(recent, intent.orderProductHint)
-    if (match.kind === 'found') {
-      return buildOrderTemplateReply(
-        store,
-        intent,
-        'order_found',
-        { orderFacts: formatOrderFactsBlock(match.order, currency) },
-        ctx
-      )
-    }
-    if (match.kind === 'clarify') {
-      return buildOrderTemplateReply(
-        store,
-        intent,
-        'order_clarify',
-        { clarifyOrderNumbers: match.orderNumbers },
-        ctx
-      )
-    }
-    return buildOrderTemplateReply(store, intent, 'order_not_found', {}, ctx)
-  }
-
-  const recent = await findRecentOrdersForCustomer(store.id, customer.id, 1)
-  if (recent.length === 0) {
-    return buildOrderTemplateReply(store, intent, 'order_not_found', {}, ctx)
-  }
-
-  return buildOrderTemplateReply(
+  const homeUrl = getStoreHomeUrl(store.slug)
+  const orders = await collectOrders({
     store,
+    customerPhone,
     intent,
-    'order_found',
-    { orderFacts: formatOrderFactsBlock(recent[0], currency) },
-    ctx
-  )
+    conversationId: input.conversationId,
+  })
+
+  const hints = [
+    intent.orderNumber ? `requested order number: ${intent.orderNumber}` : null,
+    intent.orderNumberHint ? `requested order suffix: ${intent.orderNumberHint}` : null,
+    intent.orderProductHint ? `product hint: ${intent.orderProductHint}` : null,
+    intent.orderScope ? `scope hint: ${intent.orderScope}` : null,
+  ]
+    .filter(Boolean)
+    .join('; ')
+
+  const factsHeader = hints ? `Lookup hints: ${hints}\n\n` : ''
+  const orderFacts = `${factsHeader}${formatOrdersFacts(orders, store.currency)}`
+
+  return buildLocalizedReply({
+    customerLanguage: intent.customerLanguage,
+    customerMessage: input.customerMessage,
+    fallbackLanguage: store.ai_language,
+    customPrompt: store.ai_system_prompt,
+    conversationHistory: input.conversationHistory,
+    template: 'order_assistant',
+    facts: {
+      storeName: store.name,
+      homeUrl,
+      orderFacts,
+      customerAsk: input.customerMessage ?? null,
+      orderOutcome: orders.length > 0 ? 'found' : 'none',
+    },
+  })
 }

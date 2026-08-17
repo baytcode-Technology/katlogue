@@ -468,16 +468,31 @@ async function attachOrderDetails(orders: Order[]): Promise<OrderWithDetails[]> 
   }))
 }
 
-export async function findRecentOrdersForCustomer(
+function uniqueOrdersById(orders: OrderWithDetails[]): OrderWithDetails[] {
+  const seen = new Set<number>()
+  const result: OrderWithDetails[] = []
+  for (const order of orders) {
+    if (seen.has(order.id)) continue
+    seen.add(order.id)
+    result.push(order)
+  }
+  return result.sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )
+}
+
+export async function findRecentOrdersForCustomers(
   storeId: number,
-  customerId: number,
-  limit = 5
+  customerIds: number[],
+  limit = 8
 ): Promise<OrderWithDetails[]> {
+  if (customerIds.length === 0) return []
+
   const { data, error } = await supabaseAdmin
     .from('orders')
     .select('*')
     .eq('store_id', storeId)
-    .eq('customer_id', customerId)
+    .in('customer_id', customerIds)
     .neq('source', 'razorpay_setup_test')
     .order('created_at', { ascending: false })
     .limit(limit)
@@ -489,16 +504,26 @@ export async function findRecentOrdersForCustomer(
   return attachOrderDetails((data ?? []) as Order[])
 }
 
-export async function findOrderByNumberForCustomer(
+export async function findRecentOrdersForCustomer(
   storeId: number,
   customerId: number,
+  limit = 5
+): Promise<OrderWithDetails[]> {
+  return findRecentOrdersForCustomers(storeId, [customerId], limit)
+}
+
+export async function findOrderByNumberForCustomers(
+  storeId: number,
+  customerIds: number[],
   orderNumber: string
 ): Promise<OrderWithDetails | null> {
+  if (customerIds.length === 0) return null
+
   const { data, error } = await supabaseAdmin
     .from('orders')
     .select('*')
     .eq('store_id', storeId)
-    .eq('customer_id', customerId)
+    .in('customer_id', customerIds)
     .eq('order_number', orderNumber)
     .neq('source', 'razorpay_setup_test')
     .maybeSingle()
@@ -511,5 +536,73 @@ export async function findOrderByNumberForCustomer(
 
   const [withDetails] = await attachOrderDetails([data as Order])
   return withDetails ?? null
+}
+
+export async function findOrderByNumberForCustomer(
+  storeId: number,
+  customerId: number,
+  orderNumber: string
+): Promise<OrderWithDetails | null> {
+  return findOrderByNumberForCustomers(storeId, [customerId], orderNumber)
+}
+
+export async function findOrdersByNumberSuffixForCustomers(
+  storeId: number,
+  customerIds: number[],
+  suffix: string
+): Promise<OrderWithDetails[]> {
+  if (customerIds.length === 0) return []
+  const clean = suffix.replace(/\D/g, '')
+  if (!clean || clean.length > 6) return []
+
+  const { data, error } = await supabaseAdmin
+    .from('orders')
+    .select('*')
+    .eq('store_id', storeId)
+    .in('customer_id', customerIds)
+    .like('order_number', `%-${clean}`)
+    .neq('source', 'razorpay_setup_test')
+    .order('created_at', { ascending: false })
+    .limit(8)
+
+  if (error) {
+    throw new AppError(400, error.message, 'ORDER_LOOKUP_FAILED')
+  }
+
+  return attachOrderDetails((data ?? []) as Order[])
+}
+
+export async function findRecentOrdersByShippingPhone(
+  storeId: number,
+  phoneVariants: string[],
+  limit = 8
+): Promise<OrderWithDetails[]> {
+  const variants = [...new Set(phoneVariants.map((v) => v.trim()).filter(Boolean))]
+  if (variants.length === 0) return []
+
+  const filters = variants.flatMap((variant) => [
+    `shipping_address->>whatsapp_number.eq.${variant}`,
+    `shipping_address->>phone_number.eq.${variant}`,
+  ])
+
+  const { data, error } = await supabaseAdmin
+    .from('orders')
+    .select('*')
+    .eq('store_id', storeId)
+    .is('customer_id', null)
+    .neq('source', 'razorpay_setup_test')
+    .or(filters.join(','))
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    throw new AppError(400, error.message, 'ORDER_LIST_FAILED')
+  }
+
+  return uniqueOrdersById(await attachOrderDetails((data ?? []) as Order[]))
+}
+
+export function mergeOrderDetails(groups: OrderWithDetails[][]): OrderWithDetails[] {
+  return uniqueOrdersById(groups.flat())
 }
 

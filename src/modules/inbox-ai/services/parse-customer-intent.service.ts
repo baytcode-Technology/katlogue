@@ -23,8 +23,10 @@ export type ParsedCustomerIntent = {
   categoryName: string | null
   wantsImage: boolean
   orderNumber: string | null
+  orderNumberHint: string | null
   orderProductHint: string | null
   orderScope: OrderScope
+  typedPhone: string | null
   /** Set when message is off-topic due to language-capability questions */
   offTopicReason?: 'language_meta' | 'general' | null
 }
@@ -49,8 +51,10 @@ type LlmIntentResult = {
   categoryName?: string | null
   wantsImage?: boolean
   orderNumber?: string | null
+  orderNumberHint?: string | null
   orderProductHint?: string | null
   orderScope?: OrderScope
+  typedPhone?: string | null
 }
 
 const INTENT_SCHEMA = `You classify customer messages for a store WhatsApp/Instagram inbox.
@@ -82,16 +86,19 @@ Return JSON only:
   "sku": "SKU if mentioned or null",
   "categoryName": "English category e.g. shirts, pants, or null",
   "wantsImage": true if they ask for photo/image,
-  "orderNumber": "order number e.g. JAN26-3 if mentioned, or null",
+  "orderNumber": "full order number e.g. JAN26-3 if mentioned, or null",
+  "orderNumberHint": "bare digits after order e.g. 88 from 'order 88', or null",
   "orderProductHint": "product name in an order question e.g. shirt, or null",
-  "orderScope": "latest" | "specific" | "product" | null
+  "orderScope": "latest" | "specific" | "product" | null,
+  "typedPhone": "a 10-15 digit phone the customer typed, or null"
 }
 
 Rules:
 - Any product availability, price, or shopping question = product_search (NOT off_topic), even with personal context.
-- order_status for: my/last/recent order, order status, tracking, shipped, delivery, payment status, where is my order — NOT product_search or off_topic.
+- order_status for: my/last/recent order, order status, tracking, shipped, delivery, payment status, where is my order, "order evide", "kittiyilla", "ordered today" — NOT product_search or off_topic.
 - "where is my shirt order" → order_status, orderScope: "product", orderProductHint: "shirt", searchQuery: "".
 - "status of order JAN26-5" → order_status, orderScope: "specific", orderNumber: "JAN26-5".
+- "order 88" / "order 10" → order_status, orderNumberHint: "88" or "10".
 - "my last order" → order_status, orderScope: "latest".
 - Messages in any language about products = product_search (unless clearly about an existing order).
 - off_topic for: "do you know Malayalam?", "can you speak Hindi?", reading PDFs/files, general knowledge, app/code questions, unrelated chat — NO shopping intent.
@@ -109,7 +116,7 @@ const OFF_TOPIC_PATTERN =
 const ORDER_NUMBER_PATTERN = /\b([A-Z]{3}\d{2}-\d+)\b/i
 
 const ORDER_STATUS_PATTERN =
-  /\b(my\s+order|last\s+order|recent\s+order|order\s+status|order\s+update|where\s+is\s+(my\s+)?order|track(ing)?(\s+my\s+order|\s+number|\s+id)?|shipped|delivery\s+status|payment\s+status|order\s+number|order\s+no\.?|order\s+#)\b/i
+  /\b(my\s+order|last\s+order|recent\s+order|order\s+status|order\s+update|where\s+is\s+(my\s+)?order|track(ing)?(\s+my\s+order|\s+number|\s+id)?|shipped|delivery\s+status|payment\s+status|order\s+number|order\s+no\.?|order\s+#|ordered|order\s+evide|kittiyilla|kitteela)\b|എവിടെ|ഓർഡർ|ഓര്‍ഡര്‍/i
 
 const ORDER_PRODUCT_PATTERN =
   /\b(?:my|the|where\s+is)\s+(?:\w+\s+){0,3}order\b|\border\s+(?:for|with|of)\s+/i
@@ -240,8 +247,24 @@ export function extractOrderNumber(text: string): string | null {
   return bare?.[1]?.toUpperCase() ?? null
 }
 
+export function extractOrderNumberHint(text: string): string | null {
+  if (extractOrderNumber(text)) return null
+  const match = text.match(/\border\s*(?:#|no\.?|number)?\s*[:#-]?\s*(\d{1,6})\b/i)
+  return match?.[1] ?? null
+}
+
+export function extractPhoneFromText(text: string): string | null {
+  const withoutOrders = text.replace(ORDER_NUMBER_PATTERN, ' ')
+  const match = withoutOrders.match(/(?:^|[^\d])(\d{10,15})(?:[^\d]|$)/)
+  return match?.[1] ?? null
+}
+
 export function isOrderStatusMessage(text: string): boolean {
-  return ORDER_STATUS_PATTERN.test(text.trim()) || extractOrderNumber(text) !== null
+  return (
+    ORDER_STATUS_PATTERN.test(text.trim()) ||
+    extractOrderNumber(text) !== null ||
+    extractOrderNumberHint(text) !== null
+  )
 }
 
 export function extractOrderProductHint(text: string): string | null {
@@ -296,7 +319,11 @@ function normalizeIntent(intent: CustomerIntent, hasProductSignals: boolean): Cu
 }
 
 function finalizeIntent(
-  partial: Omit<ParsedCustomerIntent, 'requestedItem'> & { requestedItem?: string | null },
+  partial: Omit<ParsedCustomerIntent, 'requestedItem' | 'orderNumberHint' | 'typedPhone'> & {
+    requestedItem?: string | null
+    orderNumberHint?: string | null
+    typedPhone?: string | null
+  },
   trimmed: string
 ): ParsedCustomerIntent {
   const requestedItem =
@@ -332,8 +359,10 @@ function finalizeIntent(
     sku: partial.sku?.trim() || null,
     categoryName: partial.categoryName?.trim() || null,
     orderNumber: partial.orderNumber?.trim()?.toUpperCase() || null,
+    orderNumberHint: partial.orderNumberHint?.trim() || null,
     orderProductHint: partial.orderProductHint?.trim() || null,
     orderScope: partial.orderScope ?? null,
+    typedPhone: partial.typedPhone?.trim() || null,
   }
 }
 
@@ -343,12 +372,16 @@ function fromLlmResult(parsed: LlmIntentResult, trimmed: string): ParsedCustomer
   const categoryFromText = extractCategory(trimmed)
   const skuFromText = extractSku(trimmed)
   const orderNumberFromText = extractOrderNumber(trimmed)
+  const orderNumberHintFromText = extractOrderNumberHint(trimmed)
+  const typedPhoneFromText = extractPhoneFromText(trimmed)
   const orderProductHintFromText = extractOrderProductHint(trimmed)
 
   const color = parsed.color?.trim() || colorFromText
   const size = parsed.size?.trim()?.toUpperCase() || sizeFromText
   const categoryName = parsed.categoryName?.trim() || categoryFromText
   const orderNumber = parsed.orderNumber?.trim()?.toUpperCase() || orderNumberFromText
+  const orderNumberHint = parsed.orderNumberHint?.trim() || orderNumberHintFromText
+  const typedPhone = parsed.typedPhone?.trim() || typedPhoneFromText
   const orderProductHint = parsed.orderProductHint?.trim() || orderProductHintFromText
   const intent = parsed.intent ?? 'product_search'
   const searchQuery =
@@ -377,8 +410,10 @@ function fromLlmResult(parsed: LlmIntentResult, trimmed: string): ParsedCustomer
       categoryName,
       wantsImage: parsed.wantsImage === true || wantsImageFromText(trimmed),
       orderNumber,
+      orderNumberHint,
       orderProductHint,
       orderScope,
+      typedPhone,
     },
     trimmed
   )
@@ -403,8 +438,10 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         categoryName: null,
         wantsImage: false,
         orderNumber: null,
+        orderNumberHint: null,
         orderProductHint: null,
         orderScope: null,
+        typedPhone: null,
         offTopicReason: 'language_meta',
       },
       trimmed
@@ -423,8 +460,10 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         categoryName: null,
         wantsImage: false,
         orderNumber: null,
+        orderNumberHint: null,
         orderProductHint: null,
         orderScope: null,
+        typedPhone: null,
         offTopicReason: 'general',
       },
       trimmed
@@ -443,8 +482,10 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         categoryName: null,
         wantsImage: false,
         orderNumber: null,
+        orderNumberHint: null,
         orderProductHint: null,
         orderScope: null,
+        typedPhone: null,
       },
       trimmed
     )
@@ -465,8 +506,10 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         categoryName: null,
         wantsImage: false,
         orderNumber: orderNumberFromText,
+        orderNumberHint: extractOrderNumberHint(trimmed),
         orderProductHint,
         orderScope,
+        typedPhone: extractPhoneFromText(trimmed),
       },
       trimmed
     )
@@ -484,8 +527,10 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         categoryName: categoryFromText,
         wantsImage: wantsImageFromText(trimmed),
         orderNumber: null,
+        orderNumberHint: null,
         orderProductHint: null,
         orderScope: null,
+        typedPhone: null,
       },
       trimmed
     )
@@ -505,8 +550,10 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
       categoryName: categoryFromText,
       wantsImage: wantsImageFromText(trimmed),
       orderNumber: null,
+      orderNumberHint: null,
       orderProductHint: null,
       orderScope: null,
+      typedPhone: null,
     },
     trimmed
   )
@@ -537,8 +584,10 @@ export async function parseCustomerIntent(
         categoryName: null,
         wantsImage: false,
         orderNumber: null,
+        orderNumberHint: null,
         orderProductHint: null,
         orderScope: null,
+        typedPhone: null,
         offTopicReason: 'general',
       },
       trimmed

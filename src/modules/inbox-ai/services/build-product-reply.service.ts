@@ -185,6 +185,7 @@ export async function buildProductReply(input: {
   conversationHistory?: string | null
   channel?: InboxAiChannel
   customerPhone?: string | null
+  conversationId?: number | null
 }): Promise<ProductReplyResult> {
   const { store, customerText, intent } = input
   const homeUrl = getStoreHomeUrl(store.slug)
@@ -244,7 +245,7 @@ export async function buildProductReply(input: {
         fallbackLanguage: store.ai_language,
         customPrompt: ctx.customPrompt,
         conversationHistory: ctx.conversationHistory,
-        template: 'order_whatsapp_required',
+        template: 'order_needs_phone',
         facts: { storeName: store.name, homeUrl },
       })
       return { ...empty, primaryText: whatsappRequired }
@@ -256,6 +257,7 @@ export async function buildProductReply(input: {
       customerPhone: input.customerPhone.trim(),
       customerMessage: customerText,
       conversationHistory: ctx.conversationHistory,
+      conversationId: input.conversationId,
     })
     return { ...empty, primaryText: orderReply }
   }

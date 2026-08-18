@@ -1,6 +1,7 @@
-import { supabaseAuth } from '../../../config/supabase.js'
+import { supabaseAdmin, supabaseAuth } from '../../../config/supabase.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import type { AuthSession, VerifyOtpResult } from '../types/auth.types.js'
+import type { VerifiedGoogleProfile } from '../services/verify-google-id-token.service.js'
 
 function mapAuthError(error: { message: string; status?: number }, fallback: string): never {
   const status = error.status ?? 400
@@ -56,31 +57,71 @@ export async function refreshAuthSession(refreshToken: string): Promise<VerifyOt
   return buildAuthResult(data.user, data.session)
 }
 
-function nonceFromIdToken(idToken: string): string | undefined {
-  const payload = idToken.split('.')[1]
-  if (!payload) return undefined
-
-  try {
-    const padded = payload.replace(/-/g, '+').replace(/_/g, '/')
-    const remainder = padded.length % 4
-    const base64 = remainder === 0 ? padded : padded + '='.repeat(4 - remainder)
-    const parsed = JSON.parse(Buffer.from(base64, 'base64').toString('utf8')) as {
-      nonce?: unknown
-    }
-    return typeof parsed.nonce === 'string' && parsed.nonce.trim()
-      ? parsed.nonce.trim()
-      : undefined
-  } catch {
-    return undefined
-  }
+function nonceError(message: string): boolean {
+  return /nonce/i.test(message)
 }
 
 export async function signInWithGoogleIdToken(idToken: string): Promise<VerifyOtpResult> {
-  const nonce = nonceFromIdToken(idToken)
   const { data, error } = await supabaseAuth.auth.signInWithIdToken({
     provider: 'google',
     token: idToken,
-    ...(nonce ? { nonce } : {}),
+  })
+
+  if (!error && data.session && data.user) {
+    return buildAuthResult(data.user, data.session)
+  }
+
+  if (error && !nonceError(error.message)) {
+    mapAuthError(error, 'Google sign-in failed')
+  }
+
+  throw new AppError(401, error?.message ?? 'Google sign-in failed', 'GOOGLE_NONCE_REQUIRED')
+}
+
+export async function createSessionForGoogleProfile(
+  profile: VerifiedGoogleProfile
+): Promise<VerifyOtpResult> {
+  const { error: createError } = await supabaseAdmin.auth.admin.createUser({
+    email: profile.email,
+    email_confirm: true,
+    user_metadata: {
+      full_name: profile.name,
+      name: profile.name,
+      avatar_url: profile.picture,
+      picture: profile.picture,
+      email_verified: true,
+      provider_id: profile.sub,
+    },
+    app_metadata: {
+      provider: 'google',
+      providers: ['google'],
+    },
+  })
+
+  if (
+    createError &&
+    !/already|registered|exists|duplicate/i.test(createError.message)
+  ) {
+    throw new AppError(400, createError.message, 'GOOGLE_USER_CREATE_FAILED')
+  }
+
+  const { data: link, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+    type: 'magiclink',
+    email: profile.email,
+  })
+
+  const tokenHash = link?.properties?.hashed_token
+  if (linkError || !tokenHash) {
+    throw new AppError(
+      400,
+      linkError?.message ?? 'Could not create Google session',
+      'GOOGLE_SESSION_FAILED'
+    )
+  }
+
+  const { data, error } = await supabaseAuth.auth.verifyOtp({
+    token_hash: tokenHash,
+    type: 'email',
   })
 
   if (error || !data.session || !data.user) {

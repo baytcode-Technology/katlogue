@@ -56,10 +56,31 @@ export async function refreshAuthSession(refreshToken: string): Promise<VerifyOt
   return buildAuthResult(data.user, data.session)
 }
 
+function nonceFromIdToken(idToken: string): string | undefined {
+  const payload = idToken.split('.')[1]
+  if (!payload) return undefined
+
+  try {
+    const padded = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const remainder = padded.length % 4
+    const base64 = remainder === 0 ? padded : padded + '='.repeat(4 - remainder)
+    const parsed = JSON.parse(Buffer.from(base64, 'base64').toString('utf8')) as {
+      nonce?: unknown
+    }
+    return typeof parsed.nonce === 'string' && parsed.nonce.trim()
+      ? parsed.nonce.trim()
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export async function signInWithGoogleIdToken(idToken: string): Promise<VerifyOtpResult> {
+  const nonce = nonceFromIdToken(idToken)
   const { data, error } = await supabaseAuth.auth.signInWithIdToken({
     provider: 'google',
     token: idToken,
+    ...(nonce ? { nonce } : {}),
   })
 
   if (error || !data.session || !data.user) {

@@ -55,21 +55,23 @@ export async function sendAutoReplyInstagramText(input: {
     timestamp: now,
   })
 
-  if (!saved) return
+  const messageToEmit =
+    saved ?? (await chatRepository.findMessageByMetaMessageId(metaResult.metaMessageId))
+  if (!messageToEmit) return
 
   emitToStore(store.id, SOCKET_EVENTS.INSTAGRAM_MESSAGE_NEW, {
     storeId: store.id,
     conversationId: conversation.id,
     message: {
-      id: saved.id,
-      meta_message_id: saved.meta_message_id,
-      direction: saved.direction,
-      type: saved.type,
-      text_body: saved.text_body,
-      status: saved.status,
-      timestamp: saved.timestamp,
-      from_ig_id: saved.from_ig_id,
-      to_ig_id: saved.to_ig_id,
+      id: messageToEmit.id,
+      meta_message_id: messageToEmit.meta_message_id,
+      direction: messageToEmit.direction,
+      type: messageToEmit.type,
+      text_body: messageToEmit.text_body,
+      status: messageToEmit.status,
+      timestamp: messageToEmit.timestamp,
+      from_ig_id: messageToEmit.from_ig_id,
+      to_ig_id: messageToEmit.to_ig_id,
     },
   })
 

@@ -92,8 +92,10 @@ export async function sendAutoReplyWhatsAppText(input: {
     timestamp: now,
   })
 
-  if (saved) {
-    emitOutboundWhatsAppMessage({ storeId: store.id, conversation, message: saved })
+  const messageToEmit =
+    saved ?? (await chatRepository.findMessageByMetaMessageId(metaResult.metaMessageId))
+  if (messageToEmit) {
+    emitOutboundWhatsAppMessage({ storeId: store.id, conversation, message: messageToEmit })
   }
 }
 
@@ -149,7 +151,9 @@ export async function sendAutoReplyWhatsAppImage(input: {
     timestamp: now,
   })
 
-  if (saved) {
-    emitOutboundWhatsAppMessage({ storeId: store.id, conversation, message: saved })
+  const messageToEmit =
+    saved ?? (await chatRepository.findMessageByMetaMessageId(metaResult.metaMessageId))
+  if (messageToEmit) {
+    emitOutboundWhatsAppMessage({ storeId: store.id, conversation, message: messageToEmit })
   }
 }

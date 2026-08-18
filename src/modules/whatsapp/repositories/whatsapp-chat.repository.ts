@@ -204,6 +204,24 @@ export async function insertMessage(input: {
 
 
 
+export async function findMessageByMetaMessageId(
+  metaMessageId: string,
+): Promise<WhatsAppMessage | null> {
+  const { data, error } = await supabaseAdmin
+    .from('whatsapp_messages')
+    .select('*')
+    .eq('meta_message_id', metaMessageId)
+    .maybeSingle()
+
+  if (error) {
+    throw new AppError(400, error.message, 'WHATSAPP_MESSAGE_FETCH_FAILED')
+  }
+
+  return (data as WhatsAppMessage) ?? null
+}
+
+
+
 export async function updateMessageStatus(input: {
 
   metaMessageId: string

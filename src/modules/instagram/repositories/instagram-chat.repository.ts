@@ -110,6 +110,22 @@ export async function insertMessage(input: {
   return (data as InstagramMessage) ?? null
 }
 
+export async function findMessageByMetaMessageId(
+  metaMessageId: string,
+): Promise<InstagramMessage | null> {
+  const { data, error } = await supabaseAdmin
+    .from('instagram_messages')
+    .select('*')
+    .eq('meta_message_id', metaMessageId)
+    .maybeSingle()
+
+  if (error) {
+    throw new AppError(400, error.message, 'INSTAGRAM_MESSAGE_FETCH_FAILED')
+  }
+
+  return (data as InstagramMessage) ?? null
+}
+
 export async function claimWebhookEvent(eventKey: string): Promise<boolean> {
   const { error } = await supabaseAdmin
     .from('instagram_webhook_events')

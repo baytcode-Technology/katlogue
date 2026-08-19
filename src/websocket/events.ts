@@ -1,5 +1,6 @@
 export const SOCKET_EVENTS = {
   JOIN_STORE: 'store:join',
+  STORE_JOINED: 'store:joined',
   MESSAGE_NEW: 'whatsapp:message:new',
   MESSAGE_STATUS: 'whatsapp:message:status',
   CONVERSATION_UPDATED: 'whatsapp:conversation:updated',

@@ -48,12 +48,17 @@ export function initSocketServer(httpServer: HttpServer): Server {
         try {
           const raw = payload?.storeId
           const storeId = typeof raw === 'number' ? raw : Number(String(raw ?? '').trim())
-          if (!Number.isFinite(storeId) || storeId <= 0) return
+          if (!Number.isFinite(storeId) || storeId <= 0) {
+            console.log('[websocket] JOIN_STORE invalid storeId:', raw)
+            return
+          }
 
           await storeRepository.assertStoreMember(storeId, auth.userId)
           await socket.join(storeRoom(storeId))
           socket.data.storeId = storeId
-        } catch {
+          console.log('[websocket] client joined store room:', storeId, 'room:', storeRoom(storeId))
+        } catch (err) {
+          console.error('[websocket] JOIN_STORE failed:', err)
           socket.emit('error', { message: 'Forbidden store access' })
         }
       })
@@ -68,6 +73,12 @@ export function getSocketServer(): Server | null {
 }
 
 export function emitToStore<T>(storeId: number, event: string, payload: T): void {
-  if (!io) return
-  io.to(storeRoom(storeId)).emit(event, payload)
+  if (!io) {
+    console.log('[websocket] emitToStore: io not initialized')
+    return
+  }
+  const room = storeRoom(storeId)
+  const socketsInRoom = io.sockets.adapter.rooms.get(room)
+  console.log('[websocket] emitToStore:', event, 'to room:', room, 'sockets:', socketsInRoom?.size ?? 0)
+  io.to(room).emit(event, payload)
 }

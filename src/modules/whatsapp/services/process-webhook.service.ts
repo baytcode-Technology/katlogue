@@ -45,6 +45,9 @@ async function persistMessage(input: {
 
   const customer = await customerRepository.findOrCreateByWhatsApp(store.id, customerPhone)
 
+  // Upsert conversation *without* incrementing unread yet.
+  // If the message insert is a duplicate (insertMessage returns null),
+  // we must NOT increment unread again.
   const conversation = await chatRepository.upsertConversation({
     storeId: store.id,
     waPhoneNumberId: input.event.waPhoneNumberId ?? store.wa_phone_number_id ?? 'unknown',
@@ -55,7 +58,7 @@ async function persistMessage(input: {
       type: input.msg.type,
       textBody: input.msg.textBody,
     }),
-    incrementUnread: input.incrementUnread,
+    incrementUnread: undefined,
   })
 
   const saved = await chatRepository.insertMessage({
@@ -75,7 +78,28 @@ async function persistMessage(input: {
     timestamp: input.msg.timestamp,
   })
 
-  if (!saved) return null
+  if (!saved) {
+    // Duplicate message (or already persisted): still emit MESSAGE_NEW
+    // so the realtime UI (chat details) updates immediately.
+    const existing = await chatRepository.findMessageByMetaMessageId(input.msg.metaMessageId)
+    if (!existing) return null
+    return { saved: existing, customer }
+  }
+
+  if (input.incrementUnread) {
+    await chatRepository.upsertConversation({
+      storeId: store.id,
+      waPhoneNumberId: input.event.waPhoneNumberId ?? store.wa_phone_number_id ?? 'unknown',
+      customerWaNumber: customerPhone,
+      customerId: customer.id,
+      lastMessageAt: input.msg.timestamp,
+      lastMessagePreview: formatWhatsAppMessagePreview({
+        type: input.msg.type,
+        textBody: input.msg.textBody,
+      }),
+      incrementUnread: true,
+    })
+  }
 
   return { saved, customer }
 }

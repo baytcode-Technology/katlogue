@@ -60,10 +60,10 @@ export async function sendAutoReplyInstagramText(input: {
   if (!messageToEmit) return
 
   emitToStore(store.id, SOCKET_EVENTS.INSTAGRAM_MESSAGE_NEW, {
-    storeId: store.id,
-    conversationId: conversation.id,
+    storeId: Number(store.id),
+    conversationId: Number(conversation.id),
     message: {
-      id: messageToEmit.id,
+      id: Number(messageToEmit.id),
       meta_message_id: messageToEmit.meta_message_id,
       direction: messageToEmit.direction,
       type: messageToEmit.type,
@@ -76,14 +76,14 @@ export async function sendAutoReplyInstagramText(input: {
   })
 
   emitToStore(store.id, SOCKET_EVENTS.INSTAGRAM_CONVERSATION_UPDATED, {
-    storeId: store.id,
+    storeId: Number(store.id),
     conversation: {
-      id: conversation.id,
+      id: Number(conversation.id),
       customer_ig_id: conversation.customer_ig_id,
       customer_ig_username: conversation.customer_ig_username,
       last_message_at: conversation.last_message_at,
       last_message_preview: conversation.last_message_preview,
-      unread_count: conversation.unread_count,
+      unread_count: Number(conversation.unread_count ?? 0),
     },
   })
 }

@@ -86,10 +86,10 @@ function emitNewMessage(
   message: NonNullable<Awaited<ReturnType<typeof chatRepository.insertMessage>>>
 ) {
   emitToStore(storeId, SOCKET_EVENTS.MESSAGE_NEW, {
-    storeId,
-    conversationId,
+    storeId: Number(storeId),
+    conversationId: Number(conversationId),
     message: {
-      id: message.id,
+      id: Number(message.id),
       meta_message_id: message.meta_message_id,
       direction: message.direction,
       type: message.type,
@@ -188,13 +188,13 @@ export async function processWhatsAppWebhook(body: unknown): Promise<void> {
 
         if (conversation) {
           emitToStore(store.id, SOCKET_EVENTS.CONVERSATION_UPDATED, {
-            storeId: store.id,
+            storeId: Number(store.id),
             conversation: {
-              id: conversation.id,
+              id: Number(conversation.id),
               customer_wa_number: conversation.customer_wa_number,
               last_message_at: conversation.last_message_at,
               last_message_preview: conversation.last_message_preview,
-              unread_count: conversation.unread_count,
+              unread_count: Number(conversation.unread_count ?? 0),
             },
           })
         }
@@ -265,8 +265,8 @@ export async function processWhatsAppWebhook(body: unknown): Promise<void> {
       if (!updated) continue
 
       emitToStore(store.id, SOCKET_EVENTS.MESSAGE_STATUS, {
-        storeId: store.id,
-        conversationId: updated.conversation_id,
+        storeId: Number(store.id),
+        conversationId: Number(updated.conversation_id),
         metaMessageId: updated.meta_message_id,
         status: updated.status,
       })

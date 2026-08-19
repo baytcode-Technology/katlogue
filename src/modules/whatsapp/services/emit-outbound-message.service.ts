@@ -8,10 +8,10 @@ export function emitOutboundWhatsAppMessage(input: {
   message: WhatsAppMessage
 }) {
   emitToStore(input.storeId, SOCKET_EVENTS.MESSAGE_NEW, {
-    storeId: input.storeId,
-    conversationId: input.conversation.id,
+    storeId: Number(input.storeId),
+    conversationId: Number(input.conversation.id),
     message: {
-      id: input.message.id,
+      id: Number(input.message.id),
       meta_message_id: input.message.meta_message_id,
       direction: input.message.direction,
       type: input.message.type,
@@ -28,13 +28,13 @@ export function emitOutboundWhatsAppMessage(input: {
   })
 
   emitToStore(input.storeId, SOCKET_EVENTS.CONVERSATION_UPDATED, {
-    storeId: input.storeId,
+    storeId: Number(input.storeId),
     conversation: {
-      id: input.conversation.id,
+      id: Number(input.conversation.id),
       customer_wa_number: input.conversation.customer_wa_number,
       last_message_at: input.conversation.last_message_at,
       last_message_preview: input.conversation.last_message_preview,
-      unread_count: input.conversation.unread_count,
+      unread_count: Number(input.conversation.unread_count ?? 0),
     },
   })
 }

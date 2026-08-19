@@ -100,10 +100,10 @@ function emitNewMessage(
   message: NonNullable<Awaited<ReturnType<typeof chatRepository.insertMessage>>>
 ) {
   emitToStore(storeId, SOCKET_EVENTS.INSTAGRAM_MESSAGE_NEW, {
-    storeId,
-    conversationId,
+    storeId: Number(storeId),
+    conversationId: Number(conversationId),
     message: {
-      id: message.id,
+      id: Number(message.id),
       meta_message_id: message.meta_message_id,
       direction: message.direction,
       type: message.type,
@@ -121,14 +121,14 @@ function emitConversationUpdated(
   conversation: NonNullable<Awaited<ReturnType<typeof chatRepository.upsertConversation>>>
 ) {
   emitToStore(storeId, SOCKET_EVENTS.INSTAGRAM_CONVERSATION_UPDATED, {
-    storeId,
+    storeId: Number(storeId),
     conversation: {
-      id: conversation.id,
+      id: Number(conversation.id),
       customer_ig_id: conversation.customer_ig_id,
       customer_ig_username: conversation.customer_ig_username,
       last_message_at: conversation.last_message_at,
       last_message_preview: conversation.last_message_preview,
-      unread_count: conversation.unread_count,
+      unread_count: Number(conversation.unread_count ?? 0),
     },
   })
 }

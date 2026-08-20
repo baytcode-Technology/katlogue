@@ -29,3 +29,9 @@ export const upsertPushTokenSchema = z.object({
 })
 
 export type UpsertPushTokenBody = z.infer<typeof upsertPushTokenSchema>
+
+export const deletePushTokenSchema = z.object({
+  expo_push_token: z.string().trim().min(1, 'Push token is required'),
+})
+
+export type DeletePushTokenBody = z.infer<typeof deletePushTokenSchema>

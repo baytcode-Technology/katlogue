@@ -1086,6 +1086,26 @@ export function buildOpenApiDocument() {
           },
           responses: { '200': { description: 'Token registered' } },
         },
+        delete: {
+          tags: ['Stores'],
+          summary: 'Unregister Expo push token for this store device',
+          description:
+            'Called by the merchant app on sign-out so the device stops receiving push alerts for this store.',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['expo_push_token'],
+                  properties: { expo_push_token: { type: 'string' } },
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'Token removed or not found' } },
+        },
       },
       '/api/stores/me/payment-config': {
         get: {

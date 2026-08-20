@@ -4,8 +4,10 @@ import { validateBody, validateQuery } from '../../shared/middleware/validate.mi
 import { requiredStoreQuerySchema } from '../stores/validations/store.validation.js'
 import { getNotificationPreferences } from './controllers/get-notification-preferences.controller.js'
 import { updateNotificationPreferences } from './controllers/update-notification-preferences.controller.js'
+import { deletePushToken } from './controllers/delete-push-token.controller.js'
 import { upsertPushToken } from './controllers/upsert-push-token.controller.js'
 import {
+  deletePushTokenSchema,
   updateNotificationPreferencesSchema,
   upsertPushTokenSchema,
 } from './validations/notification.validation.js'
@@ -31,4 +33,11 @@ notificationRoutes.put(
   validateQuery(requiredStoreQuerySchema),
   validateBody(upsertPushTokenSchema),
   upsertPushToken
+)
+notificationRoutes.delete(
+  '/me/push-token',
+  requireAuth,
+  validateQuery(requiredStoreQuerySchema),
+  validateBody(deletePushTokenSchema),
+  deletePushToken
 )

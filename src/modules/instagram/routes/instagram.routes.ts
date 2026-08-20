@@ -22,7 +22,9 @@ import {
   setReplyModeSchema,
 } from '../../inbox-ai/validations/inbox-ai.validation.js'
 import { subscribeInstagramWebhooksHandler } from '../controllers/subscribe-webhooks.controller.js'
+import { clearInstagramChatHistoryHandler } from '../controllers/clear-chat-history.controller.js'
 import { sendMessageSchema } from '../validations/send-message.validation.js'
+import { clearInstagramChatHistorySchema } from '../validations/clear-chat-history.validation.js'
 import {
   forwardInstagramMessageSchema,
   sendInstagramMediaSchema,
@@ -40,6 +42,12 @@ router.get('/connect', requireAuth, connectInstagram)
 router.get('/oauth/callback', instagramOAuthCallback)
 router.get('/connection-status', requireAuth, instagramConnectionStatus)
 router.post('/subscribe-webhooks', requireAuth, subscribeInstagramWebhooksHandler)
+router.post(
+  '/clear-chat-history',
+  requireAuth,
+  validateBody(clearInstagramChatHistorySchema),
+  clearInstagramChatHistoryHandler
+)
 
 router.post('/send', requireAuth, validateBody(sendMessageSchema), sendInstagramMessage)
 router.post(

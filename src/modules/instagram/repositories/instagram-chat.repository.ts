@@ -285,3 +285,18 @@ export async function findMessageById(input: {
 
   return (data as InstagramMessage) ?? null
 }
+
+/** Hard-delete all Instagram conversations for a store (messages cascade). */
+export async function deleteConversationsByStoreId(storeId: number): Promise<number> {
+  const { data, error } = await supabaseAdmin
+    .from('instagram_conversations')
+    .delete()
+    .eq('store_id', storeId)
+    .select('id')
+
+  if (error) {
+    throw new AppError(400, error.message, 'INSTAGRAM_CHAT_HISTORY_CLEAR_FAILED')
+  }
+
+  return data?.length ?? 0
+}

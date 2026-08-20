@@ -45,13 +45,22 @@ export async function findPushTokensByStoreId(storeId: number): Promise<StorePus
   return (data ?? []) as StorePushToken[]
 }
 
-export async function deletePushToken(expoPushToken: string): Promise<void> {
-  const { error } = await supabaseAdmin
+export async function deletePushTokenForStoreUser(
+  storeId: number,
+  userId: string,
+  expoPushToken: string
+): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
     .from('store_push_tokens')
     .delete()
+    .eq('store_id', storeId)
+    .eq('user_id', userId)
     .eq('expo_push_token', expoPushToken)
+    .select('id')
 
   if (error) {
     throw new AppError(400, error.message, 'PUSH_TOKEN_DELETE_FAILED')
   }
+
+  return (data?.length ?? 0) > 0
 }

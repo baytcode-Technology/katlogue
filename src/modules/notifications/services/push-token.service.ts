@@ -13,3 +13,18 @@ export async function registerPushTokenForOwner(
   await pushTokenRepository.upsertPushToken(store.id, ownerId, input)
   return { registered: true }
 }
+
+export async function unregisterPushTokenForOwner(
+  ownerId: string,
+  storeId: number,
+  expoPushToken: string
+): Promise<{ removed: boolean }> {
+  const store = await storeStaffRepository.resolveOwnedStore(ownerId, storeId)
+
+  const removed = await pushTokenRepository.deletePushTokenForStoreUser(
+    store.id,
+    ownerId,
+    expoPushToken
+  )
+  return { removed }
+}

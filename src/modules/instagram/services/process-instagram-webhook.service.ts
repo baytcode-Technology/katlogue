@@ -296,6 +296,7 @@ export async function processInstagramWebhook(body: unknown): Promise<void> {
     const conversation = await chatRepository.upsertConversation({
       storeId: store.id,
       customerIgId: event.senderIgId,
+      igUserId: store.ig_user_id?.trim() || event.recipientIgId,
       customerId: customer.id,
       lastMessageAt: event.timestamp,
       lastMessagePreview: event.preview,

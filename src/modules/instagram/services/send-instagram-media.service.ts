@@ -119,6 +119,7 @@ export async function sendInstagramMediaMessageService(input: SendInstagramMedia
   conversation = await chatRepository.upsertConversation({
     storeId: input.storeId,
     customerIgId,
+    igUserId: credentials.igUserId,
     customerIgUsername: customerUsername,
     customerId: customer.id,
     lastMessageAt: now,

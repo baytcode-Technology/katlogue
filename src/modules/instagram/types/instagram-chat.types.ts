@@ -12,6 +12,7 @@ export type InstagramConversation = {
   customer_id: number | null
   customer_ig_id: string
   customer_ig_username: string | null
+  ig_user_id: string | null
   last_message_at: string | null
   last_message_preview: string | null
   unread_count: number

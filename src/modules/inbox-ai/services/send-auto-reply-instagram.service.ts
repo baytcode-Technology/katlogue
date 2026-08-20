@@ -36,6 +36,7 @@ export async function sendAutoReplyInstagramText(input: {
   const conversation = await chatRepository.upsertConversation({
     storeId: store.id,
     customerIgId,
+    igUserId: credentials.igUserId,
     customerId: customer.id,
     lastMessageAt: now,
     lastMessagePreview: message,

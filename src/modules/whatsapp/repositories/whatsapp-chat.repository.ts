@@ -601,12 +601,19 @@ export async function findMessageById(input: {
   return (data as WhatsAppMessage) ?? null
 }
 
-/** Hard-delete all WhatsApp conversations for a store (messages cascade). */
-export async function deleteConversationsByStoreId(storeId: number): Promise<number> {
+/**
+ * Delete WhatsApp conversations that do not belong to the currently connected
+ * phone number id (messages cascade). Keeps current-account threads.
+ */
+export async function deleteConversationsExceptPhoneNumberId(
+  storeId: number,
+  currentWaPhoneNumberId: string
+): Promise<number> {
   const { data, error } = await supabaseAdmin
     .from('whatsapp_conversations')
     .delete()
     .eq('store_id', storeId)
+    .neq('wa_phone_number_id', currentWaPhoneNumberId)
     .select('id')
 
   if (error) {

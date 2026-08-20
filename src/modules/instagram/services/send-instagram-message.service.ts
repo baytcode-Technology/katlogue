@@ -91,6 +91,7 @@ export async function sendInstagramTextMessageService(input: SendInstagramTextIn
   conversation = await chatRepository.upsertConversation({
     storeId: input.storeId,
     customerIgId,
+    igUserId: credentials.igUserId,
     customerIgUsername: customerUsername,
     customerId: customer.id,
     lastMessageAt: now,

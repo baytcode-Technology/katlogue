@@ -9,6 +9,7 @@ import type {
 export async function upsertConversation(input: {
   storeId: number
   customerIgId: string
+  igUserId: string
   customerIgUsername?: string | null
   customerId?: number | null
   lastMessageAt: string | null
@@ -32,6 +33,7 @@ export async function upsertConversation(input: {
   const row: Record<string, unknown> = {
     store_id: input.storeId,
     customer_ig_id: input.customerIgId,
+    ig_user_id: input.igUserId,
     last_message_at: input.lastMessageAt,
     last_message_preview: input.lastMessagePreview,
     updated_at: new Date().toISOString(),
@@ -286,12 +288,20 @@ export async function findMessageById(input: {
   return (data as InstagramMessage) ?? null
 }
 
-/** Hard-delete all Instagram conversations for a store (messages cascade). */
-export async function deleteConversationsByStoreId(storeId: number): Promise<number> {
+/**
+ * Delete Instagram conversations that do not belong to the currently connected
+ * business account (messages cascade). Keeps current-account threads.
+ * Rows with null ig_user_id are treated as previous/orphan and removed.
+ */
+export async function deleteConversationsExceptIgUserId(
+  storeId: number,
+  currentIgUserId: string
+): Promise<number> {
   const { data, error } = await supabaseAdmin
     .from('instagram_conversations')
     .delete()
     .eq('store_id', storeId)
+    .or(`ig_user_id.is.null,ig_user_id.neq.${currentIgUserId}`)
     .select('id')
 
   if (error) {

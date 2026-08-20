@@ -42,6 +42,8 @@ import { embeddedSignupEvent } from '../controllers/embedded-signup-event.contro
 
 import { offboardWhatsApp } from '../controllers/offboard-whatsapp.controller.js'
 
+import { clearWhatsAppChatHistoryHandler } from '../controllers/clear-chat-history.controller.js'
+
 import { connectionStatus } from '../controllers/connection-status.controller.js'
 
 import { triggerSync } from '../controllers/trigger-sync.controller.js'
@@ -71,6 +73,8 @@ import { triggerSyncSchema } from '../validations/trigger-sync.validation.js'
 import { completeOnboardingSchema } from '../validations/complete-onboarding.validation.js'
 
 import { offboardWhatsAppSchema } from '../validations/offboard-whatsapp.validation.js'
+
+import { clearWhatsAppChatHistorySchema } from '../validations/clear-chat-history.validation.js'
 
 import { sendMediaSchema, forwardMessageSchema } from '../validations/send-media.validation.js'
 
@@ -123,6 +127,18 @@ router.post(
   validateBody(offboardWhatsAppSchema),
 
   offboardWhatsApp
+
+)
+
+router.post(
+
+  '/clear-chat-history',
+
+  requireAuth,
+
+  validateBody(clearWhatsAppChatHistorySchema),
+
+  clearWhatsAppChatHistoryHandler
 
 )
 

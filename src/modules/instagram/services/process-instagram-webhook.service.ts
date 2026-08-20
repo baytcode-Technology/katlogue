@@ -5,6 +5,7 @@ import { handleInboundInboxAi } from '../../inbox-ai/index.js'
 import { emitToStore } from '../../../websocket/index.js'
 import { SOCKET_EVENTS } from '../../../websocket/events.js'
 import * as chatRepository from '../repositories/instagram-chat.repository.js'
+import type { InstagramMessage } from '../types/instagram-chat.types.js'
 
 type InstagramMessagingEvent = {
   sender?: { id?: string }
@@ -15,7 +16,10 @@ type InstagramMessagingEvent = {
     text?: string
     is_echo?: boolean
     is_self?: boolean
-    attachments?: Array<{ type?: string }>
+    attachments?: Array<{
+      type?: string
+      payload?: { url?: string; title?: string }
+    }>
   }
 }
 
@@ -31,12 +35,60 @@ type InstagramWebhookBody = {
   }>
 }
 
+type ParsedAttachment = {
+  type: 'image' | 'audio' | 'video' | 'file' | 'share' | 'story_mention' | 'ig_reel' | 'unsupported'
+  mediaUrl: string | null
+  preview: string
+}
+
+function mapAttachmentType(raw: string | undefined): ParsedAttachment['type'] {
+  const t = (raw ?? '').toLowerCase()
+  if (t === 'image' || t === 'audio' || t === 'video' || t === 'file') return t
+  if (t === 'share') return 'share'
+  if (t === 'story_mention') return 'story_mention'
+  if (t === 'ig_reel' || t === 'reel') return 'ig_reel'
+  return 'unsupported'
+}
+
+type IgAttachment = {
+  type?: string
+  payload?: { url?: string; title?: string }
+}
+
+function parseAttachment(attachments: IgAttachment[] | undefined): ParsedAttachment | null {
+  if (!attachments?.length) return null
+  const first = attachments[0]
+  const type = mapAttachmentType(first?.type)
+  const mediaUrl = first?.payload?.url?.trim() || null
+  const label =
+    type === 'image'
+      ? 'Photo'
+      : type === 'video'
+        ? 'Video'
+        : type === 'audio'
+          ? 'Voice message'
+          : type === 'file'
+            ? 'File'
+            : type === 'share'
+              ? 'Shared post'
+              : type === 'story_mention'
+                ? 'Story mention'
+                : type === 'ig_reel'
+                  ? 'Reel'
+                  : 'Attachment'
+  return { type, mediaUrl, preview: first?.payload?.title?.trim() || label }
+}
+
 function parseMessagingEvents(body: unknown): Array<{
   entryIgId: string | null
   recipientIgId: string
   senderIgId: string
   metaMessageId: string
   textBody: string | null
+  messageType: string
+  mediaUrl: string | null
+  caption: string | null
+  preview: string
   timestamp: string
   raw: InstagramMessagingEvent
 }> {
@@ -47,6 +99,10 @@ function parseMessagingEvents(body: unknown): Array<{
     senderIgId: string
     metaMessageId: string
     textBody: string | null
+    messageType: string
+    mediaUrl: string | null
+    caption: string | null
+    preview: string
     timestamp: string
     raw: InstagramMessagingEvent
   }> = []
@@ -69,11 +125,28 @@ function parseMessagingEvents(body: unknown): Array<{
       // Skip echoes of messages we sent via API
       if (event.message.is_echo && !event.message.is_self) continue
 
-      const textBody =
-        event.message.text?.trim() ??
-        (event.message.attachments?.length
-          ? `[${event.message.attachments[0]?.type ?? 'attachment'}]`
-          : null)
+      const text = event.message.text?.trim() || null
+      const attachment = parseAttachment(event.message.attachments)
+
+      let messageType = 'text'
+      let mediaUrl: string | null = null
+      let caption: string | null = null
+      let textBody = text
+      let preview = text || '[message]'
+
+      if (attachment) {
+        messageType =
+          attachment.type === 'image' ||
+          attachment.type === 'audio' ||
+          attachment.type === 'video' ||
+          attachment.type === 'file'
+            ? attachment.type
+            : 'text'
+        mediaUrl = attachment.mediaUrl
+        caption = text
+        textBody = text ?? `[${attachment.preview}]`
+        preview = text?.trim() || attachment.preview
+      }
 
       const rawTs = event.timestamp ?? 0
       const ms = rawTs > 0 && rawTs < 1_000_000_000_000 ? rawTs * 1000 : rawTs
@@ -85,6 +158,10 @@ function parseMessagingEvents(body: unknown): Array<{
         senderIgId,
         metaMessageId,
         textBody,
+        messageType,
+        mediaUrl,
+        caption,
+        preview,
         timestamp: ts,
         raw: event,
       })
@@ -94,10 +171,10 @@ function parseMessagingEvents(body: unknown): Array<{
   return results
 }
 
-function emitNewMessage(
+export function emitInstagramNewMessage(
   storeId: number,
   conversationId: number,
-  message: NonNullable<Awaited<ReturnType<typeof chatRepository.insertMessage>>>
+  message: InstagramMessage
 ) {
   emitToStore(storeId, SOCKET_EVENTS.INSTAGRAM_MESSAGE_NEW, {
     storeId: Number(storeId),
@@ -108,6 +185,10 @@ function emitNewMessage(
       direction: message.direction,
       type: message.type,
       text_body: message.text_body,
+      media_id: message.media_id,
+      media_url: message.media_url,
+      mime_type: message.mime_type,
+      caption: message.caption,
       status: message.status,
       timestamp: message.timestamp,
       from_ig_id: message.from_ig_id,
@@ -116,7 +197,7 @@ function emitNewMessage(
   })
 }
 
-function emitConversationUpdated(
+export function emitInstagramConversationUpdated(
   storeId: number,
   conversation: NonNullable<Awaited<ReturnType<typeof chatRepository.upsertConversation>>>
 ) {
@@ -190,11 +271,12 @@ export async function processInstagramWebhook(body: unknown): Promise<void> {
 
   for (const event of events) {
     console.info(
-      '[instagram webhook] event recipient=%s entry=%s sender=%s mid=%s',
+      '[instagram webhook] event recipient=%s entry=%s sender=%s mid=%s type=%s',
       event.recipientIgId,
       event.entryIgId ?? 'n/a',
       event.senderIgId,
-      event.metaMessageId
+      event.metaMessageId,
+      event.messageType
     )
 
     const isNew = await chatRepository.claimWebhookEvent(event.metaMessageId)
@@ -216,7 +298,7 @@ export async function processInstagramWebhook(body: unknown): Promise<void> {
       customerIgId: event.senderIgId,
       customerId: customer.id,
       lastMessageAt: event.timestamp,
-      lastMessagePreview: event.textBody ?? '[message]',
+      lastMessagePreview: event.preview,
       incrementUnread: true,
     })
 
@@ -227,8 +309,10 @@ export async function processInstagramWebhook(body: unknown): Promise<void> {
       direction: 'inbound',
       fromIgId: event.senderIgId,
       toIgId: event.recipientIgId,
-      type: 'text',
+      type: event.messageType,
       textBody: event.textBody,
+      mediaUrl: event.mediaUrl,
+      caption: event.caption,
       status: 'received',
       rawPayload: event.raw,
       timestamp: event.timestamp,
@@ -237,31 +321,33 @@ export async function processInstagramWebhook(body: unknown): Promise<void> {
     if (!saved) continue
 
     console.info(
-      '[instagram webhook] saved inbound message store=%s conversation=%s',
+      '[instagram webhook] saved inbound message store=%s conversation=%s type=%s',
       store.id,
-      conversation.id
+      conversation.id,
+      event.messageType
     )
 
-    emitNewMessage(store.id, conversation.id, saved)
-    emitConversationUpdated(store.id, conversation)
+    emitInstagramNewMessage(store.id, conversation.id, saved)
+    emitInstagramConversationUpdated(store.id, conversation)
 
     void notifyInstagramChat({
       storeId: store.id,
       storeSlug: store.slug,
       conversationId: conversation.id,
-      preview: event.textBody ?? '[message]',
+      preview: event.preview,
       username: conversation.customer_ig_username,
     }).catch((err) => {
       console.error('[notifications] Instagram push failed', err)
     })
 
-    if (event.textBody?.trim() && saved.id) {
+    const aiText = event.caption?.trim() || (event.messageType === 'text' ? event.textBody?.trim() : null)
+    if (aiText && saved.id) {
       handleInboundInboxAi({
         channel: 'instagram',
         storeId: store.id,
         conversationId: conversation.id,
         messageId: saved.id,
-        textBody: event.textBody,
+        textBody: aiText,
         customerKey: event.senderIgId,
       })
     }

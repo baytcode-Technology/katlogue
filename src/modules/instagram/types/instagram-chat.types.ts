@@ -31,6 +31,10 @@ export type InstagramMessage = {
   to_ig_id: string
   type: string
   text_body: string | null
+  media_id: string | null
+  media_url: string | null
+  mime_type: string | null
+  caption: string | null
   status: InstagramMessageStatus
   raw_payload: Record<string, unknown> | null
   timestamp: string | null

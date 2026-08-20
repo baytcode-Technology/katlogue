@@ -115,3 +115,51 @@ export async function sendInstagramTextMessage(input: {
     throw new AppError(400, message, 'INSTAGRAM_SEND_FAILED')
   }
 }
+
+export async function sendInstagramAttachmentMessage(input: {
+  igUserId: string
+  accessToken: string
+  recipientIgId: string
+  type: 'image' | 'audio' | 'video' | 'file'
+  url: string
+}): Promise<{ metaMessageId: string; raw: unknown }> {
+  const apiUrl = `https://graph.instagram.com/${env.INSTAGRAM.API_VERSION}/${input.igUserId}/messages`
+
+  try {
+    const { data } = await axios.post<{
+      message_id?: string
+      recipient_id?: string
+    }>(
+      apiUrl,
+      {
+        recipient: { id: input.recipientIgId },
+        message: {
+          attachment: {
+            type: input.type,
+            payload: {
+              url: input.url,
+            },
+          },
+        },
+      },
+      {
+        params: { access_token: input.accessToken },
+        timeout: 60_000,
+      }
+    )
+
+    const metaMessageId = data.message_id?.trim()
+    if (!metaMessageId) {
+      throw new AppError(502, 'Instagram did not return a message id', 'INSTAGRAM_SEND_FAILED')
+    }
+
+    return { metaMessageId, raw: data }
+  } catch (err) {
+    if (err instanceof AppError) throw err
+    const message =
+      axios.isAxiosError(err) && err.response?.data
+        ? JSON.stringify(err.response.data)
+        : 'Failed to send Instagram media message'
+    throw new AppError(400, message, 'INSTAGRAM_SEND_FAILED')
+  }
+}

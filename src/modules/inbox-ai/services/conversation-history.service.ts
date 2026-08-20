@@ -28,7 +28,9 @@ export async function fetchRecentConversationHistory(input: {
     .slice()
     .reverse()
     .map((m) => {
-      const text = ('caption' in m ? (m.caption ?? m.text_body) : m.text_body) ?? ''
+      const caption = 'caption' in m ? m.caption : null
+      const textBody = 'text_body' in m ? m.text_body : null
+      const text = (caption ?? textBody) ?? ''
       const trimmed = String(text).trim()
       if (!trimmed) return null
       const role: ConversationHistoryLine['role'] =

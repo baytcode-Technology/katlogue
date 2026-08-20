@@ -85,3 +85,45 @@ export const whatsAppMediaUpload = multer({
     cb(null, true)
   },
 }).single('file')
+
+const INSTAGRAM_MEDIA_MIME = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/aac',
+  'audio/wav',
+  'audio/x-m4a',
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+  'application/octet-stream',
+])
+
+function isAllowedInstagramMedia(file: Express.Multer.File): boolean {
+  const mime = (file.mimetype || '').toLowerCase()
+  if (
+    INSTAGRAM_MEDIA_MIME.has(mime) ||
+    mime.startsWith('image/') ||
+    mime.startsWith('audio/') ||
+    mime.startsWith('video/')
+  ) {
+    return true
+  }
+  const name = (file.originalname || '').toLowerCase()
+  return /\.(jpe?g|png|webp|mp4|mov|webm|m4a|aac|mp3|wav)$/.test(name)
+}
+
+export const instagramMediaUpload = multer({
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!isAllowedInstagramMedia(file)) {
+      cb(new Error('Unsupported media type for Instagram upload'))
+      return
+    }
+    cb(null, true)
+  },
+}).single('file')

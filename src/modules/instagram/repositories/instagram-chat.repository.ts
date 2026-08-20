@@ -78,6 +78,10 @@ export async function insertMessage(input: {
   toIgId: string
   type: string
   textBody: string | null
+  mediaId?: string | null
+  mediaUrl?: string | null
+  mimeType?: string | null
+  caption?: string | null
   status?: InstagramMessageStatus
   rawPayload: unknown
   timestamp: string | null
@@ -94,6 +98,10 @@ export async function insertMessage(input: {
         to_ig_id: input.toIgId,
         type: input.type,
         text_body: input.textBody,
+        media_id: input.mediaId ?? null,
+        media_url: input.mediaUrl ?? null,
+        mime_type: input.mimeType ?? null,
+        caption: input.caption ?? null,
         status: input.status ?? (input.direction === 'inbound' ? 'received' : 'sent'),
         raw_payload: input.rawPayload as Record<string, unknown>,
         timestamp: input.timestamp,
@@ -258,4 +266,22 @@ export async function resetUnreadCount(input: {
   }
 
   return data as InstagramConversation
+}
+
+export async function findMessageById(input: {
+  storeId: number
+  messageId: number
+}): Promise<InstagramMessage | null> {
+  const { data, error } = await supabaseAdmin
+    .from('instagram_messages')
+    .select('*')
+    .eq('store_id', input.storeId)
+    .eq('id', input.messageId)
+    .maybeSingle()
+
+  if (error) {
+    throw new AppError(400, error.message, 'INSTAGRAM_MESSAGE_FETCH_FAILED')
+  }
+
+  return (data as InstagramMessage) ?? null
 }

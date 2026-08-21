@@ -187,17 +187,22 @@ export async function getConnectionStatus(storeId: number) {
 
   const hasToken = Boolean(store.wa_access_token)
   const hasPhone = Boolean(store.wa_phone_number_id)
+  const connected = hasToken && hasPhone
 
   let isOnBizApp = false
   let platformType: string | null = null
+  let codeVerificationStatus: string | null = null
+  let phoneStatus: string | null = null
 
-  if (hasToken && hasPhone) {
+  if (connected) {
     const status = await fetchPhoneCoexistenceStatus({
       phoneNumberId: store.wa_phone_number_id!,
       accessToken: store.wa_access_token!,
     })
     isOnBizApp = status.isOnBizApp
     platformType = status.platformType
+    codeVerificationStatus = status.codeVerificationStatus
+    phoneStatus = status.phoneStatus
   }
 
   const syncJobs = await syncRepository.listSyncJobs(storeId)
@@ -207,13 +212,15 @@ export async function getConnectionStatus(storeId: number) {
     syncJobs.every((j) => ['completed', 'declined', 'failed'].includes(j.status))
 
   return {
-    connected: hasToken && hasPhone,
+    connected,
     is_on_biz_app: isOnBizApp,
     platform_type: platformType,
+    code_verification_status: codeVerificationStatus,
+    phone_status: phoneStatus,
     wa_phone_number_id: store.wa_phone_number_id,
     wa_waba_id: store.wa_waba_id,
     whatsapp_number: store.whatsapp_number,
     sync_jobs: syncJobs,
-    sync_complete: allSyncComplete || syncJobs.length === 0,
+    sync_complete: connected ? allSyncComplete : true,
   }
 }

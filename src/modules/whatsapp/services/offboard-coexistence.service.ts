@@ -87,8 +87,8 @@ export async function offboardWhatsAppStore(input: {
   await deleteSyncJobsForStore(input.storeId)
 
   const merchantSteps = [
-    'On the phone, open WhatsApp Business → Settings → Account → Business Platform → Disconnect from BaytCode / AiShopy.',
-    'Wait ~1 minute, then tap Connect WhatsApp again to run Embedded Signup from scratch (OTP should appear).',
+    'On the phone, open WhatsApp Business → Settings → Account → Business platform → Disconnect from BaytCode / AiShopy (or any listed Meta partner).',
+    'Wait about one minute, then tap Connect WhatsApp and finish every Meta screen — including any QR or verification code in WhatsApp Business.',
   ]
 
   return {

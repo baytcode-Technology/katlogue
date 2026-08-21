@@ -1,29 +1,28 @@
 import * as storeStaffRepository from '../../stores/repositories/store-staff.repository.js'
-import { AppError } from '../../../shared/errors/app.error.js'
 import * as pushTokenRepository from '../repositories/push-token.repository.js'
 import type { UpsertPushTokenInput } from '../types/notification.types.js'
 
-export async function registerPushTokenForOwner(
-  ownerId: string,
+/** Register Expo push token for an owner or active staff member of the store. */
+export async function registerPushTokenForStoreMember(
+  userId: string,
   storeId: number,
   input: UpsertPushTokenInput
 ): Promise<{ registered: true }> {
-  const store = await storeStaffRepository.resolveOwnedStore(ownerId, storeId)
-
-  await pushTokenRepository.upsertPushToken(store.id, ownerId, input)
+  await storeStaffRepository.assertStoreMember(storeId, userId)
+  await pushTokenRepository.upsertPushToken(storeId, userId, input)
   return { registered: true }
 }
 
-export async function unregisterPushTokenForOwner(
-  ownerId: string,
+/** Remove Expo push token for an owner or active staff member of the store. */
+export async function unregisterPushTokenForStoreMember(
+  userId: string,
   storeId: number,
   expoPushToken: string
 ): Promise<{ removed: boolean }> {
-  const store = await storeStaffRepository.resolveOwnedStore(ownerId, storeId)
-
+  await storeStaffRepository.assertStoreMember(storeId, userId)
   const removed = await pushTokenRepository.deletePushTokenForStoreUser(
-    store.id,
-    ownerId,
+    storeId,
+    userId,
     expoPushToken
   )
   return { removed }

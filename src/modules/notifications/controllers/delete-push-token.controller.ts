@@ -12,7 +12,7 @@ export const deletePushToken = asyncHandler(async (req: Request, res: Response) 
 
   const { store_id } = req.validatedQuery as RequiredStoreQuery
   const body = req.body as DeletePushTokenBody
-  const data = await pushTokenService.unregisterPushTokenForOwner(
+  const data = await pushTokenService.unregisterPushTokenForStoreMember(
     req.authUser.id,
     store_id,
     body.expo_push_token

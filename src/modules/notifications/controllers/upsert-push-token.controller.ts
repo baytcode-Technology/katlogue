@@ -12,7 +12,7 @@ export const upsertPushToken = asyncHandler(async (req: Request, res: Response) 
 
   const { store_id } = req.validatedQuery as RequiredStoreQuery
   const body = req.body as UpsertPushTokenBody
-  const data = await pushTokenService.registerPushTokenForOwner(
+  const data = await pushTokenService.registerPushTokenForStoreMember(
     req.authUser.id,
     store_id,
     body

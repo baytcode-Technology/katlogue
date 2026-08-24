@@ -15,7 +15,7 @@
   "dependencies": {
     "@scalar/express-api-reference": "^0.9.16",
     "@supabase/supabase-js": "^2.105.4",
-    "@tokenbee/sdk": "^1.3.0",
+    "@tokenbee/sdk": "^2.0.0",
     "axios": "^1.16.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",

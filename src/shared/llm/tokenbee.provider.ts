@@ -35,7 +35,7 @@ export class TokenBeeProvider implements LlmProvider {
   async complete(systemPrompt: string, history: LlmChatMessage[]): Promise<string> {
     try {
       const res = (await this.client.send({
-        model: TokenBeeModel.GroqLlama3_3_70b,
+        model: TokenBeeModel.GroqGptOss20b,
         input: {
           messages: [
             { role: 'system', content: systemPrompt },

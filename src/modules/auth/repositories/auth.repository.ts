@@ -78,6 +78,48 @@ export async function signInWithGoogleIdToken(idToken: string): Promise<VerifyOt
   throw new AppError(401, error?.message ?? 'Google sign-in failed', 'GOOGLE_NONCE_REQUIRED')
 }
 
+export async function signInWithAppleIdToken(idToken: string): Promise<VerifyOtpResult> {
+  const { data, error } = await supabaseAuth.auth.signInWithIdToken({
+    provider: 'apple',
+    token: idToken,
+  })
+
+  if (error || !data.session || !data.user) {
+    mapAuthError(error ?? { message: 'Apple sign-in failed' }, 'Apple sign-in failed')
+  }
+
+  return buildAuthResult(data.user, data.session)
+}
+
+export async function updateUserFullNameMetadata(
+  userId: string,
+  fullName: {
+    givenName?: string
+    middleName?: string
+    familyName?: string
+  }
+): Promise<void> {
+  const nameParts = [fullName.givenName, fullName.middleName, fullName.familyName].filter(
+    (part): part is string => Boolean(part && part.trim())
+  )
+  if (nameParts.length === 0) return
+
+  const displayName = nameParts.join(' ')
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+    user_metadata: {
+      full_name: displayName,
+      name: displayName,
+      given_name: fullName.givenName ?? null,
+      family_name: fullName.familyName ?? null,
+    },
+  })
+
+  if (error) {
+    // Name is best-effort; do not fail the sign-in session.
+    console.warn('[auth] Apple full name metadata update failed:', error.message)
+  }
+}
+
 export async function createSessionForGoogleProfile(
   profile: VerifiedGoogleProfile
 ): Promise<VerifyOtpResult> {

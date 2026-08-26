@@ -392,3 +392,22 @@ export async function activateBusinessSubscription(
 
   return data as Store
 }
+
+export async function downgradeStoreToStarter(storeId: number): Promise<Store> {
+  const { data, error } = await supabaseAdmin
+    .from('stores')
+    .update({
+      subscription_plan: 'starter',
+      subscription_expires_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', storeId)
+    .select('*')
+    .single()
+
+  if (error) {
+    throw new AppError(400, error.message, 'SUBSCRIPTION_DOWNGRADE_FAILED')
+  }
+
+  return data as Store
+}

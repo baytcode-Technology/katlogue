@@ -1,1 +1,1 @@
-export { subscriptionRoutes, platformRazorpayWebhookRoutes } from './routes/subscription.routes.js'
+export { subscriptionRoutes, platformRazorpayWebhookRoutes, revenueCatWebhookRoutes } from './routes/subscription.routes.js'

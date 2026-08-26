@@ -17,6 +17,7 @@ import razorpayWebhookRoutes from './modules/payments/routes/razorpay-webhook.ro
 import {
   subscriptionRoutes,
   platformRazorpayWebhookRoutes,
+  revenueCatWebhookRoutes,
 } from './modules/subscriptions/index.js'
 import { customerRoutes } from './modules/customers/index.js'
 import { instagramRoutes } from './modules/instagram/index.js'
@@ -77,6 +78,8 @@ app.use('/api/webhooks/razorpay', razorpayWebhookRoutes)
 app.use('/api/webhooks/razorpay/platform', platformRazorpayWebhookRoutes)
 
 app.use(express.json())
+
+app.use('/api/subscriptions/revenuecat/webhook', revenueCatWebhookRoutes)
 
 app.get('/', (_req, res) => {
   res.json({

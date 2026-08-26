@@ -7,6 +7,8 @@ import { createSubscriptionCheckout } from '../controllers/create-checkout.contr
 import { getSubscriptionPricing } from '../controllers/get-pricing.controller.js'
 import { verifySubscriptionPayment } from '../controllers/verify-payment.controller.js'
 import { getSubscriptionCheckoutStatus } from '../controllers/get-checkout-status.controller.js'
+import { syncAppleSubscription } from '../controllers/sync-apple-subscription.controller.js'
+import { revenueCatWebhook } from '../controllers/revenuecat-webhook.controller.js'
 import { verifySubscriptionPaymentSchema } from '../validations/subscription.validation.js'
 import * as processPlatformWebhookService from '../services/process-platform-webhook.service.js'
 import { asyncHandler } from '../../../shared/helpers/async-handler.js'
@@ -32,6 +34,12 @@ subscriptionRoutes.post(
   verifySubscriptionPayment
 )
 subscriptionRoutes.get('/status', requireAuth, getSubscriptionCheckoutStatus)
+subscriptionRoutes.post(
+  '/apple/sync',
+  requireAuth,
+  validateQuery(requiredStoreQuerySchema),
+  syncAppleSubscription
+)
 
 export const platformRazorpayWebhookRoutes = Router()
 
@@ -54,3 +62,7 @@ platformRazorpayWebhookRoutes.post(
     res.status(200).json({ success: true })
   })
 )
+
+export const revenueCatWebhookRoutes = Router()
+
+revenueCatWebhookRoutes.post('/', revenueCatWebhook)

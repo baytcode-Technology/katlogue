@@ -1,5 +1,5 @@
 import { AppError } from '../errors/app.error.js'
-import { GroqProvider } from './groq.provider.js'
+import { OpenAiProvider } from './openai.provider.js'
 import { TokenBeeProvider } from './tokenbee.provider.js'
 import type { LlmChatMessage, LlmProvider } from './types.js'
 
@@ -11,11 +11,11 @@ let cachedProvider: LlmProvider | null = null
 export function getLlmProvider(): LlmProvider {
   if (cachedProvider) return cachedProvider
 
-  const provider = (process.env.LLM_PROVIDER ?? 'groq').toLowerCase()
+  const provider = (process.env.LLM_PROVIDER ?? 'tokenbee').toLowerCase()
   if (provider === 'tokenbee') {
     cachedProvider = new TokenBeeProvider()
-  } else if (provider === 'groq') {
-    cachedProvider = new GroqProvider()
+  } else if (provider === 'openai') {
+    cachedProvider = new OpenAiProvider()
   } else {
     throw new AppError(500, `Unknown LLM_PROVIDER: ${provider}`, 'LLM_NOT_CONFIGURED')
   }

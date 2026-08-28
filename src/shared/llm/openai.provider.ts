@@ -2,20 +2,18 @@ import OpenAI from 'openai'
 import { AppError } from '../errors/app.error.js'
 import type { LlmChatMessage, LlmProvider } from './types.js'
 
-export class GroqProvider implements LlmProvider {
+export class OpenAiProvider implements LlmProvider {
   private client: OpenAI
   private model: string
 
   constructor() {
-    const apiKey = process.env.LLM_API_KEY
+    const apiKey = process.env.LLM_API_KEY?.trim()
     if (!apiKey) {
       throw new AppError(500, 'LLM_API_KEY is not configured', 'LLM_NOT_CONFIGURED')
     }
-    this.client = new OpenAI({
-      apiKey,
-      baseURL: 'https://api.groq.com/openai/v1',
-    })
-    this.model = process.env.LLM_MODEL ?? 'llama-3.3-70b-versatile'
+
+    this.client = new OpenAI({ apiKey })
+    this.model = process.env.LLM_MODEL?.trim() || 'gpt-4o-mini'
   }
 
   async complete(systemPrompt: string, history: LlmChatMessage[]): Promise<string> {

@@ -46,7 +46,7 @@ export class TokenBeeProvider implements LlmProvider {
           ],
           strategy: CompressionStrategy.Smart,
           context: TokenBeeContext.Conversation,
-          rate: CompressionRate.High,
+          rate: CompressionRate.Low,
         },
       })) as ChatCompletionResponse
 

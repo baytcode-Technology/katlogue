@@ -269,17 +269,40 @@ export async function sendWhatsAppTextMessage(input: SendWhatsAppTextInput) {
 
       unread_count: conversation.unread_count,
 
+      reply_mode: conversation.reply_mode,
+
+      ai_paused_until: conversation.ai_paused_until,
+
     },
 
   })
 
 
 
-  void pauseInboxAiForConversation({
+  await pauseInboxAiForConversation({
     channel: 'whatsapp',
     storeId: input.storeId,
     conversationId: conversation.id,
   })
+
+  const refreshed = await chatRepository.findConversationById({
+    storeId: input.storeId,
+    conversationId: conversation.id,
+  })
+  if (refreshed) {
+    emitToStore(input.storeId, SOCKET_EVENTS.CONVERSATION_UPDATED, {
+      storeId: input.storeId,
+      conversation: {
+        id: refreshed.id,
+        customer_wa_number: refreshed.customer_wa_number,
+        last_message_at: refreshed.last_message_at,
+        last_message_preview: refreshed.last_message_preview,
+        unread_count: refreshed.unread_count,
+        reply_mode: refreshed.reply_mode,
+        ai_paused_until: refreshed.ai_paused_until,
+      },
+    })
+  }
 
 
 

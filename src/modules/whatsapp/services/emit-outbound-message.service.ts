@@ -35,6 +35,8 @@ export function emitOutboundWhatsAppMessage(input: {
       last_message_at: input.conversation.last_message_at,
       last_message_preview: input.conversation.last_message_preview,
       unread_count: Number(input.conversation.unread_count ?? 0),
+      reply_mode: input.conversation.reply_mode,
+      ai_paused_until: input.conversation.ai_paused_until,
     },
   })
 }

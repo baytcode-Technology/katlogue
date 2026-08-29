@@ -9,7 +9,10 @@ import type { InstagramConversation } from '../../instagram/types/instagram-chat
 import type { Store } from '../../stores/types/store.types.js'
 import { scheduleDebouncedInboxAi } from '../debounce.js'
 import { checkInboxAiRateLimit } from '../rate-limit.js'
-import { isAiPaused } from '../repositories/conversation-ai.repository.js'
+import {
+  clearAiPauseForConversation,
+  isAiPaused,
+} from '../repositories/conversation-ai.repository.js'
 import { buildProductReply } from './build-product-reply.service.js'
 import {
   extractLastShownProduct,
@@ -67,11 +70,33 @@ async function loadReplyContext(input: HandleInboundInboxAiInput): Promise<Reply
         })
 
   if (!conversation) return null
-  if (conversation.reply_mode === 'manual') return null
-  if (isAiPaused(conversation.ai_paused_until)) return null
+  if (conversation.reply_mode === 'manual') {
+    console.info(
+      '[inbox-ai] skip store=%d conversation=%d reason=manual_mode',
+      input.storeId,
+      input.conversationId
+    )
+    return null
+  }
+
+  let activeConversation = conversation
+  if (isAiPaused(conversation.ai_paused_until)) {
+    await clearAiPauseForConversation({
+      channel: input.channel,
+      storeId: input.storeId,
+      conversationId: input.conversationId,
+    })
+    activeConversation = { ...conversation, ai_paused_until: null }
+    console.info(
+      '[inbox-ai] cleared pause store=%d conversation=%d reason=customer_inbound',
+      input.storeId,
+      input.conversationId
+    )
+  }
+
   if (!checkInboxAiRateLimit(input.storeId, input.customerKey)) return null
 
-  return { store, conversation }
+  return { store, conversation: activeConversation }
 }
 
 async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
@@ -193,6 +218,7 @@ export function handleInboundInboxAi(input: HandleInboundInboxAiInput): void {
 }
 
 export {
+  clearAiPauseForConversation,
   pauseInboxAiForConversation,
   updateConversationReplyMode,
 } from '../repositories/conversation-ai.repository.js'

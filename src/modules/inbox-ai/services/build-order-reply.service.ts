@@ -248,6 +248,7 @@ export async function buildOrderReply(input: {
 
   return buildLocalizedReply({
     customerLanguage: intent.customerLanguage,
+    scriptStyle: intent.scriptStyle,
     customerMessage: input.customerMessage,
     fallbackLanguage: store.ai_language,
     customPrompt: store.ai_system_prompt,

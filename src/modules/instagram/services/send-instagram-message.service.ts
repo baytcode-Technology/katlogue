@@ -119,11 +119,19 @@ export async function sendInstagramTextMessageService(input: SendInstagramTextIn
   emitInstagramNewMessage(input.storeId, conversation.id, saved)
   emitInstagramConversationUpdated(input.storeId, conversation)
 
-  void pauseInboxAiForConversation({
+  await pauseInboxAiForConversation({
     channel: 'instagram',
     storeId: input.storeId,
     conversationId: conversation.id,
   })
+
+  const refreshed = await chatRepository.findConversationById({
+    storeId: input.storeId,
+    conversationId: conversation.id,
+  })
+  if (refreshed) {
+    emitInstagramConversationUpdated(input.storeId, refreshed)
+  }
 
   return {
     conversation,

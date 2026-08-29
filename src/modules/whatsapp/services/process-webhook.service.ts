@@ -219,6 +219,8 @@ export async function processWhatsAppWebhook(body: unknown): Promise<void> {
               last_message_at: conversation.last_message_at,
               last_message_preview: conversation.last_message_preview,
               unread_count: Number(conversation.unread_count ?? 0),
+              reply_mode: conversation.reply_mode,
+              ai_paused_until: conversation.ai_paused_until,
             },
           })
         }

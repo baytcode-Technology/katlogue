@@ -50,6 +50,25 @@ export async function pauseInboxAiForConversation(input: {
   }
 }
 
+export async function clearAiPauseForConversation(input: {
+  channel: InboxChannel
+  storeId: number
+  conversationId: number
+}): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from(tableForChannel(input.channel))
+    .update({
+      ai_paused_until: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('store_id', input.storeId)
+    .eq('id', input.conversationId)
+
+  if (error) {
+    throw new AppError(400, error.message, 'CONVERSATION_AI_PAUSE_CLEAR_FAILED')
+  }
+}
+
 export function isAiPaused(aiPausedUntil: string | null | undefined): boolean {
   if (!aiPausedUntil) return false
   return new Date(aiPausedUntil).getTime() > Date.now()

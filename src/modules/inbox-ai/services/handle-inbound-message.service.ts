@@ -12,6 +12,7 @@ import { checkInboxAiRateLimit } from '../rate-limit.js'
 import { isAiPaused } from '../repositories/conversation-ai.repository.js'
 import { buildProductReply } from './build-product-reply.service.js'
 import {
+  extractLastShownProduct,
   fetchRecentConversationHistory,
   formatConversationHistory,
   type InboxAiChannel,
@@ -93,6 +94,22 @@ async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
     const conversationHistory = formatConversationHistory(recentMessages)
 
     const intent = await parseCustomerIntent(text, { recentMessages })
+    const lastShownProduct = extractLastShownProduct(recentMessages)
+
+    console.info(
+      '[inbox-ai] %s store=%d conversation=%d intent=%s lang=%s script=%s query=%s category=%s color=%s lastShown=%s',
+      input.channel,
+      input.storeId,
+      input.conversationId,
+      intent.intent,
+      intent.customerLanguage,
+      intent.scriptStyle,
+      intent.searchQuery || 'none',
+      intent.categoryName ?? 'none',
+      intent.color ?? 'none',
+      lastShownProduct?.title ?? 'none'
+    )
+
     const customerPhone =
       input.channel === 'whatsapp' && 'customer_wa_number' in conversation
         ? conversation.customer_wa_number
@@ -103,6 +120,7 @@ async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
       customerText: text,
       intent,
       conversationHistory,
+      lastShownProduct,
       channel: input.channel,
       customerPhone,
       conversationId: input.conversationId,

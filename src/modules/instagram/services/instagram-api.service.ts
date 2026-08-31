@@ -26,6 +26,49 @@ function formatMetaAxiosError(err: unknown): string {
   return data.error?.message ?? JSON.stringify(err.response.data)
 }
 
+export type InstagramCustomerProfile = {
+  username: string | null
+  name: string | null
+}
+
+export async function fetchInstagramCustomerProfile(input: {
+  accessToken: string
+  customerIgId: string
+}): Promise<InstagramCustomerProfile | null> {
+  const customerIgId = input.customerIgId.trim()
+  const accessToken = input.accessToken.trim()
+  if (!customerIgId || !accessToken) return null
+
+  const url = `https://graph.instagram.com/${env.INSTAGRAM.API_VERSION}/${customerIgId}`
+
+  try {
+    const { data } = await axios.get<{
+      username?: string
+      name?: string
+    }>(url, {
+      params: {
+        fields: 'username,name',
+        access_token: accessToken,
+      },
+      timeout: 15_000,
+    })
+
+    const username = data.username?.trim().replace(/^@/, '') || null
+    const name = data.name?.trim() || null
+
+    if (!username && !name) return null
+
+    return { username, name }
+  } catch (err) {
+    console.warn(
+      '[instagram] customer profile lookup failed customer=%s %s',
+      customerIgId,
+      formatMetaAxiosError(err)
+    )
+    return null
+  }
+}
+
 /** Subscribe the connected IG account to webhook fields (required for DM delivery). */
 export async function subscribeInstagramWebhooks(input: {
   igUserId: string

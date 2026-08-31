@@ -2,6 +2,7 @@ import * as customerRepository from '../../customers/repositories/customer.repos
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import { notifyInstagramChat } from '../../notifications/services/send-store-notification.service.js'
 import { handleInboundInboxAi } from '../../inbox-ai/index.js'
+import { ensureInstagramCustomerUsername } from './ensure-instagram-customer-username.service.js'
 import { emitToStore } from '../../../websocket/index.js'
 import { SOCKET_EVENTS } from '../../../websocket/events.js'
 import * as chatRepository from '../repositories/instagram-chat.repository.js'
@@ -332,6 +333,17 @@ export async function processInstagramWebhook(body: unknown): Promise<void> {
 
     emitInstagramNewMessage(store.id, conversation.id, saved)
     emitInstagramConversationUpdated(store.id, conversation)
+
+    if (!conversation.customer_ig_username) {
+      void ensureInstagramCustomerUsername({
+        store,
+        conversationId: conversation.id,
+        customerIgId: event.senderIgId,
+        existingUsername: conversation.customer_ig_username,
+      }).catch((err) => {
+        console.error('[instagram] profile lookup failed on inbound', err)
+      })
+    }
 
     void notifyInstagramChat({
       storeId: store.id,

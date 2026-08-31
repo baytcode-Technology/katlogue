@@ -71,6 +71,33 @@ export async function upsertConversation(input: {
   return data as InstagramConversation
 }
 
+export async function updateCustomerIgUsername(input: {
+  storeId: number
+  conversationId: number
+  username: string
+}): Promise<InstagramConversation | null> {
+  const username = input.username.trim().replace(/^@/, '')
+  if (!username) return null
+
+  const { data, error } = await supabaseAdmin
+    .from('instagram_conversations')
+    .update({
+      customer_ig_username: username,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('store_id', input.storeId)
+    .eq('id', input.conversationId)
+    .is('customer_ig_username', null)
+    .select('*')
+    .maybeSingle()
+
+  if (error) {
+    throw new AppError(400, error.message, 'INSTAGRAM_CONVERSATION_USERNAME_UPDATE_FAILED')
+  }
+
+  return (data as InstagramConversation) ?? null
+}
+
 export async function insertMessage(input: {
   storeId: number
   conversationId: number

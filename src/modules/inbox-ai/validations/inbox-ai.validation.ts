@@ -10,6 +10,7 @@ export const updateInboxAiSettingsSchema = z
     ai_auto_reply_enabled: z.boolean().optional(),
     ai_system_prompt: z.union([z.string().trim().max(8000), z.null()]).optional(),
     ai_language: z.union([z.string().trim().max(16), z.null()]).optional(),
+    ai_third_party_consent: z.literal(true).optional(),
   })
   .refine((body) => Object.keys(body).length > 0, {
     message: 'At least one field is required',

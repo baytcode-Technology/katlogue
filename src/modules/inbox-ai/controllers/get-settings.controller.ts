@@ -20,6 +20,7 @@ export const getInboxAiSettings = asyncHandler(async (req: Request, res: Respons
       ai_auto_reply_enabled: store.ai_auto_reply_enabled ?? false,
       ai_system_prompt: store.ai_system_prompt,
       ai_language: store.ai_language,
+      ai_third_party_consented: Boolean(store.ai_third_party_consent_at),
       premium: hasPremiumAccess(store),
     },
   })

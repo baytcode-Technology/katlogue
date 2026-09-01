@@ -12,6 +12,7 @@ export const updateInboxAiSettings = asyncHandler(async (req: Request, res: Resp
     ai_auto_reply_enabled?: boolean
     ai_system_prompt?: string | null
     ai_language?: string | null
+    ai_third_party_consent?: true
   }
 
   await storeRepository.assertStoreMember(Number(storeId), req.authUser.id)
@@ -27,12 +28,27 @@ export const updateInboxAiSettings = asyncHandler(async (req: Request, res: Resp
     )
   }
 
+  const enablingAi = body.ai_auto_reply_enabled === true
+  const hasStoredConsent = Boolean(existing.ai_third_party_consent_at)
+  const consentProvided = body.ai_third_party_consent === true
+
+  if (enablingAi && !hasStoredConsent && !consentProvided) {
+    throw new AppError(
+      403,
+      'Third-party AI consent is required to enable Chat Boat',
+      'AI_CONSENT_REQUIRED'
+    )
+  }
+
   const store = await storeRepository.updateStore(Number(storeId), {
     ...(body.ai_auto_reply_enabled !== undefined
       ? { ai_auto_reply_enabled: body.ai_auto_reply_enabled }
       : {}),
     ...(body.ai_system_prompt !== undefined ? { ai_system_prompt: body.ai_system_prompt } : {}),
     ...(body.ai_language !== undefined ? { ai_language: body.ai_language } : {}),
+    ...(consentProvided
+      ? { ai_third_party_consent_at: new Date().toISOString() }
+      : {}),
   })
 
   res.status(200).json({
@@ -42,6 +58,7 @@ export const updateInboxAiSettings = asyncHandler(async (req: Request, res: Resp
       ai_auto_reply_enabled: store.ai_auto_reply_enabled ?? false,
       ai_system_prompt: store.ai_system_prompt,
       ai_language: store.ai_language,
+      ai_third_party_consented: Boolean(store.ai_third_party_consent_at),
       premium: hasPremiumAccess(store),
     },
   })

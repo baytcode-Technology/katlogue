@@ -13,14 +13,11 @@ import {
   clearAiPauseForConversation,
   isAiPaused,
 } from '../repositories/conversation-ai.repository.js'
-import { buildProductReply } from './build-product-reply.service.js'
+import { composeInboxAiReply } from './compose-inbox-ai-reply.service.js'
 import {
-  extractLastShownProduct,
   fetchRecentConversationHistory,
-  formatConversationHistory,
   type InboxAiChannel,
 } from './conversation-history.service.js'
-import { parseCustomerIntent } from './parse-customer-intent.service.js'
 import { sendAutoReplyInstagramText } from './send-auto-reply-instagram.service.js'
 import {
   sendAutoReplyWhatsAppImage,
@@ -116,10 +113,22 @@ async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
       storeId: input.storeId,
       conversationId: input.conversationId,
     })
-    const conversationHistory = formatConversationHistory(recentMessages)
 
-    const intent = await parseCustomerIntent(text, { recentMessages })
-    const lastShownProduct = extractLastShownProduct(recentMessages)
+    const customerPhone =
+      input.channel === 'whatsapp' && 'customer_wa_number' in conversation
+        ? conversation.customer_wa_number
+        : null
+
+    const composed = await composeInboxAiReply({
+      store,
+      channel: input.channel,
+      customerText: text,
+      recentMessages,
+      customerPhone,
+      conversationId: input.conversationId,
+    })
+
+    const { intent, lastShownProduct, reply } = composed
 
     console.info(
       '[inbox-ai] %s store=%d conversation=%d intent=%s lang=%s script=%s query=%s category=%s color=%s lastShown=%s',
@@ -134,22 +143,6 @@ async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
       intent.color ?? 'none',
       lastShownProduct?.title ?? 'none'
     )
-
-    const customerPhone =
-      input.channel === 'whatsapp' && 'customer_wa_number' in conversation
-        ? conversation.customer_wa_number
-        : null
-
-    const reply = await buildProductReply({
-      store,
-      customerText: text,
-      intent,
-      conversationHistory,
-      lastShownProduct,
-      channel: input.channel,
-      customerPhone,
-      conversationId: input.conversationId,
-    })
 
     if (!reply.primaryText.trim()) return
 

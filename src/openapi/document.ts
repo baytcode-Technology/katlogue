@@ -38,6 +38,7 @@ export function buildOpenApiDocument() {
       { name: 'Health', description: 'Service health' },
       { name: 'Auth', description: 'Email OTP sign-in' },
       { name: 'Stores', description: 'Merchant store management' },
+      { name: 'Inbox AI', description: 'Chat Boat auto-reply settings and preview (merchant)' },
       { name: 'Products', description: 'Product catalog (merchant)' },
       { name: 'Categories', description: 'Categories (merchant)' },
       { name: 'Uploads', description: 'File uploads (merchant)' },
@@ -517,6 +518,31 @@ export function buildOpenApiDocument() {
             expo_push_token: { type: 'string' },
             platform: { type: 'string', enum: ['ios', 'android', 'web'] },
             sound_channel_id: { type: 'string' },
+          },
+        },
+        PreviewInboxAiReplyBody: {
+          type: 'object',
+          required: ['message'],
+          properties: {
+            message: { type: 'string', minLength: 1, maxLength: 2000, example: 'blue shirt undo?' },
+            channel: { type: 'string', enum: ['whatsapp', 'instagram'], default: 'whatsapp' },
+          },
+        },
+        PreviewInboxAiReplyData: {
+          type: 'object',
+          properties: {
+            intent: { type: 'string', example: 'product_search' },
+            customerLanguage: { type: 'string', example: 'Malayalam' },
+            scriptStyle: { type: 'string', enum: ['malayalam_script', 'latin', 'other'] },
+            searchQuery: { type: 'string', nullable: true },
+            color: { type: 'string', nullable: true },
+            categoryName: { type: 'string', nullable: true },
+            requestedItem: { type: 'string', nullable: true },
+            replyText: { type: 'string' },
+            wouldSendImage: { type: 'boolean' },
+            hasFollowUpText: { type: 'boolean' },
+            lastShownProductTitle: { type: 'string', nullable: true },
+            note: { type: 'string', example: 'Preview only — not sent to any customer' },
           },
         },
         CreateOrderBody: {
@@ -1250,6 +1276,49 @@ export function buildOpenApiDocument() {
                 },
               },
             },
+          },
+        },
+      },
+      '/api/stores/{storeId}/inbox-ai/preview': {
+        post: {
+          tags: ['Inbox AI'],
+          summary: 'Preview Chat Boat reply (no message sent)',
+          description:
+            'Runs the same intent parsing and reply generation as live auto-reply using gpt-4o-mini. Does not send to WhatsApp or Instagram. Limited to 20 previews per store per hour.',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: 'storeId',
+              in: 'path',
+              required: true,
+              schema: { $ref: '#/components/schemas/EntityId' },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/PreviewInboxAiReplyBody' },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description: 'Preview generated',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      message: { type: 'string' },
+                      data: { $ref: '#/components/schemas/PreviewInboxAiReplyData' },
+                    },
+                  },
+                },
+              },
+            },
+            '429': { description: 'Preview rate limit (20/hour/store)' },
           },
         },
       },

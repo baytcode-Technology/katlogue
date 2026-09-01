@@ -37,6 +37,7 @@ export type Store = {
   ai_system_prompt: string | null
   ai_language: string | null
   ai_auto_reply_enabled: boolean
+  ai_third_party_consent_at: string | null
   industry: string | null
   is_active: boolean
   subscription_plan: 'starter' | 'business' | 'enterprise'
@@ -68,6 +69,7 @@ export type UpdateStoreInput = {
   ai_system_prompt?: string | null
   ai_language?: string | null
   ai_auto_reply_enabled?: boolean
+  ai_third_party_consent_at?: string | null
   is_active?: boolean
   theme_config?: ThemeConfig | null
 }

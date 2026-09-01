@@ -206,6 +206,14 @@ function buildAuthResult(
   }
 }
 
+export async function deleteUserAccount(userId: string): Promise<void> {
+  const { error } = await supabaseAdmin.auth.admin.deleteUser(userId)
+
+  if (error) {
+    throw new AppError(400, error.message || 'Failed to delete account', 'ACCOUNT_DELETE_FAILED')
+  }
+}
+
 function mapSession(session: {
   access_token: string
   refresh_token: string

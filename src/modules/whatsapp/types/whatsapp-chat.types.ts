@@ -38,6 +38,8 @@ export type WhatsAppConversation = {
 
   ai_paused_until: string | null
 
+  ai_disclosure_sent: boolean
+
   created_at: string
 
   updated_at: string

@@ -73,3 +73,31 @@ export function isAiPaused(aiPausedUntil: string | null | undefined): boolean {
   if (!aiPausedUntil) return false
   return new Date(aiPausedUntil).getTime() > Date.now()
 }
+
+export async function tryMarkAiDisclosureSent(input: {
+  channel: InboxChannel
+  storeId: number
+  conversationId: number
+}): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from(tableForChannel(input.channel))
+    .update({
+      ai_disclosure_sent: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('store_id', input.storeId)
+    .eq('id', input.conversationId)
+    .eq('ai_disclosure_sent', false)
+    .select('id')
+    .maybeSingle()
+
+  if (error) {
+    throw new AppError(
+      400,
+      error.message,
+      'CONVERSATION_AI_DISCLOSURE_SENT_UPDATE_FAILED'
+    )
+  }
+
+  return Boolean(data)
+}

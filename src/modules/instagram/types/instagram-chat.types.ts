@@ -18,6 +18,8 @@ export type InstagramConversation = {
   unread_count: number
   reply_mode: 'ai' | 'manual'
   ai_paused_until: string | null
+
+  ai_disclosure_sent: boolean
   created_at: string
   updated_at: string
 }

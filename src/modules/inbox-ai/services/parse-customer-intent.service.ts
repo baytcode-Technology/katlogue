@@ -12,7 +12,7 @@ export type CustomerIntent =
   | 'off_topic'
   | 'explicit'
 
-export type OrderScope = 'latest' | 'specific' | 'product' | null
+export type OrderScope = 'latest' | 'all' | 'specific' | 'product' | null
 
 /**
  * Script the customer typed in. Manglish (Malayalam written with Latin letters)
@@ -111,7 +111,7 @@ Return JSON only:
   "orderNumber": "full order number e.g. JAN26-3 if mentioned, or null",
   "orderNumberHint": "bare digits after order e.g. 88 from 'order 88', or null",
   "orderProductHint": "product name in an order question e.g. shirt, or null",
-  "orderScope": "latest" | "specific" | "product" | null,
+  "orderScope": "latest" | "all" | "specific" | "product" | null,
   "typedPhone": "a 10-15 digit phone the customer typed, or null"
 }
 
@@ -124,11 +124,13 @@ Rules:
 - buy_intent: the customer wants to buy or order what was already discussed, without naming a new product. "I'll take it", "ok I want this", "how to order", "order cheyyam", "order cheyyan pattumo", "book it", "edukkam", "എടുക്കാം", "വേണം" alone, "how to pay", "cash on delivery undo".
   For buy_intent ALSO return searchQuery: "", categoryName: null. Keep size/color if they stated one (e.g. "L edukkam" → size: "L").
 - Any product availability, price, or shopping question = product_search (NOT off_topic), even with personal context.
-- order_status for: my/last/recent order, order status, tracking, shipped, delivery, payment status, where is my order, "order evide", "kittiyilla", "ordered today" — NOT product_search or off_topic.
+- order_status for: my/last/recent order, all/total orders, order status, tracking, shipped, delivery, payment status, where is my order, "order evide", "kittiyilla", "ordered today" — NOT product_search or off_topic.
 - "where is my shirt order" → order_status, orderScope: "product", orderProductHint: "shirt", searchQuery: "".
 - "status of order JAN26-5" → order_status, orderScope: "specific", orderNumber: "JAN26-5".
-- "order 88" / "order 10" → order_status, orderNumberHint: "88" or "10".
-- "my last order" → order_status, orderScope: "latest".
+- "order 88" / "order 10" → order_status, orderNumberHint: "88" or "10", orderScope: "specific".
+- "my last order" / "last order status" / "ente last order" → order_status, orderScope: "latest".
+- "all my orders" / "my orders" / "total orders" / "how many orders" / "ella orders" / "orders okke" / "ente orders ellam" → order_status, orderScope: "all".
+- "where is my order" (no last/all) → order_status, orderScope: "latest".
 - Messages in any language about products = product_search (unless clearly about an existing order).
 - off_topic for: "do you know Malayalam?", "can you speak Hindi?", reading PDFs/files, general knowledge, app/code questions, unrelated chat — NO shopping intent.
 - explicit only for sexual/violent/harassing content.`
@@ -167,7 +169,13 @@ const OFF_TOPIC_PATTERN =
 const ORDER_NUMBER_PATTERN = /\b([A-Z]{3}\d{2}-\d+)\b/i
 
 const ORDER_STATUS_PATTERN =
-  /\b(my\s+order|last\s+order|recent\s+order|order\s+status|order\s+update|where\s+is\s+(my\s+)?order|track(ing)?(\s+my\s+order|\s+number|\s+id)?|shipped|delivery\s+status|payment\s+status|order\s+number|order\s+no\.?|order\s+#|ordered|order\s+evide|kittiyilla|kitteela)\b|എവിടെ|ഓർഡർ|ഓര്‍ഡര്‍/i
+  /\b(my\s+orders?|last\s+order|recent\s+order|all\s+(my\s+)?orders?|total\s+orders?|how\s+many\s+orders?|order\s+status|order\s+update|where\s+is\s+(my\s+)?order|track(ing)?(\s+my\s+order|\s+number|\s+id)?|shipped|delivery\s+status|payment\s+status|order\s+number|order\s+no\.?|order\s+#|ordered|order\s+evide|kittiyilla|kitteela|ella\s+orders?|orders?\s+okke)\b|എവിടെ|ഓർഡർ|ഓര്‍ഡര്‍/i
+
+/**
+ * Customer wants a list / count of all orders under their number — not only the last one.
+ */
+const ALL_ORDERS_SCOPE_PATTERN =
+  /\b(all\s+(my\s+)?orders?|my\s+orders\b|total\s+orders?|how\s+many\s+orders?|orders?\s+list|list\s+(my\s+)?orders?|ella\s+orders?|orders?\s+okke|orders?\s+ellam|ente\s+orders(?:\s+ellam)?\b|njangalude\s+orders?|എല്ലാ\s*ഓർഡർ|ഓർഡറുകൾ)\b/i
 
 /** Words that mean "track an existing order" rather than "I want to order". */
 const ORDER_TRACKING_WORD_PATTERN =
@@ -468,11 +476,17 @@ export function extractPhoneFromText(text: string): string | null {
 }
 
 export function isOrderStatusMessage(text: string): boolean {
+  const trimmed = text.trim()
   return (
-    ORDER_STATUS_PATTERN.test(text.trim()) ||
+    ORDER_STATUS_PATTERN.test(trimmed) ||
+    ALL_ORDERS_SCOPE_PATTERN.test(trimmed) ||
     extractOrderNumber(text) !== null ||
     extractOrderNumberHint(text) !== null
   )
+}
+
+export function isAllOrdersScopeMessage(text: string): boolean {
+  return ALL_ORDERS_SCOPE_PATTERN.test(text.trim())
 }
 
 export function extractOrderProductHint(text: string): string | null {
@@ -499,9 +513,11 @@ export function resolveOrderScope(
   orderNumber: string | null,
   orderProductHint: string | null
 ): OrderScope {
-  if (orderNumber) return 'specific'
-  if (/\b(last|recent|my)\s+order\b/i.test(text) && !orderProductHint) return 'latest'
+  if (orderNumber || extractOrderNumberHint(text)) return 'specific'
+  if (isAllOrdersScopeMessage(text)) return 'all'
   if (orderProductHint && ORDER_PRODUCT_PATTERN.test(text)) return 'product'
+  if (/\b(last|recent)\s+order\b/i.test(text) && !orderProductHint) return 'latest'
+  if (/\bmy\s+order\b/i.test(text) && !orderProductHint) return 'latest'
   if (isOrderStatusMessage(text)) return 'latest'
   return null
 }

@@ -60,7 +60,7 @@ const TEMPLATE_TASKS: Record<ShopOwnerTemplateTask, string> = {
 Keep every line natural shop talk, not marketing copy. No markdown.`,
 
   order_assistant:
-    'You are helping with an EXISTING order, not selling products. Answer the customer\'s actual question using ONLY the order facts. Speak like a real shop person: warm, use the honorific once, one short apology if you cannot find it, then one useful follow-up (when they ordered, which product, or which number they used). Include order number, items with qty and prices, total, status, recipient name, and address when the matching order is in the facts. If several orders match, ask which one. If none match, do not dump an old unrelated order — say you could not find that one and ask a follow-up. NEVER invent or change numbers, prices, quantities, statuses, tracking, names, or addresses.',
+    'You are helping with EXISTING orders, not selling products. Answer using ONLY the order facts. Speak like a real shop person: warm, use the honorific once. NEVER invent or change numbers, prices, quantities, statuses, tracking, names, or addresses. Scope rules: (1) If facts say orderScope=all or "Customer asked for: all orders", list EVERY order from the facts (order number, date, status, total at minimum), state how many, then ask which order number they want full details for — do NOT skip the list and only ask which one. (2) If facts say latest / one specific order, give full status for that order only (items, total, recipient, address, tracking when present). (3) If several product-matching orders are listed, summarise each briefly then ask which one. (4) If none match, one short apology and one useful follow-up (when they ordered, which product, or which number).',
 
   order_needs_phone:
     'Say order status can only be checked on WhatsApp using the phone number used when placing the order. Ask them to message from that number. Be warm, not robotic.',
@@ -127,7 +127,8 @@ function buildLanguageBlock(
 }
 
 function resolveMaxChars(task: ShopOwnerTemplateTask): number {
-  if (task === 'order_assistant' || task === 'order_needs_phone') return 900
+  if (task === 'order_assistant') return 1200
+  if (task === 'order_needs_phone') return 900
   if (task === 'product_lines') return 320
   return 400
 }

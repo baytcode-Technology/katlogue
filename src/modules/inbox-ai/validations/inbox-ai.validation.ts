@@ -27,8 +27,3 @@ export const setReplyModeParamsSchema = z.object({
 export const setReplyModeQuerySchema = z.object({
   store_id: entityId('Invalid store id'),
 })
-
-export const previewInboxAiReplySchema = z.object({
-  message: z.string().trim().min(1, 'Message is required').max(2000),
-  channel: z.enum(['whatsapp', 'instagram']).optional().default('whatsapp'),
-})

@@ -12,14 +12,17 @@ import {
   extractOrderNumberHint,
   extractOrderProductHint,
   extractPhoneFromText,
+  isAllOrdersScopeMessage,
   isOrderStatusMessage,
   resolveOrderScope,
 } from '../services/parse-customer-intent.service.js'
 import {
   formatOrderFactsBlock,
   formatOrderStatusLabel,
+  formatOrdersFactsForScope,
   formatPaymentProviderLabel,
   parseOrderItemSnapshot,
+  selectOrdersForScope,
 } from '../services/build-order-reply.service.js'
 import type { OrderWithDetails } from '../../orders/repositories/order.repository.js'
 
@@ -70,6 +73,18 @@ test('resolves order scope', () => {
   assert.equal(resolveOrderScope('order JAN26-3', 'JAN26-3', null), 'specific')
   assert.equal(resolveOrderScope('my last order', null, null), 'latest')
   assert.equal(resolveOrderScope('where is my shirt order', null, 'shirt'), 'product')
+  assert.equal(resolveOrderScope('where is my order', null, null), 'latest')
+  assert.equal(resolveOrderScope('all my orders', null, null), 'all')
+  assert.equal(resolveOrderScope('how many orders', null, null), 'all')
+  assert.equal(resolveOrderScope('orders okke', null, null), 'all')
+  assert.equal(resolveOrderScope('my orders', null, null), 'all')
+  assert.equal(resolveOrderScope('ente orders ellam', null, null), 'all')
+})
+
+test('all-orders detector does not steal singular last-order asks', () => {
+  assert.equal(isAllOrdersScopeMessage('all my orders'), true)
+  assert.equal(isAllOrdersScopeMessage('my last order'), false)
+  assert.equal(isAllOrdersScopeMessage('where is my order'), false)
 })
 
 test('extracts product hint from order question', () => {
@@ -201,6 +216,152 @@ test('facts block includes name, address, qty, prices and excludes secrets', () 
   assert.doesNotMatch(facts, /secret-payment-id/)
   assert.doesNotMatch(facts, /secret\/proof/)
   assert.doesNotMatch(facts, /admin_notes/)
+})
+
+console.log('\n=== Scope selection ===')
+
+test('latest keeps only the newest order', () => {
+  const orders = [
+    mockOrder({ id: 1, order_number: 'JAN26-1', created_at: '2026-01-01T10:00:00.000Z' }),
+    mockOrder({ id: 2, order_number: 'JAN26-2', created_at: '2026-01-20T10:00:00.000Z' }),
+    mockOrder({ id: 3, order_number: 'JAN26-3', created_at: '2026-01-10T10:00:00.000Z' }),
+  ]
+  const selected = selectOrdersForScope(orders, {
+    orderScope: 'latest',
+    orderNumber: null,
+    orderNumberHint: null,
+    orderProductHint: null,
+  })
+  assert.equal(selected.length, 1)
+  assert.equal(selected[0].order_number, 'JAN26-2')
+})
+
+test('all keeps every recent order newest-first', () => {
+  const orders = [
+    mockOrder({ id: 1, order_number: 'JAN26-1', created_at: '2026-01-01T10:00:00.000Z' }),
+    mockOrder({ id: 2, order_number: 'JAN26-2', created_at: '2026-01-20T10:00:00.000Z' }),
+    mockOrder({ id: 3, order_number: 'JAN26-3', created_at: '2026-01-10T10:00:00.000Z' }),
+  ]
+  const selected = selectOrdersForScope(orders, {
+    orderScope: 'all',
+    orderNumber: null,
+    orderNumberHint: null,
+    orderProductHint: null,
+  })
+  assert.equal(selected.length, 3)
+  assert.equal(selected[0].order_number, 'JAN26-2')
+  assert.equal(selected[2].order_number, 'JAN26-1')
+})
+
+test('specific matches order number', () => {
+  const orders = [
+    mockOrder({ id: 1, order_number: 'JAN26-1', created_at: '2026-01-01T10:00:00.000Z' }),
+    mockOrder({ id: 2, order_number: 'JAN26-5', created_at: '2026-01-20T10:00:00.000Z' }),
+  ]
+  const selected = selectOrdersForScope(orders, {
+    orderScope: 'specific',
+    orderNumber: 'JAN26-5',
+    orderNumberHint: null,
+    orderProductHint: null,
+  })
+  assert.equal(selected.length, 1)
+  assert.equal(selected[0].order_number, 'JAN26-5')
+})
+
+test('product scope filters by item name', () => {
+  const shirt = mockOrder({
+    id: 1,
+    order_number: 'JAN26-1',
+    created_at: '2026-01-01T10:00:00.000Z',
+    items: [
+      {
+        id: 1,
+        order_id: 1,
+        product_id: 1,
+        variant_id: null,
+        quantity: 1,
+        unit_price: 500,
+        total_price: 500,
+        snapshot: { product: { name: 'Blue Shirt' } },
+      },
+    ],
+  })
+  const pants = mockOrder({
+    id: 2,
+    order_number: 'JAN26-2',
+    created_at: '2026-01-20T10:00:00.000Z',
+    items: [
+      {
+        id: 2,
+        order_id: 2,
+        product_id: 2,
+        variant_id: null,
+        quantity: 1,
+        unit_price: 400,
+        total_price: 400,
+        snapshot: { product: { name: 'Loose Pants' } },
+      },
+    ],
+  })
+  const selected = selectOrdersForScope([shirt, pants], {
+    orderScope: 'product',
+    orderNumber: null,
+    orderNumberHint: null,
+    orderProductHint: 'shirt',
+  })
+  assert.equal(selected.length, 1)
+  assert.equal(selected[0].order_number, 'JAN26-1')
+})
+
+test('all-scope facts use compact summaries and count', () => {
+  const orders = [
+    mockOrder({
+      id: 2,
+      order_number: 'JAN26-2',
+      created_at: '2026-01-20T10:00:00.000Z',
+      items: [
+        {
+          id: 1,
+          order_id: 2,
+          product_id: 1,
+          variant_id: null,
+          quantity: 1,
+          unit_price: 500,
+          total_price: 500,
+          snapshot: { product: { name: 'Cap' } },
+        },
+      ],
+    }),
+    mockOrder({ id: 1, order_number: 'JAN26-1', created_at: '2026-01-01T10:00:00.000Z' }),
+  ]
+  const facts = formatOrdersFactsForScope(orders, 'INR', 'all')
+  assert.match(facts, /count=2/)
+  assert.match(facts, /JAN26-2/)
+  assert.match(facts, /JAN26-1/)
+  assert.match(facts, /Items: Cap x1/)
+  assert.doesNotMatch(facts, /Recipient:/)
+})
+
+test('latest-scope facts use full detail block', () => {
+  const order = mockOrder({
+    order_number: 'AUG26-10',
+    items: [
+      {
+        id: 1,
+        order_id: 1,
+        product_id: 1,
+        variant_id: null,
+        quantity: 1,
+        unit_price: 500,
+        total_price: 500,
+        snapshot: { product: { name: 'Cap' } },
+      },
+    ],
+  })
+  const facts = formatOrdersFactsForScope([order], 'INR', 'latest')
+  assert.match(facts, /latest \/ last order/)
+  assert.match(facts, /Recipient: Nuaim Panackal/)
+  assert.match(facts, /Address: Mannancherry/)
 })
 
 if (failed > 0) {

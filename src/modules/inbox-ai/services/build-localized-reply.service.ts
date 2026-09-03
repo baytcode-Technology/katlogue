@@ -23,6 +23,8 @@ export type LocalizedReplyFacts = {
   orderFacts?: string | null
   customerAsk?: string | null
   orderOutcome?: 'found' | 'none' | 'needs_phone' | null
+  /** latest | all | specific | product — controls how the reply should list orders */
+  orderScope?: 'latest' | 'all' | 'specific' | 'product' | null
   /** Product we last sent, so reactions like "ok" can be answered in context. */
   lastShownProduct?: LastShownProduct | null
   /** Product being sent right now, used by the product_lines task. */
@@ -285,6 +287,7 @@ function buildFactsBlock(template: LocalizedReplyTemplate, facts: LocalizedReply
   if (facts.refusalReason) lines.push(`Reason: ${facts.refusalReason}`)
   if (facts.customerAsk?.trim()) lines.push(`Customer asked: ${facts.customerAsk.trim()}`)
   if (facts.orderOutcome) lines.push(`Order lookup outcome: ${facts.orderOutcome}`)
+  if (facts.orderScope) lines.push(`Order reply scope: ${facts.orderScope}`)
   if (facts.orderFacts?.trim()) lines.push(`Order facts:\n${facts.orderFacts.trim()}`)
 
   if (facts.lastShownProduct?.title) {

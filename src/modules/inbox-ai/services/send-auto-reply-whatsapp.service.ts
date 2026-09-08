@@ -7,6 +7,7 @@ import * as chatRepository from '../../whatsapp/repositories/whatsapp-chat.repos
 import { emitOutboundWhatsAppMessage } from '../../whatsapp/services/emit-outbound-message.service.js'
 import {
   isWhatsAppReadyForStore,
+  resolveBusinessFromNumber,
   resolveStoreWhatsAppCredentials,
   sendMediaMessage,
   sendTextMessage,
@@ -83,7 +84,7 @@ export async function sendAutoReplyWhatsAppText(input: {
     conversationId: conversation.id,
     metaMessageId: metaResult.metaMessageId,
     direction: 'outbound',
-    fromNumber: store.whatsapp_number,
+    fromNumber: resolveBusinessFromNumber(store),
     toNumber: customerWaNumber,
     type: 'text',
     textBody: message,
@@ -139,7 +140,7 @@ export async function sendAutoReplyWhatsAppImage(input: {
     conversationId: conversation.id,
     metaMessageId: metaResult.metaMessageId,
     direction: 'outbound',
-    fromNumber: store.whatsapp_number,
+    fromNumber: resolveBusinessFromNumber(store),
     toNumber: customerWaNumber,
     type: 'image',
     textBody: preview,

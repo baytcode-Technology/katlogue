@@ -17,6 +17,8 @@ import {
 
   isWhatsAppReadyForStore,
 
+  resolveBusinessFromNumber,
+
   resolveStoreWhatsAppCredentials,
 
   sendTextMessage,
@@ -195,7 +197,7 @@ export async function sendWhatsAppTextMessage(input: SendWhatsAppTextInput) {
 
     direction: 'outbound',
 
-    fromNumber: store.whatsapp_number,
+    fromNumber: resolveBusinessFromNumber(store),
 
     toNumber: customerWaNumber,
 

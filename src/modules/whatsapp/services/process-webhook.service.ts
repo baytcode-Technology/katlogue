@@ -14,7 +14,7 @@ import {
   type WebhookFieldEvent,
 } from './coexistence-webhook.service.js'
 import { markHistorySyncDeclined } from './coexistence-sync.service.js'
-import { markAsRead, resolveStoreWhatsAppCredentials, type ParsedWebhookMessage } from './whatsapp.service.js'
+import { markAsRead, resolveBusinessFromNumber, resolveStoreWhatsAppCredentials, type ParsedWebhookMessage } from './whatsapp.service.js'
 import { formatWhatsAppMessagePreview } from './whatsapp-message-content.service.js'
 
 function whatsAppSenderLabel(customer: Customer, phone: string): string {
@@ -37,7 +37,7 @@ async function persistMessage(input: {
   const store = input.store
   if (!store) return null
 
-  const businessNumber = input.event.displayPhoneNumber ?? store.whatsapp_number
+  const businessNumber = resolveBusinessFromNumber(store, input.event.displayPhoneNumber)
   const customerPhone =
     input.direction === 'inbound' ? input.msg.from : input.msg.to ?? input.msg.from
 
@@ -148,7 +148,7 @@ export async function processWhatsAppWebhook(body: unknown): Promise<void> {
     if (!store) continue
 
     const credentials = resolveStoreWhatsAppCredentials(store)
-    const businessNumber = event.displayPhoneNumber ?? store.whatsapp_number
+    const businessNumber = resolveBusinessFromNumber(store, event.displayPhoneNumber)
 
     // Contact sync
     for (const contact of event.contacts) {

@@ -47,7 +47,7 @@ export async function insertStore(
       owner_id: ownerId,
       name: input.name,
       slug: input.slug,
-      whatsapp_number: input.whatsapp_number,
+      whatsapp_number: input.whatsapp_number ?? null,
       currency: input.currency,
       country: input.country,
       description: input.description ?? null,

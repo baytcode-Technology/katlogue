@@ -16,7 +16,7 @@ export type PublicStoreResponse = {
   name: string
   description: string | null
   logo_url: string | null
-  whatsapp_number: string
+  whatsapp_number: string | null
   currency: string
   timezone: string
   is_active: boolean

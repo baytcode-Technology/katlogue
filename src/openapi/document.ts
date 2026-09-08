@@ -98,11 +98,16 @@ export function buildOpenApiDocument() {
         },
         CreateStoreBody: {
           type: 'object',
-          required: ['name', 'slug', 'whatsapp_number', 'currency'],
+          required: ['name', 'slug', 'currency'],
           properties: {
             name: { type: 'string', maxLength: 200, example: 'My Shop' },
             slug: { type: 'string', minLength: 3, maxLength: 63, example: 'my-shop' },
-            whatsapp_number: { type: 'string', example: '+919876543210' },
+            whatsapp_number: {
+              type: 'string',
+              nullable: true,
+              description: 'Optional contact number (E.164). Empty/null allowed.',
+              example: '+919876543210',
+            },
             currency: { type: 'string', minLength: 3, maxLength: 3, example: 'INR' },
             description: { type: 'string', nullable: true },
             logo_url: { type: 'string', format: 'uri', nullable: true },
@@ -119,7 +124,11 @@ export function buildOpenApiDocument() {
           properties: {
             name: { type: 'string', maxLength: 200 },
             slug: { type: 'string', minLength: 3, maxLength: 63 },
-            whatsapp_number: { type: 'string' },
+            whatsapp_number: {
+              type: 'string',
+              nullable: true,
+              description: 'Optional contact number; null clears',
+            },
             currency: { type: 'string', minLength: 3, maxLength: 3 },
             description: { type: 'string', nullable: true },
             logo_url: { type: 'string', format: 'uri', nullable: true },

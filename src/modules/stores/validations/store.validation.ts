@@ -1,6 +1,41 @@
 import { z } from 'zod'
 import { isValidSubdomainSlug } from '../../../shared/utils/storefront.js'
 
+/** Optional store contact phone (API key whatsapp_number). Empty → null. */
+const optionalContactNumber = z.preprocess((val) => {
+  if (val === undefined || val === null) return null
+  if (typeof val === 'string') {
+    const trimmed = val.trim()
+    return trimmed === '' ? null : trimmed
+  }
+  return val
+}, z.union([
+  z.null(),
+  z
+    .string()
+    .min(8, 'Contact number must be at least 8 characters')
+    .max(20, 'Contact number is too long'),
+]))
+
+/** PATCH: undefined = leave unchanged; null/"" = clear; non-empty = validate. */
+const optionalContactNumberPatch = z.preprocess((val) => {
+  if (val === undefined) return undefined
+  if (val === null) return null
+  if (typeof val === 'string') {
+    const trimmed = val.trim()
+    return trimmed === '' ? null : trimmed
+  }
+  return val
+}, z
+  .union([
+    z.null(),
+    z
+      .string()
+      .min(8, 'Contact number must be at least 8 characters')
+      .max(20, 'Contact number is too long'),
+  ])
+  .optional())
+
 export const createStoreSchema = z.object({
   name: z.string().trim().min(1, 'Store name is required').max(200),
   slug: z
@@ -13,11 +48,7 @@ export const createStoreSchema = z.object({
       message:
         'Slug must be 3–63 chars, lowercase letters/numbers/hyphens only, and not a reserved name (e.g. api, app, www)',
     }),
-  whatsapp_number: z
-    .string()
-    .trim()
-    .min(8, 'WhatsApp number is required')
-    .max(20, 'WhatsApp number is too long'),
+  whatsapp_number: optionalContactNumber,
   currency: z
     .string()
     .trim()
@@ -82,12 +113,7 @@ export const updateStoreSchema = z
     description: z.union([z.string().trim().max(2000), z.null()]).optional(),
     logo_url: optionalUrl,
     banner_url: optionalUrl,
-    whatsapp_number: z
-      .string()
-      .trim()
-      .min(8, 'WhatsApp number is required')
-      .max(20, 'WhatsApp number is too long')
-      .optional(),
+    whatsapp_number: optionalContactNumberPatch,
     currency: z
       .string()
       .trim()

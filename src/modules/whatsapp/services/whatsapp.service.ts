@@ -168,6 +168,23 @@ export function isWhatsAppReadyForStore(store: Store): boolean {
   return resolveStoreWhatsAppCredentials(store) !== null
 }
 
+/**
+ * Display/business number for message persistence (from_number NOT NULL).
+ * Prefers store contact number, then webhook/display fallback, then phone number id.
+ */
+export function resolveBusinessFromNumber(
+  store: Pick<Store, 'whatsapp_number' | 'wa_phone_number_id'>,
+  fallback?: string | null
+): string {
+  const fromStore = store.whatsapp_number?.trim()
+  if (fromStore) return fromStore
+  const fromFallback = fallback?.trim()
+  if (fromFallback) return fromFallback
+  const phoneId = store.wa_phone_number_id?.trim()
+  if (phoneId) return phoneId
+  return 'unknown'
+}
+
 /** Meta GET /webhook verification. */
 export function verifyWebhook(input: {
   mode: string

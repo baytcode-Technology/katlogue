@@ -7,6 +7,7 @@ import { emitOutboundWhatsAppMessage } from './emit-outbound-message.service.js'
 import { formatWhatsAppMessagePreview } from './whatsapp-message-content.service.js'
 import {
   isWhatsAppReadyForStore,
+  resolveBusinessFromNumber,
   resolveStoreWhatsAppCredentials,
   sendMediaMessage,
 } from './whatsapp.service.js'
@@ -112,7 +113,7 @@ export async function sendWhatsAppMediaMessage(input: SendWhatsAppMediaInput) {
     conversationId: conversation.id,
     metaMessageId: metaResult.metaMessageId,
     direction: 'outbound',
-    fromNumber: store.whatsapp_number,
+    fromNumber: resolveBusinessFromNumber(store),
     toNumber: customerWaNumber,
     type: input.type,
     textBody: formatWhatsAppMessagePreview({ type: input.type, textBody: preview }),

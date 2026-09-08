@@ -21,7 +21,7 @@ export type Store = {
   description: string | null
   logo_url: string | null
   banner_url: string | null
-  whatsapp_number: string
+  whatsapp_number: string | null
   wa_phone_number_id: string | null
   wa_waba_id: string | null
   wa_access_token: string | null
@@ -61,7 +61,7 @@ export type UpdateStoreInput = {
   description?: string | null
   logo_url?: string | null
   banner_url?: string | null
-  whatsapp_number?: string
+  whatsapp_number?: string | null
   currency?: string
   country?: string
   timezone?: string
@@ -77,7 +77,7 @@ export type UpdateStoreInput = {
 export type CreateStoreInput = {
   name: string
   slug: string
-  whatsapp_number: string
+  whatsapp_number: string | null
   currency: string
   country: string
   description?: string | null

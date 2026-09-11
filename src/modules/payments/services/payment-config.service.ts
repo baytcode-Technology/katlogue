@@ -15,17 +15,26 @@ export async function getPaymentConfigForOwner(
   ownerId: string,
   storeId: number
 ): Promise<{ store_id: number; payment_config: MerchantPaymentConfigView }> {
-  const store = await storeStaffRepository.resolveOwnedStore(ownerId, storeId)
+  const match = await storeStaffRepository.findStoreByIdForUser(storeId, ownerId)
+  if (!match) {
+    throw new AppError(403, 'You do not have access to this store', 'FORBIDDEN')
+  }
 
-  const stored = parseStoredPaymentConfig(store.payment_config)
-  const secrets = getDecryptedRazorpaySecrets(stored)
+  const stored = parseStoredPaymentConfig(match.store.payment_config)
+  const ownerSecrets =
+    match.role === 'owner' ? getDecryptedRazorpaySecrets(stored) : null
 
   return {
-    store_id: store.id,
-    payment_config: toMerchantPaymentConfigView(stored, {
-      key_secret: secrets.key_secret ?? undefined,
-      webhook_secret: secrets.webhook_secret ?? undefined,
-    }),
+    store_id: match.store.id,
+    payment_config: toMerchantPaymentConfigView(
+      stored,
+      ownerSecrets
+        ? {
+            key_secret: ownerSecrets.key_secret ?? undefined,
+            webhook_secret: ownerSecrets.webhook_secret ?? undefined,
+          }
+        : undefined
+    ),
   }
 }
 

@@ -5,16 +5,25 @@ import {
   mergeNotificationPreferencesUpdate,
   parseStoredNotificationPreferences,
 } from '../lib/notification-preferences.js'
+import type { Store } from '../../stores/types/store.types.js'
 import type {
   NotificationPreferencesView,
   UpdateNotificationPreferencesInput,
 } from '../types/notification.types.js'
 
+async function resolveMemberStore(userId: string, storeId: number): Promise<Store> {
+  const match = await storeStaffRepository.findStoreByIdForUser(storeId, userId)
+  if (!match) {
+    throw new AppError(403, 'You do not have access to this store', 'FORBIDDEN')
+  }
+  return match.store
+}
+
 export async function getNotificationPreferencesForOwner(
   ownerId: string,
   storeId: number
 ): Promise<{ store_id: number; notification_preferences: NotificationPreferencesView }> {
-  const store = await storeStaffRepository.resolveOwnedStore(ownerId, storeId)
+  const store = await resolveMemberStore(ownerId, storeId)
 
   return {
     store_id: store.id,
@@ -27,7 +36,7 @@ export async function updateNotificationPreferencesForOwner(
   storeId: number,
   input: UpdateNotificationPreferencesInput
 ): Promise<{ store_id: number; notification_preferences: NotificationPreferencesView }> {
-  const store = await storeStaffRepository.resolveOwnedStore(ownerId, storeId)
+  const store = await resolveMemberStore(ownerId, storeId)
 
   const current = parseStoredNotificationPreferences(store.notification_preferences)
   const next = mergeNotificationPreferencesUpdate(current, input)

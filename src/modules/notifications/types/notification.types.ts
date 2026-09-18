@@ -43,6 +43,25 @@ export type UpsertPushTokenInput = {
   sound_channel_id?: string
 }
 
+export type StoreWebPushSubscription = {
+  id: number
+  store_id: number
+  user_id: string
+  endpoint: string
+  p256dh: string
+  auth: string
+  created_at: string
+  updated_at: string
+}
+
+export type UpsertWebPushSubscriptionInput = {
+  endpoint: string
+  keys: {
+    p256dh: string
+    auth: string
+  }
+}
+
 export type StoreNotificationKind =
   | 'chat_whatsapp'
   | 'chat_instagram'

@@ -351,6 +351,7 @@ export async function processInstagramWebhook(body: unknown): Promise<void> {
       conversationId: conversation.id,
       preview: event.preview,
       username: conversation.customer_ig_username,
+      customerIgId: conversation.customer_ig_id ?? event.senderIgId,
     }).catch((err) => {
       console.error('[notifications] Instagram push failed', err)
     })

@@ -93,8 +93,10 @@ export async function notifyWhatsAppChat(input: {
   conversationId: number
   preview: string
   senderLabel: string
+  customerPhone?: string | null
 }): Promise<void> {
   const body = input.preview.trim() || 'New message'
+  const phone = input.customerPhone?.trim() || ''
   await sendStoreNotification({
     storeId: input.storeId,
     kind: 'chat_whatsapp',
@@ -105,6 +107,7 @@ export async function notifyWhatsAppChat(input: {
       channel: 'whatsapp',
       conversationId: String(input.conversationId),
       storeSlug: input.storeSlug,
+      ...(phone ? { phone } : {}),
     },
   })
 }
@@ -115,9 +118,11 @@ export async function notifyInstagramChat(input: {
   conversationId: number
   preview: string
   username?: string | null
+  customerIgId?: string | null
 }): Promise<void> {
   const sender = input.username ? `@${input.username.replace(/^@/, '')}` : 'Instagram user'
   const body = input.preview.trim() || 'New message'
+  const phone = input.customerIgId?.trim() || ''
   await sendStoreNotification({
     storeId: input.storeId,
     kind: 'chat_instagram',
@@ -128,6 +133,7 @@ export async function notifyInstagramChat(input: {
       channel: 'instagram',
       conversationId: String(input.conversationId),
       storeSlug: input.storeSlug,
+      ...(phone ? { phone } : {}),
     },
   })
 }

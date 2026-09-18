@@ -234,6 +234,7 @@ export async function processWhatsAppWebhook(body: unknown): Promise<void> {
             textBody: saved.text_body,
           }),
           senderLabel: whatsAppSenderLabel(customer, msg.from),
+          customerPhone: conversation?.customer_wa_number ?? msg.from,
         }).catch((err) => {
           console.error('[notifications] WhatsApp push failed', err)
         })

@@ -3,7 +3,9 @@ import {
   parseStoredNotificationPreferences,
   shouldSendNotification,
 } from '../lib/notification-preferences.js'
+import { sendWebPushToSubscriptions } from '../lib/web-push-send.js'
 import * as pushTokenRepository from '../repositories/push-token.repository.js'
+import * as webPushRepository from '../repositories/web-push-subscription.repository.js'
 import type { SendStoreNotificationInput } from '../types/notification.types.js'
 
 type ExpoPushMessage = {
@@ -52,23 +54,37 @@ export async function sendStoreNotification(input: SendStoreNotificationInput): 
   const prefs = parseStoredNotificationPreferences(store.notification_preferences)
   if (!shouldSendNotification(prefs, input.kind)) return
 
-  const tokens = await pushTokenRepository.findPushTokensByStoreId(input.storeId)
-  if (tokens.length === 0) return
+  const [tokens, webSubscriptions] = await Promise.all([
+    pushTokenRepository.findPushTokensByStoreId(input.storeId),
+    webPushRepository.findWebPushSubscriptionsByStoreId(input.storeId),
+  ])
 
-  const sound = 'default'
-  const channelId = 'aishopy-alerts'
+  if (tokens.length === 0 && webSubscriptions.length === 0) return
 
-  const messages: ExpoPushMessage[] = tokens.map((token) => ({
-    to: token.expo_push_token,
-    title: input.title,
-    body: input.body,
-    sound,
-    channelId: token.platform === 'android' ? (token.sound_channel_id ?? channelId) : undefined,
-    data: input.data,
-    priority: 'high',
-  }))
+  if (tokens.length > 0) {
+    const sound = 'default'
+    const channelId = 'aishopy-alerts'
 
-  await sendExpoPush(messages)
+    const messages: ExpoPushMessage[] = tokens.map((token) => ({
+      to: token.expo_push_token,
+      title: input.title,
+      body: input.body,
+      sound,
+      channelId: token.platform === 'android' ? (token.sound_channel_id ?? channelId) : undefined,
+      data: input.data,
+      priority: 'high',
+    }))
+
+    await sendExpoPush(messages)
+  }
+
+  if (webSubscriptions.length > 0) {
+    await sendWebPushToSubscriptions(webSubscriptions, {
+      title: input.title,
+      body: input.body,
+      data: input.data,
+    })
+  }
 }
 
 export async function notifyWhatsAppChat(input: {

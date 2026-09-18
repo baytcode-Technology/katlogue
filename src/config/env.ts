@@ -71,6 +71,12 @@ export const env = {
     KEY_SECRET: optionalEnv('PLATFORM_RAZORPAY_KEY_SECRET'),
     WEBHOOK_SECRET: optionalEnv('PLATFORM_RAZORPAY_WEBHOOK_SECRET'),
   },
+  /** Web Push VAPID keys (browser / PWA). Optional — Expo push unaffected when unset. */
+  VAPID: {
+    PUBLIC_KEY: optionalEnv('VAPID_PUBLIC_KEY'),
+    PRIVATE_KEY: optionalEnv('VAPID_PRIVATE_KEY'),
+    SUBJECT: optionalEnv('VAPID_SUBJECT') ?? 'mailto:aishopyapp@gmail.com',
+  },
 } as const
 
 export function isGoogleOAuthConfigured(): boolean {
@@ -93,4 +99,8 @@ export function isPlatformRazorpayConfigured(): boolean {
 
 export function isPaymentEncryptionConfigured(): boolean {
   return Boolean(env.PAYMENT_ENCRYPTION_KEY)
+}
+
+export function isWebPushConfigured(): boolean {
+  return Boolean(env.VAPID.PUBLIC_KEY && env.VAPID.PRIVATE_KEY)
 }

@@ -35,3 +35,19 @@ export const deletePushTokenSchema = z.object({
 })
 
 export type DeletePushTokenBody = z.infer<typeof deletePushTokenSchema>
+
+export const upsertWebPushSubscriptionSchema = z.object({
+  endpoint: z.string().trim().url('Invalid push endpoint'),
+  keys: z.object({
+    p256dh: z.string().trim().min(1, 'p256dh key is required'),
+    auth: z.string().trim().min(1, 'auth key is required'),
+  }),
+})
+
+export type UpsertWebPushSubscriptionBody = z.infer<typeof upsertWebPushSubscriptionSchema>
+
+export const deleteWebPushSubscriptionSchema = z.object({
+  endpoint: z.string().trim().url('Invalid push endpoint'),
+})
+
+export type DeleteWebPushSubscriptionBody = z.infer<typeof deleteWebPushSubscriptionSchema>

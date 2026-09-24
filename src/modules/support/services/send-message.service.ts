@@ -1,4 +1,5 @@
 import { AppError } from '../../../shared/errors/app.error.js';
+import { notifyPlatformAdminsSupportMessage } from '../../notifications/services/notify-platform-admins.service.js';
 import { assertStoreMember, findStoreById } from '../../stores/repositories/store.repository.js';
 import { buildSupportSystemPrompt } from '../knowledge/katlogue-support-knowledge.js';
 import { completeWithFallback } from '../llm/index.js';
@@ -32,6 +33,16 @@ export async function sendMessage(
   const userMessage = await supportRepository.insertMessage(conversationId, 'user', content);
 
   if (conversation.reply_mode === 'manual') {
+    const store = await findStoreById(storeId).catch(() => null);
+    void notifyPlatformAdminsSupportMessage({
+      conversationId,
+      ticketCode: conversation.ticket_code,
+      preview: content,
+      storeName: store?.name,
+    }).catch((err) => {
+      console.error('[notifications] platform admin support message push failed', err);
+    });
+
     const updatedConversation = await supportRepository.getConversationById(conversationId);
     return {
       user_message: userMessage,

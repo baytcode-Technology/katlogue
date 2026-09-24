@@ -1,7 +1,13 @@
 import webpush from 'web-push'
 import { env, isWebPushConfigured } from '../../../config/env.js'
+import * as adminWebPushRepository from '../repositories/platform-admin-web-push-subscription.repository.js'
 import * as webPushRepository from '../repositories/web-push-subscription.repository.js'
-import type { StoreWebPushSubscription } from '../types/notification.types.js'
+
+type WebPushEndpointKeys = {
+  endpoint: string
+  p256dh: string
+  auth: string
+}
 
 let vapidConfigured = false
 let missingVapidLogged = false
@@ -31,8 +37,15 @@ function isGoneStatus(statusCode: number | undefined): boolean {
   return statusCode === 404 || statusCode === 410
 }
 
+async function deleteStaleEndpoint(endpoint: string): Promise<void> {
+  await Promise.all([
+    webPushRepository.deleteWebPushSubscriptionByEndpoint(endpoint),
+    adminWebPushRepository.deletePlatformAdminWebPushSubscriptionByEndpoint(endpoint),
+  ])
+}
+
 export async function sendWebPushToSubscriptions(
-  subscriptions: StoreWebPushSubscription[],
+  subscriptions: WebPushEndpointKeys[],
   payload: {
     title: string
     body: string
@@ -69,7 +82,7 @@ export async function sendWebPushToSubscriptions(
             : undefined
 
         if (isGoneStatus(statusCode)) {
-          await webPushRepository.deleteWebPushSubscriptionByEndpoint(sub.endpoint)
+          await deleteStaleEndpoint(sub.endpoint)
           return
         }
 

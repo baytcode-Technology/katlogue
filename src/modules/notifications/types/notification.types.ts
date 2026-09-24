@@ -54,6 +54,16 @@ export type StoreWebPushSubscription = {
   updated_at: string
 }
 
+export type PlatformAdminWebPushSubscription = {
+  id: number
+  user_id: string
+  endpoint: string
+  p256dh: string
+  auth: string
+  created_at: string
+  updated_at: string
+}
+
 export type UpsertWebPushSubscriptionInput = {
   endpoint: string
   keys: {
@@ -69,10 +79,24 @@ export type StoreNotificationKind =
   | 'order_online'
   | 'order_pos'
 
+export type PlatformAdminNotificationKind =
+  | 'ticket_raised'
+  | 'support_message'
+  | 'user_signed_up'
+
 export type SendStoreNotificationInput = {
   storeId: number
   kind: StoreNotificationKind
   title: string
   body: string
   data?: Record<string, string>
+}
+
+export type SendPlatformAdminNotificationInput = {
+  kind: PlatformAdminNotificationKind
+  title: string
+  body: string
+  data?: Record<string, string>
+  /** When true, SW may set requireInteraction */
+  important?: boolean
 }

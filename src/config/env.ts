@@ -77,6 +77,13 @@ export const env = {
     PRIVATE_KEY: optionalEnv('VAPID_PRIVATE_KEY'),
     SUBJECT: optionalEnv('VAPID_SUBJECT') ?? 'mailto:aishopyapp@gmail.com',
   },
+  /** Optional Vercel API for attaching merchant custom domains to the storefront project. */
+  VERCEL: {
+    TOKEN: optionalEnv('VERCEL_TOKEN'),
+    PROJECT_ID: optionalEnv('VERCEL_PROJECT_ID'),
+    TEAM_ID: optionalEnv('VERCEL_TEAM_ID'),
+    STOREFRONT_CNAME: optionalEnv('VERCEL_STOREFRONT_CNAME') ?? 'cname.vercel-dns.com',
+  },
 } as const
 
 export function isGoogleOAuthConfigured(): boolean {
@@ -103,4 +110,8 @@ export function isPaymentEncryptionConfigured(): boolean {
 
 export function isWebPushConfigured(): boolean {
   return Boolean(env.VAPID.PUBLIC_KEY && env.VAPID.PRIVATE_KEY)
+}
+
+export function isVercelConfigured(): boolean {
+  return Boolean(env.VERCEL.TOKEN && env.VERCEL.PROJECT_ID)
 }

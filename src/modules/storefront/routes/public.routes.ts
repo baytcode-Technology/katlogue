@@ -16,9 +16,11 @@ import { verifyRazorpayPaymentBodySchema } from '../../payments/validations/veri
 import { paymentProofUpload } from '../../../shared/middleware/upload.middleware.js'
 import { uploadPaymentProof } from '../../uploads/controllers/upload-payment-proof.controller.js'
 import { verifyRazorpayPayment } from '../../orders/controllers/verify-razorpay-payment.controller.js'
+import { resolvePublicHost } from '../controllers/resolve-host.controller.js'
 
 const router = Router()
 
+router.get('/resolve-host', resolvePublicHost)
 router.use(resolveStoreFromHost)
 
 router.get('/store', getPublicStore)

@@ -31,6 +31,9 @@ function mapUniqueViolation(error: { code?: string; message?: string }): never {
   if (message.includes('slug')) {
     throw new AppError(409, 'A store with this slug already exists', 'SLUG_EXISTS')
   }
+  if (message.includes('custom_domain')) {
+    throw new AppError(409, 'This domain is already connected to another store', 'DOMAIN_EXISTS')
+  }
   if (message.includes('whatsapp_number')) {
     throw new AppError(409, 'This WhatsApp number is already registered', 'WHATSAPP_EXISTS')
   }
@@ -338,6 +341,54 @@ export async function findActiveStoreBySlug(slug: string): Promise<Store | null>
   }
 
   return data as Store | null
+}
+
+export async function findActiveStoreByCustomDomain(hostname: string): Promise<Store | null> {
+  const domain = hostname.split(':')[0].toLowerCase().trim()
+  if (!domain) return null
+
+  const { data, error } = await supabaseAdmin
+    .from('stores')
+    .select('*')
+    .eq('custom_domain', domain)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (error) {
+    throw new AppError(400, error.message, 'STORE_LOOKUP_FAILED')
+  }
+
+  return data as Store | null
+}
+
+export async function updateStoreCustomDomain(
+  storeId: number,
+  patch: {
+    custom_domain: string | null
+    custom_domain_status: 'pending' | 'active' | 'failed' | null
+    custom_domain_verified_at: string | null
+  }
+): Promise<Store> {
+  const { data, error } = await supabaseAdmin
+    .from('stores')
+    .update({
+      custom_domain: patch.custom_domain,
+      custom_domain_status: patch.custom_domain_status,
+      custom_domain_verified_at: patch.custom_domain_verified_at,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', storeId)
+    .select('*')
+    .single()
+
+  if (error) {
+    if (error.code === '23505') {
+      mapUniqueViolation(error)
+    }
+    throw new AppError(400, error.message, 'STORE_UPDATE_FAILED')
+  }
+
+  return data as Store
 }
 
 export async function incrementProductCount(storeId: number): Promise<void> {

@@ -1,9 +1,10 @@
 import {
+  buildStorefrontOrigin,
   buildStorefrontProductUrl,
-  buildSubdomainUrl,
   formatMoney,
   getPublicStorefrontBaseDomain,
 } from '../../../shared/utils/storefront.js'
+import type { Store } from '../../stores/types/store.types.js'
 import * as categoryRepository from '../../categories/repositories/category.repository.js'
 import { findActiveProductsByStoreId } from '../../products/repositories/product.repository.js'
 import { findVariantsByProductIds } from '../../products/repositories/product-variant.repository.js'
@@ -507,6 +508,15 @@ export function formatOtherMatches(
   return `${header}\n\n${lines.join('\n\n')}`
 }
 
-export function getStoreHomeUrl(storeSlug: string): string {
-  return buildSubdomainUrl(storeSlug, getPublicStorefrontBaseDomain())
+export function getStoreHomeUrl(
+  storeOrSlug: string | Pick<Store, 'slug' | 'custom_domain' | 'custom_domain_status'>
+): string {
+  if (typeof storeOrSlug === 'string') {
+    return buildStorefrontOrigin({ slug: storeOrSlug })
+  }
+  return buildStorefrontOrigin({
+    slug: storeOrSlug.slug,
+    customDomain: storeOrSlug.custom_domain,
+    customDomainStatus: storeOrSlug.custom_domain_status,
+  })
 }

@@ -40,6 +40,9 @@ export type Store = {
   ai_third_party_consent_at: string | null
   industry: string | null
   is_active: boolean
+  custom_domain?: string | null
+  custom_domain_status?: 'pending' | 'active' | 'failed' | null
+  custom_domain_verified_at?: string | null
   subscription_plan: 'starter' | 'business' | 'enterprise'
   subscription_expires_at: string | null
   product_count: number

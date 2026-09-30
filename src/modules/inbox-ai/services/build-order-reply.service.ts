@@ -343,7 +343,7 @@ export async function buildOrderReply(input: {
   conversationId?: number | null
 }): Promise<string> {
   const { store, intent, customerPhone } = input
-  const homeUrl = getStoreHomeUrl(store.slug)
+  const homeUrl = getStoreHomeUrl(store)
   const collected = await collectOrders({
     store,
     customerPhone,

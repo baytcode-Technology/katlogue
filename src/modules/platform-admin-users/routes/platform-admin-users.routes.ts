@@ -6,10 +6,14 @@ import {
   validateParams,
   validateQuery,
 } from '../../../shared/middleware/validate.middleware.js'
+import { deletePlatformAdminPushToken } from '../../notifications/controllers/delete-platform-admin-push-token.controller.js'
+import { upsertPlatformAdminPushToken } from '../../notifications/controllers/upsert-platform-admin-push-token.controller.js'
 import { deletePlatformAdminWebPushSubscription } from '../../notifications/controllers/delete-platform-admin-web-push-subscription.controller.js'
 import { upsertPlatformAdminWebPushSubscription } from '../../notifications/controllers/upsert-platform-admin-web-push-subscription.controller.js'
 import {
+  deletePushTokenSchema,
   deleteWebPushSubscriptionSchema,
+  upsertPushTokenSchema,
   upsertWebPushSubscriptionSchema,
 } from '../../notifications/validations/notification.validation.js'
 import { getPlatformAdminUser } from '../controllers/get-platform-admin-user.controller.js'
@@ -35,6 +39,22 @@ router.get(
   requirePlatformAdmin,
   validateParams(platformAdminUserParamsSchema),
   getPlatformAdminUser
+)
+
+router.put(
+  '/push-token',
+  requireAuth,
+  requirePlatformAdmin,
+  validateBody(upsertPushTokenSchema),
+  upsertPlatformAdminPushToken
+)
+
+router.delete(
+  '/push-token',
+  requireAuth,
+  requirePlatformAdmin,
+  validateBody(deletePushTokenSchema),
+  deletePlatformAdminPushToken
 )
 
 router.put(

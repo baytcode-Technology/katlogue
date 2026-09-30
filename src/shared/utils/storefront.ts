@@ -41,17 +41,47 @@ export function buildProductSlug(product: { id: number; name: string }): string 
   return `${slugifyProductName(product.name)}${product.id ? `-${product.id}` : ''}`
 }
 
+export function buildStorefrontOrigin(input: {
+  slug: string
+  customDomain?: string | null
+  customDomainStatus?: string | null
+  baseDomain?: string
+}): string {
+  const domain = input.customDomain?.trim().toLowerCase()
+  if (input.customDomainStatus === 'active' && domain) {
+    return `https://${domain}`
+  }
+  return buildSubdomainUrl(input.slug, input.baseDomain ?? getPublicStorefrontBaseDomain())
+}
+
 export function buildStorefrontProductUrl(
   storeSlug: string,
   baseDomain: string,
   product: { id: number; name: string },
-  variantId?: number | null
+  variantId?: number | null,
+  options?: { src?: string | null; origin?: string | null }
 ): string {
-  const base = `${buildSubdomainUrl(storeSlug, baseDomain)}/product/${buildProductSlug(product)}`
-  if (variantId != null) {
-    return `${base}?variant=${variantId}`
+  const origin = options?.origin?.replace(/\/$/, '') || buildSubdomainUrl(storeSlug, baseDomain)
+  const base = `${origin}/product/${buildProductSlug(product)}`
+  const params = new URLSearchParams()
+  if (variantId != null) params.set('variant', String(variantId))
+  const src = options?.src?.trim()
+  if (src) params.set('src', src)
+  const query = params.toString()
+  return query ? `${base}?${query}` : base
+}
+
+export function rewriteStorefrontOrigin(url: string, origin: string): string {
+  const nextOrigin = origin.replace(/\/$/, '')
+  try {
+    const parsed = new URL(url)
+    const dest = new URL(nextOrigin)
+    parsed.protocol = dest.protocol
+    parsed.host = dest.host
+    return parsed.toString()
+  } catch {
+    return url
   }
-  return base
 }
 
 export function formatMoney(amount: number, currency?: string): string {

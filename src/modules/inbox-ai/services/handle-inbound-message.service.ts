@@ -97,6 +97,47 @@ async function loadReplyContext(input: HandleInboundInboxAiInput): Promise<Reply
   return { store, conversation: activeConversation }
 }
 
+async function resolveLatestInboundText(
+  input: HandleInboundInboxAiInput
+): Promise<{ messageId: number; textBody: string } | null> {
+  try {
+    if (input.channel === 'whatsapp') {
+      const messages = await whatsappChatRepository.listMessages({
+        storeId: input.storeId,
+        conversationId: input.conversationId,
+        limit: 20,
+      })
+      const inbound = messages.find((message) => {
+        if (message.direction !== 'inbound') return false
+        return Boolean(message.text_body?.trim() || message.caption?.trim())
+      })
+      if (!inbound) return null
+      return {
+        messageId: inbound.id,
+        textBody: (inbound.text_body ?? inbound.caption ?? '').trim(),
+      }
+    }
+
+    const messages = await instagramChatRepository.listMessages({
+      storeId: input.storeId,
+      conversationId: input.conversationId,
+      limit: 20,
+    })
+    const inbound = messages.find((message) => {
+      if (message.direction !== 'inbound') return false
+      return Boolean(message.text_body?.trim() || message.caption?.trim())
+    })
+    if (!inbound) return null
+    return {
+      messageId: inbound.id,
+      textBody: (inbound.text_body ?? inbound.caption ?? '').trim(),
+    }
+  } catch (err) {
+    console.warn('[inbox-ai] latest inbound refetch failed — using captured text', err)
+    return null
+  }
+}
+
 async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
   const text = input.textBody.trim()
   if (!text) return
@@ -238,7 +279,12 @@ async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
 export function handleInboundInboxAi(input: HandleInboundInboxAiInput): void {
   const debounceKey = `${input.channel}:${input.storeId}:${input.conversationId}`
   scheduleDebouncedInboxAi(debounceKey, input.messageId, async () => {
-    await processInbound(input)
+    const latest = await resolveLatestInboundText(input)
+    await processInbound({
+      ...input,
+      messageId: latest?.messageId ?? input.messageId,
+      textBody: latest?.textBody || input.textBody,
+    })
   })
 }
 

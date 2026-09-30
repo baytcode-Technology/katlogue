@@ -36,6 +36,7 @@ export async function sendMessage(
     const store = await findStoreById(storeId).catch(() => null);
     void notifyPlatformAdminsSupportMessage({
       conversationId,
+      messageId: Number(userMessage.id),
       ticketCode: conversation.ticket_code,
       preview: content,
       storeName: store?.name,

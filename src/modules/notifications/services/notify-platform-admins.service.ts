@@ -42,12 +42,14 @@ export async function notifyPlatformAdminsTicketRaised(input: {
     data: {
       conversationId: String(input.conversationId),
       ticketCode: input.ticketCode,
+      tag: `ticket-${input.conversationId}-${input.ticketCode}`,
     },
   })
 }
 
 export async function notifyPlatformAdminsSupportMessage(input: {
   conversationId: number
+  messageId: number
   ticketCode?: string | null
   preview: string
   storeName?: string | null
@@ -63,7 +65,7 @@ export async function notifyPlatformAdminsSupportMessage(input: {
     data: {
       conversationId: String(input.conversationId),
       ...(ticket ? { ticketCode: ticket } : {}),
-      tag: `support-${input.conversationId}`,
+      tag: `support-${input.conversationId}-${input.messageId}`,
     },
   })
 }

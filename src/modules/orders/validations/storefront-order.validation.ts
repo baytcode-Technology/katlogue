@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { optionalTrimmedString, orderItemSchema } from '../../../shared/validations/zod-helpers.js'
+import { optionalTrimmedString, optionalEntityId, orderItemSchema } from '../../../shared/validations/zod-helpers.js'
 import { storefrontShippingAddressSchema } from '../../../shared/validations/shipping-address.validation.js'
 
 export const storefrontCreateOrderSchema = z.object({
@@ -12,6 +12,7 @@ export const storefrontCreateOrderSchema = z.object({
   }).optional(),
   shipping_address: storefrontShippingAddressSchema,
   notes: optionalTrimmedString(1000),
+  conversation_id: optionalEntityId('Invalid conversation id'),
 }).superRefine((val, ctx) => {
   if (val.payment_method === 'upi') {
     if (!val.payment_proof_url) {

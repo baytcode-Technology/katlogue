@@ -3,49 +3,11 @@ import {
   parseStoredNotificationPreferences,
   shouldSendNotification,
 } from '../lib/notification-preferences.js'
+import { sendExpoPush, type ExpoPushMessage } from '../lib/expo-push-send.js'
 import { sendWebPushToSubscriptions } from '../lib/web-push-send.js'
 import * as pushTokenRepository from '../repositories/push-token.repository.js'
 import * as webPushRepository from '../repositories/web-push-subscription.repository.js'
 import type { SendStoreNotificationInput } from '../types/notification.types.js'
-
-type ExpoPushMessage = {
-  to: string
-  title: string
-  body: string
-  sound?: string
-  channelId?: string
-  data?: Record<string, string>
-  priority?: 'default' | 'normal' | 'high'
-}
-
-async function sendExpoPush(messages: ExpoPushMessage[]): Promise<void> {
-  if (messages.length === 0) return
-
-  const chunks: ExpoPushMessage[][] = []
-  for (let i = 0; i < messages.length; i += 100) {
-    chunks.push(messages.slice(i, i + 100))
-  }
-
-  for (const chunk of chunks) {
-    try {
-      const res = await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Accept-Encoding': 'gzip, deflate',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(chunk),
-      })
-
-      if (!res.ok) {
-        console.error('[push] Expo API error', res.status, await res.text())
-      }
-    } catch (err) {
-      console.error('[push] Expo API request failed', err)
-    }
-  }
-}
 
 export async function sendStoreNotification(input: SendStoreNotificationInput): Promise<void> {
   const store = await storeRepository.findStoreById(input.storeId)
@@ -54,10 +16,17 @@ export async function sendStoreNotification(input: SendStoreNotificationInput): 
   const prefs = parseStoredNotificationPreferences(store.notification_preferences)
   if (!shouldSendNotification(prefs, input.kind)) return
 
-  const [tokens, webSubscriptions] = await Promise.all([
-    pushTokenRepository.findPushTokensByStoreId(input.storeId),
-    webPushRepository.findWebPushSubscriptionsByStoreId(input.storeId),
-  ])
+  const tokens = await pushTokenRepository.findPushTokensByStoreId(input.storeId)
+
+  // Web-push table may be missing until migration 059 is applied. Never block Expo.
+  let webSubscriptions: Awaited<
+    ReturnType<typeof webPushRepository.findWebPushSubscriptionsByStoreId>
+  > = []
+  try {
+    webSubscriptions = await webPushRepository.findWebPushSubscriptionsByStoreId(input.storeId)
+  } catch (err) {
+    console.warn('[web-push] lookup failed — continuing with Expo only', err)
+  }
 
   if (tokens.length === 0 && webSubscriptions.length === 0) return
 
@@ -79,11 +48,15 @@ export async function sendStoreNotification(input: SendStoreNotificationInput): 
   }
 
   if (webSubscriptions.length > 0) {
-    await sendWebPushToSubscriptions(webSubscriptions, {
-      title: input.title,
-      body: input.body,
-      data: input.data,
-    })
+    try {
+      await sendWebPushToSubscriptions(webSubscriptions, {
+        title: input.title,
+        body: input.body,
+        data: input.data,
+      })
+    } catch (err) {
+      console.warn('[web-push] send failed — Expo already attempted', err)
+    }
   }
 }
 

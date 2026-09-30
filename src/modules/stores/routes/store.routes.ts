@@ -8,6 +8,12 @@ import {
   removeStoreStaff,
 } from '../controllers/store-staff.controller.js'
 import { updateMyStore } from '../controllers/update-my-store.controller.js'
+import {
+  deleteCustomDomain,
+  getCustomDomain,
+  setCustomDomain,
+  verifyCustomDomain,
+} from '../controllers/custom-domain.controller.js'
 import inboxAiRoutes from '../../inbox-ai/routes/inbox-ai.routes.js'
 import { requireAuth } from '../../../shared/middleware/auth.middleware.js'
 import {
@@ -24,6 +30,7 @@ import {
   staffStoreQuerySchema,
   updateStoreSchema,
 } from '../validations/store.validation.js'
+import { setCustomDomainSchema } from '../validations/custom-domain.validation.js'
 
 const router = Router()
 
@@ -40,6 +47,31 @@ router.patch(
   validateQuery(requiredStoreQuerySchema),
   validateBody(updateStoreSchema),
   updateMyStore
+)
+router.get(
+  '/me/custom-domain',
+  requireAuth,
+  validateQuery(requiredStoreQuerySchema),
+  getCustomDomain
+)
+router.put(
+  '/me/custom-domain',
+  requireAuth,
+  validateQuery(requiredStoreQuerySchema),
+  validateBody(setCustomDomainSchema),
+  setCustomDomain
+)
+router.post(
+  '/me/custom-domain/verify',
+  requireAuth,
+  validateQuery(requiredStoreQuerySchema),
+  verifyCustomDomain
+)
+router.delete(
+  '/me/custom-domain',
+  requireAuth,
+  validateQuery(requiredStoreQuerySchema),
+  deleteCustomDomain
 )
 router.post('/', validateBody(createStoreSchema), requireAuth, createStore)
 

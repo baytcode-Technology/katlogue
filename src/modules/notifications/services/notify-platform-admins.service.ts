@@ -1,5 +1,7 @@
 import { getPlatformAdminUserIds } from '../../../shared/lib/platform-admin.js'
+import { sendExpoPush } from '../lib/expo-push-send.js'
 import { sendWebPushToSubscriptions } from '../lib/web-push-send.js'
+import * as adminPushTokenRepository from '../repositories/platform-admin-push-token.repository.js'
 import * as adminWebPushRepository from '../repositories/platform-admin-web-push-subscription.repository.js'
 import type { SendPlatformAdminNotificationInput } from '../types/notification.types.js'
 
@@ -9,10 +11,6 @@ export async function notifyPlatformAdmins(
   const adminIds = getPlatformAdminUserIds()
   if (adminIds.length === 0) return
 
-  const subscriptions =
-    await adminWebPushRepository.findPlatformAdminWebPushSubscriptionsByUserIds(adminIds)
-  if (subscriptions.length === 0) return
-
   const data: Record<string, string> = {
     type: input.kind,
     ...(input.data ?? {}),
@@ -21,11 +19,52 @@ export async function notifyPlatformAdmins(
     data.important = '1'
   }
 
-  await sendWebPushToSubscriptions(subscriptions, {
-    title: input.title,
-    body: input.body,
-    data,
-  })
+  let tokens: Awaited<
+    ReturnType<typeof adminPushTokenRepository.findPlatformAdminPushTokensByUserIds>
+  > = []
+  try {
+    tokens = await adminPushTokenRepository.findPlatformAdminPushTokensByUserIds(adminIds)
+  } catch (err) {
+    console.warn('[push] admin Expo lookup failed — continuing with web-push', err)
+  }
+
+  let subscriptions: Awaited<
+    ReturnType<typeof adminWebPushRepository.findPlatformAdminWebPushSubscriptionsByUserIds>
+  > = []
+  try {
+    subscriptions =
+      await adminWebPushRepository.findPlatformAdminWebPushSubscriptionsByUserIds(adminIds)
+  } catch (err) {
+    console.warn('[web-push] admin lookup failed — skipping browser admin alerts', err)
+  }
+
+  if (tokens.length === 0 && subscriptions.length === 0) return
+
+  if (tokens.length > 0) {
+    await sendExpoPush(
+      tokens.map((token) => ({
+        to: token.expo_push_token,
+        title: input.title,
+        body: input.body,
+        sound: 'default',
+        channelId: token.platform === 'android' ? (token.sound_channel_id ?? 'aishopy-alerts') : undefined,
+        data,
+        priority: 'high',
+      }))
+    )
+  }
+
+  if (subscriptions.length > 0) {
+    try {
+      await sendWebPushToSubscriptions(subscriptions, {
+        title: input.title,
+        body: input.body,
+        data,
+      })
+    } catch (err) {
+      console.warn('[web-push] admin send failed — Expo already attempted', err)
+    }
+  }
 }
 
 export async function notifyPlatformAdminsTicketRaised(input: {

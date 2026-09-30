@@ -46,6 +46,25 @@ import type {
   CreateOrderResult,
   OrderItemInput,
 } from '../types/order.types.js'
+import * as whatsappChatRepository from '../../whatsapp/repositories/whatsapp-chat.repository.js'
+import * as instagramChatRepository from '../../instagram/repositories/instagram-chat.repository.js'
+import { sendOrderPlacedChatConfirm } from '../../inbox-ai/services/send-order-placed-confirm.service.js'
+
+async function resolveStoreConversation(
+  storeId: number,
+  conversationId: number
+): Promise<boolean> {
+  const wa = await whatsappChatRepository.findConversationById({
+    storeId,
+    conversationId,
+  })
+  if (wa) return true
+  const ig = await instagramChatRepository.findConversationById({
+    storeId,
+    conversationId,
+  })
+  return Boolean(ig)
+}
 
 type LineItem = {
   input: OrderItemInput
@@ -311,10 +330,16 @@ export async function createOrder(
   const checkoutToken = randomBytes(24).toString('hex')
   const orderNumber = await orderRepository.allocateOrderNumber(storeId)
 
+  let conversationId = input.conversation_id ?? null
+  if (conversationId) {
+    const linked = await resolveStoreConversation(storeId, conversationId)
+    if (!linked) conversationId = null
+  }
+
   const order = await orderRepository.insertOrder({
     store_id: storeId,
     customer_id: customerId,
-    conversation_id: input.conversation_id ?? null,
+    conversation_id: conversationId,
     order_number: orderNumber,
     order_status: orderStatus,
     payment_status: orderPaymentStatus,
@@ -421,6 +446,17 @@ export async function createOrder(
     }).catch((err) => {
       console.error('[notifications] order push failed', err)
     })
+
+    if (conversationId) {
+      void sendOrderPlacedChatConfirm({
+        store,
+        order,
+        items: orderItems,
+        conversationId,
+      }).catch((err) => {
+        console.error('[inbox-ai] order confirm failed', err)
+      })
+    }
 
     if (isStorefront && customerId) {
       await appendOrderToCustomer(customerId, storeId, order.id, order.total)

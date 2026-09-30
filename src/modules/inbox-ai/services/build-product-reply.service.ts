@@ -1,4 +1,6 @@
 import type { Store } from '../../stores/types/store.types.js'
+import { rewriteStorefrontOrigin } from '../../../shared/utils/storefront.js'
+import { applyChatSrcToUrl } from '../lib/chat-src.js'
 import {
   buildLocalizedReply,
   buildProductReplyLines,
@@ -101,13 +103,24 @@ export async function buildProductReplyFromMatches(input: {
   intent: ParsedCustomerIntent
   customerMessage: string
   ctx?: ReplyContext
+  channel?: InboxAiChannel | null
+  conversationId?: number | null
 }): Promise<ProductReplyResult> {
-  const { matches, store, intent, customerMessage } = input
+  const { store, intent, customerMessage } = input
   const ctx = input.ctx ?? {}
   const currency = store.currency
   const customerLanguage = intent.customerLanguage
   const scriptStyle = intent.scriptStyle
   const categoryName = intent.categoryName
+  const origin = getStoreHomeUrl(store)
+  const matches = input.matches.map((match) => ({
+    ...match,
+    url: applyChatSrcToUrl(
+      rewriteStorefrontOrigin(match.url, origin),
+      input.channel,
+      input.conversationId
+    ),
+  }))
 
   if (matches.length === 0) {
     return {
@@ -119,7 +132,11 @@ export async function buildProductReplyFromMatches(input: {
     }
   }
 
-  const homeUrl = getStoreHomeUrl(store.slug)
+  const homeUrl = applyChatSrcToUrl(
+    getStoreHomeUrl(store),
+    input.channel,
+    input.conversationId
+  )
   const primary = pickPrimaryCatalogMatch(matches, categoryName)
   if (!primary) {
     return {
@@ -254,7 +271,11 @@ export async function buildProductReply(input: {
   conversationId?: number | null
 }): Promise<ProductReplyResult> {
   const { store, customerText, intent } = input
-  const homeUrl = getStoreHomeUrl(store.slug)
+  const homeUrl = applyChatSrcToUrl(
+    getStoreHomeUrl(store),
+    input.channel,
+    input.conversationId
+  )
   const ctx: ReplyContext = {
     customPrompt: store.ai_system_prompt,
     conversationHistory: input.conversationHistory,
@@ -393,6 +414,8 @@ export async function buildProductReply(input: {
       intent,
       customerMessage: customerText,
       ctx,
+      channel: input.channel,
+      conversationId: input.conversationId,
     })
     if (reply.primaryMatch) return reply
   }

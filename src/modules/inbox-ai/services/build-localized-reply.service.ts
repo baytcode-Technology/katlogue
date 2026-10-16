@@ -1,3 +1,10 @@
+import {
+  hasDevanagariScript,
+  hasMalayalamScript,
+  hasTamilScript,
+  isStiffTranslationMalayalam,
+  type ScriptStyle,
+} from '../../../shared/lib/detect-language-script.js'
 import { completeJson, completeWithFallback } from '../../../shared/llm/index.js'
 import {
   buildShopOwnerSystemPrompt,
@@ -5,7 +12,8 @@ import {
   resolveHonorific,
   type ShopOwnerTemplateTask,
 } from '../prompts/shop-owner-persona.js'
-import type { ScriptStyle } from './parse-customer-intent.service.js'
+
+export { isStiffTranslationMalayalam }
 
 export type LocalizedReplyTemplate = ShopOwnerTemplateTask
 
@@ -83,48 +91,48 @@ const EN: PhraseSet = {
 
 const ML: PhraseSet = {
   honorific: 'സാർ',
-  welcome: (storeName) => `നമസ്കാരം സാർ, ${storeName}-ലേക്ക് സ്വാഗതം.`,
-  ourStore: 'ഞങ്ങളുടെ സ്റ്റോർ',
-  whatLooking: 'എന്താണ് വേണ്ടത് സാർ?',
-  ackThanks: 'നന്ദി സാർ.',
-  askSizeOrColor: 'ഏത് സൈസ്, ഏത് കളർ വേണം സാർ?',
-  askWhatElse: 'വേറെ എന്താണ് നോക്കേണ്ടത് സാർ?',
-  buyConfirm: 'തീർച്ചയായും സാർ, ശരിയാക്കാം.',
-  buyTapLink: 'ഓർഡർ ചെയ്യാൻ ഈ ലിങ്കിൽ കയറൂ',
+  welcome: (storeName) => `ഹായ് സാർ, ${storeName} ആണ്.`,
+  ourStore: 'സ്റ്റോർ',
+  whatLooking: 'എന്താണ് വേണ്ടത്?',
+  ackThanks: 'ശരി സാർ.',
+  askSizeOrColor: 'ഏത് സൈസ്, ഏത് കളർ വേണം?',
+  askWhatElse: 'വേറെ എന്താണ് നോക്കേണ്ടത്?',
+  buyConfirm: 'ശരി സാർ, ക്രമീകരിക്കാം.',
+  buyTapLink: 'ഓർഡർ ചെയ്യാൻ ലിങ്ക് ഇതാ',
   notFoundLead: (item) => `${item} ഇപ്പോൾ ഇല്ല സാർ.`,
   weHave: (items) => `${items} ഉണ്ട്.`,
   browseHere: 'ഇവിടെ നോക്കൂ',
-  refusalRedirect: (storeName) => `${storeName}-ൽ നിന്ന് എന്താണ് വേണ്ടത് സാർ?`,
-  hereItIs: 'ഉണ്ട് സാർ, ഇതാ.',
-  closingAskSize: 'ഏത് സൈസ് വേണം സാർ?',
+  refusalRedirect: (storeName) => `${storeName}-ൽ നിന്ന് എന്താണ് വേണ്ടത്?`,
+  hereItIs: 'ഉണ്ട് സാർ',
+  closingAskSize: 'ഏത് സൈസ് വേണം?',
   moreOptions: 'ഇതുപോലെ വേറെയും ഉണ്ട്:',
   orderNotFound:
-    'ക്ഷമിക്കണം സാർ, ഈ വാട്സാപ്പ് നമ്പറിൽ ആ ഓർഡർ കാണുന്നില്ല. എപ്പോഴാണ് ഓർഡർ ചെയ്തത്, അല്ലെങ്കിൽ ഏത് നമ്പർ ഉപയോഗിച്ചു?',
+    'ആ ഓർഡർ ഈ നമ്പറിൽ കാണുന്നില്ല സാർ. എപ്പോഴാണ് ഓർഡർ ചെയ്തത്, അല്ലെങ്കിൽ ഏത് നമ്പർ ഉപയോഗിച്ചു?',
   orderNeedsPhone:
-    'ഓർഡർ ചെയ്ത സമയത്ത് ഉപയോഗിച്ച നമ്പറിൽ നിന്ന് വാട്സാപ്പിൽ മെസ്സേജ് ചെയ്താൽ മാത്രമേ ഓർഡർ വിവരം നോക്കാൻ കഴിയും സാർ.',
+    'ഓർഡർ ചെയ്ത നമ്പറിൽ നിന്ന് വാട്സാപ്പ് അയച്ചാൽ മാത്രമേ നോക്കാൻ പറ്റൂ സാർ.',
 }
 
 const ML_LATIN: PhraseSet = {
   honorific: 'saar',
-  welcome: (storeName) => `Namaskaram saar, ${storeName}-lek swagatham.`,
-  ourStore: 'Njangalude store',
-  whatLooking: 'Enthaanu vendath saar?',
-  ackThanks: 'Nandi saar.',
-  askSizeOrColor: 'Ethu size, ethu color vendam saar?',
-  askWhatElse: 'Vere enthaanu nokkendath saar?',
-  buyConfirm: 'Theerchayayum saar, shariyakkam.',
-  buyTapLink: 'Order cheyyan ee link il kayaru',
+  welcome: (storeName) => `Hai saar, ${storeName} aanu.`,
+  ourStore: 'Store',
+  whatLooking: 'Enthaanu vendath?',
+  ackThanks: 'Sheri saar.',
+  askSizeOrColor: 'Ethu size, ethu color vendam?',
+  askWhatElse: 'Vere enthaanu nokkendath?',
+  buyConfirm: 'Sheri saar, kramikkarikkam.',
+  buyTapLink: 'Order cheyyan link ithaa',
   notFoundLead: (item) => `${item} ippo illa saar.`,
   weHave: (items) => `${items} ind.`,
   browseHere: 'Ivide nokku',
-  refusalRedirect: (storeName) => `${storeName}-il ninnu enthaanu vendath saar?`,
-  hereItIs: 'Ind saar, ithaa.',
-  closingAskSize: 'Ethu size vendam saar?',
+  refusalRedirect: (storeName) => `${storeName}-il ninnu enthaanu vendath?`,
+  hereItIs: 'Ind saar',
+  closingAskSize: 'Ethu size vendam?',
   moreOptions: 'Ithupole vereyum ind:',
   orderNotFound:
-    'Kshamikkanam saar, ee WhatsApp number il aa order kaanunnilla. Eppozhaanu order cheythath, allengil ethu number upayogichu?',
+    'Aa order ee number il kaanunnilla saar. Eppozhaanu order cheythath, allengil ethu number upayogichu?',
   orderNeedsPhone:
-    'Order cheytha samayath upayogicha number il ninnu WhatsApp il message cheythal mathrame order vivaram nokkan kazhiyum saar.',
+    'Order cheytha number il ninnu WhatsApp ayachal mathrame nokkan pattu saar.',
 }
 
 const HI: PhraseSet = {
@@ -233,15 +241,33 @@ function buildFallback(
   }
 }
 
-const MALAYALAM_SCRIPT = /[\u0D00-\u0D7F]/
-const TAMIL_SCRIPT = /[\u0B80-\u0BFF]/
-const DEVANAGARI_SCRIPT = /[\u0900-\u097F]/
+const MALAYALAM_SCRIPT_CANNED_TEMPLATES: ReadonlySet<LocalizedReplyTemplate> = new Set([
+  'greeting',
+  'acknowledgement',
+  'buy_assist',
+  'not_found',
+  'refusal',
+  'product_lines',
+])
+
+export function shouldSkipModelForMalayalamScript(
+  language: string,
+  scriptStyle: ScriptStyle | undefined,
+  template: LocalizedReplyTemplate
+): boolean {
+  return (
+    isMalayalam(language) &&
+    scriptStyle === 'malayalam_script' &&
+    MALAYALAM_SCRIPT_CANNED_TEMPLATES.has(template)
+  )
+}
 
 /**
  * gpt-4o-mini sometimes answers a Malayalam customer in English, or drifts into
- * Tamil. Checking the script is a cheap way to catch that before sending.
+ * Tamil / stiff textbook Malayalam. Checking the script is a cheap way to catch
+ * that before sending.
  */
-function isReplyScriptValid(
+export function isReplyScriptValid(
   reply: string,
   language: string,
   scriptStyle?: ScriptStyle
@@ -250,18 +276,19 @@ function isReplyScriptValid(
   if (!text) return false
 
   if (isMalayalam(language)) {
-    if (TAMIL_SCRIPT.test(text) || DEVANAGARI_SCRIPT.test(text)) return false
-    return scriptStyle === 'malayalam_script'
-      ? MALAYALAM_SCRIPT.test(text)
-      : !MALAYALAM_SCRIPT.test(text)
+    if (hasTamilScript(text) || hasDevanagariScript(text)) return false
+    if (scriptStyle === 'malayalam_script') {
+      return hasMalayalamScript(text) && !isStiffTranslationMalayalam(text)
+    }
+    return !hasMalayalamScript(text)
   }
 
   const lang = language.trim().toLowerCase()
   if (lang === 'tamil' && scriptStyle !== 'latin') {
-    return TAMIL_SCRIPT.test(text) && !MALAYALAM_SCRIPT.test(text)
+    return hasTamilScript(text) && !hasMalayalamScript(text)
   }
   if (lang === 'hindi' && scriptStyle !== 'latin') {
-    return DEVANAGARI_SCRIPT.test(text) && !MALAYALAM_SCRIPT.test(text)
+    return hasDevanagariScript(text) && !hasMalayalamScript(text)
   }
 
   return true
@@ -350,6 +377,12 @@ function buildSystemPrompt(
 
 export async function buildLocalizedReply(input: LocalizedReplyInput): Promise<string> {
   const lang = resolveLanguage(input)
+  const canned = buildFallback(input.template, input.facts, resolvePhrases(lang, input.scriptStyle))
+
+  if (shouldSkipModelForMalayalamScript(lang, input.scriptStyle, input.template)) {
+    return canned
+  }
+
   const systemPrompt = buildSystemPrompt(input, lang, input.template)
   const honorific = resolveHonorific(lang, input.scriptStyle)
 
@@ -380,7 +413,7 @@ export async function buildLocalizedReply(input: LocalizedReplyInput): Promise<s
     }
   }
 
-  return buildFallback(input.template, input.facts, resolvePhrases(lang, input.scriptStyle))
+  return canned
 }
 
 export type ProductReplyLines = {
@@ -403,6 +436,10 @@ export async function buildProductReplyLines(
     intro: phrases.hereItIs,
     closing: phrases.closingAskSize,
     alsoFoundHeader: input.facts.hasOtherOptions ? phrases.moreOptions : null,
+  }
+
+  if (shouldSkipModelForMalayalamScript(lang, input.scriptStyle, 'product_lines')) {
+    return fallback
   }
 
   const systemPrompt = buildSystemPrompt(input, lang, 'product_lines')

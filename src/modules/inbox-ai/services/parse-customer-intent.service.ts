@@ -1,4 +1,11 @@
+import {
+  detectLanguageAndScript,
+  type ScriptStyle,
+} from '../../../shared/lib/detect-language-script.js'
 import { completeJson } from '../../../shared/llm/index.js'
+
+export type { ScriptStyle }
+export { detectLanguageAndScript }
 
 export type CustomerIntent =
   | 'greeting'
@@ -13,12 +20,6 @@ export type CustomerIntent =
   | 'explicit'
 
 export type OrderScope = 'latest' | 'all' | 'specific' | 'product' | null
-
-/**
- * Script the customer typed in. Manglish (Malayalam written with Latin letters)
- * must be answered in Manglish, not Malayalam script.
- */
-export type ScriptStyle = 'malayalam_script' | 'latin' | 'other'
 
 /** Intents that carry no product to look up in the catalog. */
 const NON_CATALOG_INTENTS: ReadonlySet<CustomerIntent> = new Set<CustomerIntent>([
@@ -153,13 +154,6 @@ const EMOJI_ONLY_PATTERN =
 const BUY_INTENT_PATTERN =
   /\b(how\s+(do\s+i|to|can\s+i)\s+(order|buy|pay)|i(?:'| a)?ll?\s+take\s+(it|this)|i\s+want\s+(it|this)|book\s+(it|this)|place\s+(the\s+)?order|order\s+cheyy?(am|aam|an|anam|umo|ano)|order\s+cheyyan\s+pattum(o)?|edukk?(am|aam|ano|umo)|vaangan|vangam|cash\s+on\s+delivery|\bcod\b|online\s+payment|delivery\s+charge|free\s+delivery)\b|എടുക്കാം|ഓർഡർ\s*ചെയ്യ|വാങ്ങ/i
 
-/**
- * Manglish = Malayalam typed with Latin letters. Detected separately from
- * Unicode script so these customers get a Manglish reply, not English.
- */
-const MANGLISH_PATTERN =
-  /\b(undo|undu|und|ond|onde|olla|ulla|illa|ille|aanu|aahn|aan|aano|vendam|vehnam|venam|vendath|ethra|ethrayaanu|vila|kittumo|kitteela|kittiyilla|ayakkavo|ayackavo|ayakku|cheyyam|cheyyan|cheyyamo|edukkam|koodi|entha|enthu|enik+|enick|ente|njan|ningal|pattiya|pattumo|sheri|seri|mathi|thaa|tharumo|adipoli|kollam|evide|eppo|ippo|sadhanam|saadhanam)\b/i
-
 const LANGUAGE_META_PATTERN =
   /\b(do\s+you\s+know|can\s+you\s+speak|do\s+you\s+speak|know\s+malayalam|know\s+tamil|know\s+hindi|speak\s+malayalam|speak\s+tamil|speak\s+hindi|മലയാളം\s*അറിയാമോ|അറിയാമോ|നിങ്ങൾക്ക്\s*മലയാളം|നിനക്ക്\s*മലയാളം)\b/i
 
@@ -183,9 +177,6 @@ const ORDER_TRACKING_WORD_PATTERN =
 
 const ORDER_PRODUCT_PATTERN =
   /\b(?:my|the|where\s+is)\s+(?:\w+\s+){0,3}order\b|\border\s+(?:for|with|of)\s+/i
-
-const MALAYALAM_SCRIPT = /[\u0D00-\u0D7F]/
-const TAMIL_SCRIPT = /[\u0B80-\u0BFF]/
 
 const SIZE_PATTERN = /\b(x{0,2}[sml]|xxl|xxxl|small|medium|large|extra\s*large)\b/i
 const SIZE_MAP: Record<string, string> = {
@@ -252,20 +243,6 @@ type CategoryHit = {
   canonical: string
   index: number
   end: number
-}
-
-export function detectLanguageAndScript(text: string): {
-  language: string
-  scriptStyle: ScriptStyle
-} {
-  if (MALAYALAM_SCRIPT.test(text)) {
-    return { language: 'Malayalam', scriptStyle: 'malayalam_script' }
-  }
-  if (TAMIL_SCRIPT.test(text)) return { language: 'Tamil', scriptStyle: 'other' }
-  if (/[\u0900-\u097F]/.test(text)) return { language: 'Hindi', scriptStyle: 'other' }
-  if (/[\u0600-\u06FF]/.test(text)) return { language: 'Arabic', scriptStyle: 'other' }
-  if (MANGLISH_PATTERN.test(text)) return { language: 'Malayalam', scriptStyle: 'latin' }
-  return { language: 'English', scriptStyle: 'latin' }
 }
 
 function detectLanguageFromText(text: string): string {

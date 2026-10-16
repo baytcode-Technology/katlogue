@@ -1,11 +1,63 @@
 import { AppError } from '../../../shared/errors/app.error.js';
+import {
+  detectLanguageAndScript,
+  isEnglishSupportBodyValid,
+} from '../../../shared/lib/detect-language-script.js';
+import { FALLBACK_MESSAGE } from '../../../shared/llm/index.js';
 import { notifyPlatformAdminsSupportMessage } from '../../notifications/services/notify-platform-admins.service.js';
 import { assertStoreMember, findStoreById } from '../../stores/repositories/store.repository.js';
 import { buildSupportSystemPrompt } from '../knowledge/katlogue-support-knowledge.js';
+import {
+  isManglishSupportBodyValid,
+  resolveEnglishHowToBody,
+  SUPPORT_ENGLISH_STEPS_ONLY,
+  SUPPORT_MANGLISH_RETRY,
+  wrapMalayalamScriptSupportReply,
+} from '../lib/wrap-malayalam-support-reply.js';
 import { completeWithFallback } from '../llm/index.js';
 import type { LlmChatMessage } from '../llm/types.js';
 import { checkSupportRateLimit } from '../rate-limit.js';
 import * as supportRepository from '../repositories/support.repository.js';
+
+function isLlmDown(text: string): boolean {
+  return text.trim() === FALLBACK_MESSAGE || text.includes('could not reach our AI');
+}
+
+async function completeSupportAssistantReply(
+  systemPrompt: string,
+  history: LlmChatMessage[],
+  scriptStyle: ReturnType<typeof detectLanguageAndScript>['scriptStyle'],
+  language: string
+): Promise<string> {
+  const first = await completeWithFallback(systemPrompt, history);
+  if (isLlmDown(first)) return first;
+
+  if (scriptStyle === 'malayalam_script') {
+    let retry: string | null = null;
+    if (!isEnglishSupportBodyValid(first)) {
+      retry = await completeWithFallback(systemPrompt, [
+        ...history,
+        { role: 'assistant', content: first },
+        { role: 'user', content: SUPPORT_ENGLISH_STEPS_ONLY },
+      ]);
+      if (isLlmDown(retry)) retry = null;
+    }
+    return wrapMalayalamScriptSupportReply(resolveEnglishHowToBody(first, retry));
+  }
+
+  if (language === 'Malayalam' && scriptStyle === 'latin') {
+    if (isManglishSupportBodyValid(first)) return first;
+    const retry = await completeWithFallback(systemPrompt, [
+      ...history,
+      { role: 'assistant', content: first },
+      { role: 'user', content: SUPPORT_MANGLISH_RETRY },
+    ]);
+    if (isLlmDown(retry)) return first;
+    return isManglishSupportBodyValid(retry) ? retry : first;
+  }
+
+  return first;
+}
 
 export async function sendMessage(
   ownerId: string,
@@ -64,13 +116,25 @@ export async function sendMessage(
   const productCount = await supportRepository.countProductsForStore(storeId);
   const plan = store?.subscription_plan ?? 'starter';
 
-  const systemPrompt = buildSupportSystemPrompt({
-    storeName: store?.name,
-    plan,
-    productCount,
-  });
+  const merchantScript = detectLanguageAndScript(content);
+  const systemPrompt = buildSupportSystemPrompt(
+    {
+      storeName: store?.name,
+      plan,
+      productCount,
+    },
+    {
+      merchantLanguage: merchantScript.language,
+      scriptStyle: merchantScript.scriptStyle,
+    }
+  );
 
-  const assistantText = await completeWithFallback(systemPrompt, llmHistory);
+  const assistantText = await completeSupportAssistantReply(
+    systemPrompt,
+    llmHistory,
+    merchantScript.scriptStyle,
+    merchantScript.language
+  );
   const assistantMessage = await supportRepository.insertMessage(
     conversationId,
     'assistant',

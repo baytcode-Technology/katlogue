@@ -11,7 +11,8 @@ let cachedProvider: LlmProvider | null = null
 export function getLlmProvider(): LlmProvider {
   if (cachedProvider) return cachedProvider
 
-  const provider = (process.env.LLM_PROVIDER ?? 'tokenbee').toLowerCase()
+  // const provider = (process.env.LLM_PROVIDER ?? 'tokenbee').toLowerCase()
+  const provider = (process.env.LLM_PROVIDER ?? 'openai').toLowerCase()
   if (provider === 'tokenbee') {
     cachedProvider = new TokenBeeProvider()
   } else if (provider === 'openai') {

@@ -10,7 +10,7 @@ let cachedProvider: LlmProvider | null = null
 
 export function getLlmProvider(): LlmProvider {
   if (cachedProvider) return cachedProvider
-
+   //token bee is not working, so we are using openai for now.
   // const provider = (process.env.LLM_PROVIDER ?? 'tokenbee').toLowerCase()
   const provider = (process.env.LLM_PROVIDER ?? 'openai').toLowerCase()
   if (provider === 'tokenbee') {

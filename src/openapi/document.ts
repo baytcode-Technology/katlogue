@@ -802,7 +802,7 @@ export function buildOpenApiDocument() {
             plan: { type: 'string', enum: ['business'], example: 'business' },
             store_name: { type: 'string', example: 'My Shop' },
             is_trial: { type: 'boolean', example: true },
-            regular_amount: { type: 'number', example: 1399, description: 'Full monthly price in major units' },
+            regular_amount: { type: 'number', example: 999, description: 'Full monthly price in major units' },
           },
         },
         SubscriptionPricingData: {
@@ -812,11 +812,11 @@ export function buildOpenApiDocument() {
             currency: { type: 'string', enum: ['INR', 'USD'], example: 'INR' },
             charge_amount: { type: 'number', example: 99 },
             charge_minor_units: { type: 'integer', example: 9900 },
-            regular_amount: { type: 'number', example: 1399 },
-            regular_minor_units: { type: 'integer', example: 139900 },
+            regular_amount: { type: 'number', example: 999 },
+            regular_minor_units: { type: 'integer', example: 99900 },
             is_trial: { type: 'boolean', example: true },
             price_label: { type: 'string', example: '₹99 / 1st month' },
-            compare_at_label: { type: 'string', example: '₹1399 / month' },
+            compare_at_label: { type: 'string', example: '₹999 / month' },
           },
         },
         VerifySubscriptionPaymentBody: {
@@ -1922,7 +1922,7 @@ export function buildOpenApiDocument() {
           tags: ['Subscriptions'],
           summary: 'Get Business plan pricing for current store',
           description:
-            'Returns trial eligibility and display labels. First paid checkout per store uses trial pricing (India ₹99 / global $1). Renewals use ₹1399 / $20.',
+            'Returns trial eligibility and display labels. First paid checkout per store uses trial pricing (India ₹99 / global $1). Renewals use ₹999 / $20.',
           security: [{ bearerAuth: [] }],
           responses: {
             '200': {
@@ -1948,7 +1948,7 @@ export function buildOpenApiDocument() {
           tags: ['Subscriptions'],
           summary: 'Create Business plan checkout session',
           description:
-            'Creates a Razorpay order using platform keys. Trial-eligible stores (no prior paid checkout): India ₹99 (9900 paise), global $1 (100 cents). Otherwise ₹1399 / $20. Returns data for mobile WebView checkout.',
+            'Creates a Razorpay order using platform keys. Trial-eligible stores (no prior paid checkout): India ₹99 (9900 paise), global $1 (100 cents). Otherwise ₹999 / $20. Returns data for mobile WebView checkout.',
           security: [{ bearerAuth: [] }],
           responses: {
             '200': {

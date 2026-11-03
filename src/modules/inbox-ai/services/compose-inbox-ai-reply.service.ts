@@ -5,6 +5,7 @@ import {
 } from './build-product-reply.service.js'
 import {
   extractLastShownProduct,
+  filterSessionHistory,
   formatConversationHistory,
   type InboxAiChannel,
 } from './conversation-history.service.js'
@@ -53,11 +54,12 @@ export async function composeInboxAiReply(
   input: ComposeInboxAiReplyInput
 ): Promise<ComposeInboxAiReplyResult> {
   const text = input.customerText.trim()
-  const recentMessages = input.recentMessages ?? []
+  const recentMessages = filterSessionHistory(input.recentMessages ?? [])
   const conversationHistory = formatConversationHistory(recentMessages)
 
   const intent = await parseCustomerIntent(text, { recentMessages })
-  const lastShownProduct = extractLastShownProduct(recentMessages)
+  const lastShownProduct =
+    intent.intent === 'greeting' ? null : extractLastShownProduct(recentMessages)
 
   const reply = await buildProductReply({
     store: input.store,

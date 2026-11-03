@@ -38,6 +38,8 @@ export type LocalizedReplyFacts = {
   /** Product being sent right now, used by the product_lines task. */
   productTitle?: string | null
   hasOtherOptions?: boolean
+  /** The other item they agreed to, when the first one is not in the shop. */
+  offeredItem?: string | null
 }
 
 /**
@@ -57,6 +59,7 @@ type PhraseSet = {
   buyTapLink: string
   notFoundLead: (item: string) => string
   weHave: (items: string) => string
+  alternativeLead: (missing: string, offered: string) => string
   browseHere: string
   refusalRedirect: (storeName: string) => string
   hereItIs: string
@@ -78,6 +81,8 @@ const EN: PhraseSet = {
   buyTapLink: 'Tap the link to place the order',
   notFoundLead: (item) => `We don't keep ${item} sir.`,
   weHave: (items) => `We have ${items}.`,
+  alternativeLead: (missing, offered) =>
+    `We don't have ${missing} sir. We have ${offered}.`,
   browseHere: 'Browse here',
   refusalRedirect: (storeName) => `What can I help you find at ${storeName} sir?`,
   hereItIs: 'Here it is sir.',
@@ -101,6 +106,7 @@ const ML: PhraseSet = {
   buyTapLink: 'ഓർഡർ ചെയ്യാൻ ലിങ്ക് ഇതാ',
   notFoundLead: (item) => `${item} ഇപ്പോൾ ഇല്ല സാർ.`,
   weHave: (items) => `${items} ഉണ്ട്.`,
+  alternativeLead: (missing, offered) => `${missing} ഇപ്പോൾ ഇല്ല സാർ. ${offered} ഉണ്ട്.`,
   browseHere: 'ഇവിടെ നോക്കൂ',
   refusalRedirect: (storeName) => `${storeName}-ൽ നിന്ന് എന്താണ് വേണ്ടത്?`,
   hereItIs: 'ഉണ്ട് സാർ',
@@ -124,6 +130,7 @@ const ML_LATIN: PhraseSet = {
   buyTapLink: 'Order cheyyan link ithaa',
   notFoundLead: (item) => `${item} ippo illa saar.`,
   weHave: (items) => `${items} ind.`,
+  alternativeLead: (missing, offered) => `${missing} ippo illa saar. ${offered} ind.`,
   browseHere: 'Ivide nokku',
   refusalRedirect: (storeName) => `${storeName}-il ninnu enthaanu vendath?`,
   hereItIs: 'Ind saar',
@@ -147,6 +154,7 @@ const HI: PhraseSet = {
   buyTapLink: 'ऑर्डर करने के लिए इस लिंक पर जाएं',
   notFoundLead: (item) => `${item} अभी नहीं है सर।`,
   weHave: (items) => `हमारे पास ${items} है।`,
+  alternativeLead: (missing, offered) => `${missing} नहीं है सर। ${offered} है।`,
   browseHere: 'यहाँ देखें',
   refusalRedirect: (storeName) => `${storeName} से आपको क्या चाहिए सर?`,
   hereItIs: 'जी सर, यह देखिए।',
@@ -170,6 +178,7 @@ const TA: PhraseSet = {
   buyTapLink: 'ஆர்டர் செய்ய இந்த லிங்கை அழுத்துங்கள்',
   notFoundLead: (item) => `${item} இப்போது இல்லை சார்.`,
   weHave: (items) => `எங்களிடம் ${items} உள்ளது.`,
+  alternativeLead: (missing, offered) => `${missing} இல்லை சார். ${offered} உள்ளது.`,
   browseHere: 'இங்கே பாருங்கள்',
   refusalRedirect: (storeName) => `${storeName}-ல் உங்களுக்கு என்ன வேண்டும் சார்?`,
   hereItIs: 'இருக்கு சார், இதோ.',
@@ -224,6 +233,12 @@ function buildFallback(
       return head ? `${head}\n\n${tail}` : `${p.whatLooking}\n\n${tail}`
     }
 
+    case 'alternative': {
+      const missing = facts.requestedItem?.trim() || 'that'
+      const offered = facts.offeredItem?.trim() || 'other options'
+      return p.alternativeLead(missing, offered)
+    }
+
     case 'refusal':
       return `${p.refusalRedirect(facts.storeName)}\n\n${p.browseHere}: ${facts.homeUrl}`
 
@@ -246,6 +261,7 @@ const MALAYALAM_SCRIPT_CANNED_TEMPLATES: ReadonlySet<LocalizedReplyTemplate> = n
   'acknowledgement',
   'buy_assist',
   'not_found',
+  'alternative',
   'refusal',
   'product_lines',
 ])
@@ -308,6 +324,7 @@ function buildFactsBlock(template: LocalizedReplyTemplate, facts: LocalizedReply
   const lines = [`Store name: ${facts.storeName}`, `Store link: ${facts.homeUrl}`]
 
   if (facts.requestedItem) lines.push(`Item NOT available: ${facts.requestedItem}`)
+  if (facts.offeredItem) lines.push(`Offering instead: ${facts.offeredItem}`)
   if (facts.availableProducts?.length) {
     lines.push(`Items we DO have: ${facts.availableProducts.join(', ')}`)
   }
@@ -414,6 +431,10 @@ export async function buildLocalizedReply(input: LocalizedReplyInput): Promise<s
   }
 
   return canned
+}
+
+export function staffClosingLine(language: string, scriptStyle?: ScriptStyle): string {
+  return resolvePhrases(language, scriptStyle).closingAskSize
 }
 
 export type ProductReplyLines = {

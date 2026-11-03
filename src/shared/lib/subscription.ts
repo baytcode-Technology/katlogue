@@ -8,8 +8,8 @@ export const FREE_ORDER_LIMIT = 50
 
 export const BUSINESS_TRIAL_AMOUNT_INR = 99
 export const BUSINESS_TRIAL_MINOR_INR = 9900
-export const BUSINESS_REGULAR_AMOUNT_INR = 1399
-export const BUSINESS_REGULAR_MINOR_INR = 139900
+export const BUSINESS_REGULAR_AMOUNT_INR = 999
+export const BUSINESS_REGULAR_MINOR_INR = 99900
 
 export const BUSINESS_TRIAL_AMOUNT_USD = 1
 export const BUSINESS_TRIAL_MINOR_USD = 100
@@ -140,8 +140,8 @@ export function getBusinessPricingQuote(
       regular_amount: regular.amount,
       regular_minor_units: regular.minorUnits,
       is_trial: charge.isTrial,
-      price_label: charge.isTrial ? '₹99 / 1st month' : '₹1399 / month',
-      compare_at_label: '₹1399 / month',
+      price_label: charge.isTrial ? '₹99 / 1st month' : `₹${BUSINESS_REGULAR_AMOUNT_INR} / month`,
+      compare_at_label: `₹${BUSINESS_REGULAR_AMOUNT_INR} / month`,
     }
   }
 

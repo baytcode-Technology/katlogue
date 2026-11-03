@@ -44,6 +44,8 @@ export type ParsedCustomerIntent = {
   orderProductHint: string | null
   orderScope: OrderScope
   typedPhone: string | null
+  /** Later products they also accepted, in the order they named them. */
+  alternativeCategories: string[]
   /** Set when message is off-topic due to language-capability questions */
   offTopicReason?: 'language_meta' | 'general' | null
 }
@@ -51,6 +53,8 @@ export type ParsedCustomerIntent = {
 export type ConversationHistoryLine = {
   role: 'customer' | 'store'
   text: string
+  /** When the message was sent. Used to ignore chat from a previous visit. */
+  at?: string | null
 }
 
 export type ParseCustomerIntentOptions = {
@@ -87,7 +91,9 @@ CRITICAL — Language:
   "blue shirt undo?" → customerLanguage: "Malayalam" (NOT English).
 
 CRITICAL — Extract product only:
-- IGNORE personal stories, events, reasons (wedding, party, tomorrow, gift, birthday, etc.)
+- Occasion words (wedding, marriage, party, tomorrow, gift, birthday) are tone only. Never put them in searchQuery.
+- If they name more than one product ("kurta or shirt"), searchQuery is the FIRST product. Do not drop the others; code reads them from the message.
+- A greeting by itself ("hi", "hello") is greeting with searchQuery "". "Hi, I need a blue shirt" is product_search.
 - "വെള്ള shirt ഉണ്ടോ?" → product_search, searchQuery: "shirt", color: "white", customerLanguage: "Malayalam"
 - "blue shirt undo?" → product_search, searchQuery: "shirt", color: "blue", requestedItem: "blue shirt"
 - Pairing / owned-item context: "I have a green shirt, need pants to pair / send pant images" → searchQuery: "pants", categoryName: "pants", color: null. Do NOT search for the item they already own.
@@ -136,8 +142,12 @@ Rules:
 - off_topic for: "do you know Malayalam?", "can you speak Hindi?", reading PDFs/files, general knowledge, app/code questions, unrelated chat — NO shopping intent.
 - explicit only for sexual/violent/harassing content.`
 
-const GREETING_PATTERN =
-  /^(hi|hello|hey|hii|helo|good\s+(morning|afternoon|evening)|namaste|vanakkam|hola|assalam|salam|നമസ്കാരം|ഹലോ|നമസ്കാര|नमस्ते|হ্যালো)\b/i
+/** Greeting with no product ask. "Hi, I need a blue shirt" must not match. */
+const GREETING_ONLY_PATTERN =
+  /^(?:hi+|hello+|hey+|helo|good\s+(?:morning|afternoon|evening)|namaste|vanakkam|hola|assalam(?:u\s+alaikum)?|salam|നമസ്കാരം|ഹലോ|നമസ്കാര|नमस्ते|হ্যালো)(?:[\s,!.🙏😊😀🙂]+(?:sir|saar|sar|bro|സാർ|ചേട്ടാ))?[\s.!,🙏😊😀🙂]*$/iu
+
+const OCCASION_PATTERN =
+  /\b(marriage|wedding|party|tomorrow|birthday|gift|function|engagement|reception)\b|വിവാഹം|കല്യാണം/i
 
 /**
  * Pure reactions with no new product ask. Anchored so "ok blue shirt undo?"
@@ -260,8 +270,8 @@ function resolveScriptStyle(text: string, language: string): ScriptStyle {
   return detected.scriptStyle
 }
 
-function isGreeting(text: string): boolean {
-  return GREETING_PATTERN.test(text.trim())
+function isGreetingOnly(text: string): boolean {
+  return GREETING_ONLY_PATTERN.test(text.trim())
 }
 
 function isAcknowledgement(text: string): boolean {
@@ -284,8 +294,22 @@ function isOffTopicMessage(text: string): boolean {
 }
 
 function extractSku(text: string): string | null {
-  const match = text.match(/\b(?:sku|item\s*#?)\s*[:#-]?\s*([a-z0-9-]+)/i)
-  return match?.[1]?.trim() ?? null
+  const compact = text.match(/\b((?:sku|item)[-_][a-z0-9]+(?:[-_][a-z0-9]+)*)\b/i)
+  if (compact?.[1]) return compact[1]
+
+  const labeled = text.match(/\b(?:sku|item)\b\s*(?:#|:)?\s*([a-z0-9]+(?:-[a-z0-9]+)*)/i)
+  if (labeled?.[1] && !/^(?:sku|item)$/i.test(labeled[1])) return labeled[1]
+
+  return extractBareProductCode(text)
+}
+
+/** A message that is only a product code, never "ok", "hi", or an order number. */
+function extractBareProductCode(text: string): string | null {
+  const trimmed = text.trim()
+  if (!/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+$/.test(trimmed)) return null
+  if (ORDER_NUMBER_PATTERN.test(trimmed)) return null
+  if (/^(?:ok|okay|hi|hey|hello)(?:-[A-Za-z0-9]+)*$/i.test(trimmed)) return null
+  return trimmed
 }
 
 function extractSize(text: string): string | null {
@@ -358,8 +382,17 @@ function windowScore(text: string, index: number, end: number): number {
   const window = text.slice(start, stop)
   let score = 0
   if (BUY_SIGNAL_PATTERN.test(window)) score += 4
-  if (OWNERSHIP_PATTERN.test(window)) score -= 5
+  if (ownershipInWindow(window)) score -= 5
   return score
+}
+
+/** "I have a marriage" is an occasion, not a product the customer already owns. */
+function ownershipInWindow(window: string): boolean {
+  const withoutOccasion = window.replace(
+    /\bhave\s+(?:a\s+|an\s+)?(?:marriage|wedding|party|function|birthday|engagement|reception)\b/gi,
+    ' '
+  )
+  return OWNERSHIP_PATTERN.test(withoutOccasion)
 }
 
 export function extractRequestedCategory(text: string): string | null {
@@ -367,11 +400,16 @@ export function extractRequestedCategory(text: string): string | null {
   if (hits.length === 0) return null
   if (hits.length === 1) return hits[0].canonical
 
+  const either = /\bor\b|അല്ലെങ്കിൽ/i.test(text)
   let best = hits[0]
   let bestScore = windowScore(text, best.index, best.end)
   for (const hit of hits.slice(1)) {
     const score = windowScore(text, hit.index, hit.end)
-    if (score > bestScore || (score === bestScore && hit.index > best.index)) {
+    const tie = score === bestScore
+    const preferThis =
+      score > bestScore ||
+      (tie && (either ? hit.index < best.index : hit.index > best.index))
+    if (preferThis) {
       best = hit
       bestScore = score
     }
@@ -381,6 +419,115 @@ export function extractRequestedCategory(text: string): string | null {
 
 function extractCategory(text: string): string | null {
   return extractRequestedCategory(text) ?? findCategoryHits(text)[0]?.canonical ?? null
+}
+
+/** Other products they named with "or", after the one we search first. */
+export function extractAlternativeCategories(text: string): string[] {
+  if (!/\bor\b|അല്ലെങ്കിൽ/i.test(text)) return []
+  const primary = extractRequestedCategory(text)
+  if (!primary) return []
+  const seen = new Set<string>([primary])
+  const alternatives: string[] = []
+  for (const hit of findCategoryHits(text)) {
+    if (seen.has(hit.canonical)) continue
+    if (windowScore(text, hit.index, hit.end) < 0) continue
+    seen.add(hit.canonical)
+    alternatives.push(hit.canonical)
+  }
+  return alternatives
+}
+
+export function categorySearchTerm(canonical: string): string {
+  const words = CATEGORY_GROUPS[canonical]
+  if (!words?.length) return canonical
+  return [...words].sort((a, b) => a.length - b.length)[0]
+}
+
+function primarySearchTerm(text: string, canonical: string): string {
+  const words = findCategoryHits(text)
+    .filter((hit) => hit.canonical === canonical)
+    .map((hit) => hit.word)
+  if (words.length === 0) return categorySearchTerm(canonical)
+  return [...words].sort((a, b) => a.length - b.length)[0]
+}
+
+function mentionsOccasion(text: string): boolean {
+  return OCCASION_PATTERN.test(text)
+}
+
+function preferTextSearchQuery(text: string, query: string, category: string | null): string {
+  const cleaned = query
+    .replace(
+      /\b(marriage|wedding|party|tomorrow|birthday|gift|function|engagement|reception)\b|വിവാഹം|കല്യാണം/gi,
+      ' '
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!category) return cleaned
+  const term = primarySearchTerm(text, category)
+  if (
+    !cleaned ||
+    mentionsOccasion(query) ||
+    cleaned.split(/\s+/).length > 3 ||
+    categoriesConflict(cleaned, category)
+  ) {
+    return term
+  }
+  return cleaned
+}
+
+function isColorOnlyFollowUp(text: string): boolean {
+  if (extractRequestedCategory(text) || extractSku(text) || isOrderStatusMessage(text)) return false
+  const color = extractColor(text)
+  if (!color) return false
+  const rest = text
+    .replace(new RegExp(color, 'ig'), ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\b(color|colour|please|sir|saar)\b/gi, ' ')
+    .trim()
+  return rest.length === 0
+}
+
+function categoryFromSession(
+  lines: ConversationHistoryLine[] | undefined,
+  current: string
+): string | null {
+  if (!lines?.length) return null
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i]
+    if (line.role !== 'customer') continue
+    if (line.text.trim() === current.trim()) continue
+    const category = extractRequestedCategory(line.text)
+    if (category) return category
+  }
+  return null
+}
+
+function colorFollowUpIntent(
+  trimmed: string,
+  recentMessages?: ConversationHistoryLine[]
+): ParsedCustomerIntent | null {
+  if (!isColorOnlyFollowUp(trimmed)) return null
+  const categoryName = categoryFromSession(recentMessages, trimmed)
+  if (!categoryName) return null
+  return finalizeIntent(
+    {
+      intent: 'product_search',
+      customerLanguage: detectLanguageFromText(trimmed),
+      searchQuery: categorySearchTerm(categoryName),
+      color: extractColor(trimmed),
+      size: extractSize(trimmed),
+      sku: null,
+      categoryName,
+      wantsImage: wantsImageFromText(trimmed),
+      orderNumber: null,
+      orderNumberHint: null,
+      orderProductHint: null,
+      orderScope: null,
+      typedPhone: null,
+    },
+    trimmed
+  )
 }
 
 export function extractRequestedColor(text: string, requestedCategory: string | null): string | null {
@@ -421,7 +568,7 @@ function stripExtractedTerms(text: string, color: string | null, size: string | 
   if (color) q = q.replace(new RegExp(`\\b${color}\\b`, 'gi'), ' ')
   if (size) q = q.replace(SIZE_PATTERN, ' ')
   q = q.replace(
-    /\b(photo|image|picture|pic|send|show|want|need|looking\s+for|do\s+you\s+have|price|how\s+much|wedding|party|tomorrow|birthday|gift|undo|undu|ഉണ്ടോ|ഇല്ല)\b/gi,
+    /\b(photo|image|picture|pic|send|show|want|need|looking\s+for|do\s+you\s+have|price|how\s+much|wedding|marriage|party|tomorrow|birthday|gift|function|engagement|reception|undo|undu|ഉണ്ടോ|ഇല്ല)\b|വിവാഹം|കല്യാണം/gi,
     ' '
   )
   return q.replace(/\s+/g, ' ').trim()
@@ -530,7 +677,7 @@ function normalizeIntent(
 function finalizeIntent(
   partial: Omit<
     ParsedCustomerIntent,
-    'requestedItem' | 'orderNumberHint' | 'typedPhone' | 'scriptStyle'
+    'requestedItem' | 'orderNumberHint' | 'typedPhone' | 'scriptStyle' | 'alternativeCategories'
   > & {
     requestedItem?: string | null
     orderNumberHint?: string | null
@@ -590,6 +737,7 @@ function finalizeIntent(
     orderProductHint: partial.orderProductHint?.trim() || null,
     orderScope: partial.orderScope ?? null,
     typedPhone: partial.typedPhone?.trim() || null,
+    alternativeCategories: isNonCatalog ? [] : extractAlternativeCategories(trimmed),
   }
 }
 
@@ -637,12 +785,16 @@ export function fromLlmResult(parsed: LlmIntentResult, trimmed: string): ParsedC
 
   const searchQuery = NON_CATALOG_INTENTS.has(intent)
     ? ''
-    : llmConflicts && requestedCategory
-      ? requestedCategory
-      : parsed.searchQuery?.trim() ||
-        stripExtractedTerms(trimmed, color, size) ||
-        categoryName ||
-        ''
+    : preferTextSearchQuery(
+        trimmed,
+        llmConflicts && requestedCategory
+          ? requestedCategory
+          : parsed.searchQuery?.trim() ||
+            stripExtractedTerms(trimmed, color, size) ||
+            categoryName ||
+            '',
+        requestedCategory || categoryName
+      )
 
   const orderScope =
     parsed.orderScope ??
@@ -677,8 +829,14 @@ export function fromLlmResult(parsed: LlmIntentResult, trimmed: string): ParsedC
  * Regex-only classification. Used when the LLM is unavailable, when the message
  * needs no classification (bare reactions), and by fixtures.
  */
-export function parseCustomerIntentOffline(text: string): ParsedCustomerIntent {
-  return regexFallback(text.trim())
+export function parseCustomerIntentOffline(
+  text: string,
+  options?: ParseCustomerIntentOptions
+): ParsedCustomerIntent {
+  const trimmed = text.trim()
+  const followUp = colorFollowUpIntent(trimmed, options?.recentMessages)
+  if (followUp) return followUp
+  return regexFallback(trimmed)
 }
 
 function regexFallback(trimmed: string): ParsedCustomerIntent {
@@ -732,7 +890,7 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
     )
   }
 
-  if (isGreeting(trimmed)) {
+  if (isGreetingOnly(trimmed)) {
     return finalizeIntent(
       {
         intent: 'greeting',
@@ -854,8 +1012,9 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
     }
   }
 
-  const searchQuery =
-    stripExtractedTerms(trimmed, colorFromText, sizeFromText) || categoryFromText || trimmed
+  const searchQuery = categoryFromText
+    ? primarySearchTerm(trimmed, categoryFromText)
+    : stripExtractedTerms(trimmed, colorFromText, sizeFromText)
 
   return finalizeIntent(
     {
@@ -928,6 +1087,19 @@ export async function parseCustomerIntent(
   ) {
     return regexFallback(trimmed)
   }
+
+  if (
+    isGreetingOnly(trimmed) &&
+    !extractRequestedCategory(trimmed) &&
+    !extractColor(trimmed) &&
+    !extractSku(trimmed) &&
+    !isOrderStatusMessage(trimmed)
+  ) {
+    return regexFallback(trimmed)
+  }
+
+  const followUp = colorFollowUpIntent(trimmed, options?.recentMessages)
+  if (followUp) return followUp
 
   const llmInput = buildIntentPrompt(trimmed, options?.recentMessages)
   const parsed = await completeJson<LlmIntentResult>(INTENT_SCHEMA, llmInput)

@@ -4,6 +4,9 @@ import type { ConversationHistoryLine } from './parse-customer-intent.service.js
 
 const HISTORY_LIMIT = 6
 
+/** A later "hi" must not revive a product from days ago. Follow-ups stay in this window. */
+export const SESSION_MAX_AGE_MS = 4 * 60 * 60 * 1000
+
 export type InboxAiChannel = 'whatsapp' | 'instagram'
 
 export async function fetchRecentConversationHistory(input: {
@@ -27,7 +30,7 @@ export async function fetchRecentConversationHistory(input: {
   return messages
     .slice()
     .reverse()
-    .map((m) => {
+    .map((m): ConversationHistoryLine | null => {
       const caption = 'caption' in m ? m.caption : null
       const textBody = 'text_body' in m ? m.text_body : null
       const text = (caption ?? textBody) ?? ''
@@ -35,7 +38,8 @@ export async function fetchRecentConversationHistory(input: {
       if (!trimmed) return null
       const role: ConversationHistoryLine['role'] =
         m.direction === 'inbound' ? 'customer' : 'store'
-      return { role, text: trimmed }
+      const at: string | null = m.timestamp ?? m.created_at ?? null
+      return { role, text: trimmed, at }
     })
     .filter((line): line is ConversationHistoryLine => line !== null)
 }
@@ -43,6 +47,22 @@ export async function fetchRecentConversationHistory(input: {
 export function formatConversationHistory(lines: ConversationHistoryLine[]): string | null {
   if (lines.length === 0) return null
   return lines.map((l) => `${l.role === 'customer' ? 'Customer' : 'Store'}: ${l.text}`).join('\n')
+}
+
+/**
+ * Drop chat from before this visit. Lines with no timestamp are kept so older
+ * callers that only pass text still work.
+ */
+export function filterSessionHistory(
+  lines: ConversationHistoryLine[],
+  nowMs: number = Date.now()
+): ConversationHistoryLine[] {
+  return lines.filter((line) => {
+    if (!line.at) return true
+    const time = Date.parse(line.at)
+    if (Number.isNaN(time)) return true
+    return nowMs - time <= SESSION_MAX_AGE_MS
+  })
 }
 
 export type LastShownProductRef = {

@@ -103,6 +103,10 @@ test('skips the model for greeting wrappers', () => {
     shouldSkipModelForMalayalamScript('Malayalam', 'malayalam_script', 'product_lines'),
     true
   )
+  assert.equal(
+    shouldSkipModelForMalayalamScript('Malayalam', 'malayalam_script', 'alternative'),
+    true
+  )
 })
 
 test('keeps the model for Manglish and for order replies', () => {
@@ -135,6 +139,19 @@ await testAsync('Malayalam-script product wrapper is ഉണ്ട് സാർ',
     facts: { ...facts, productTitle: 'Linen Shirt' },
   })
   assert.equal(reply, 'ഉണ്ട് സാർ')
+})
+
+await testAsync('Malayalam-script alternative names what is missing and what we have', async () => {
+  const reply = await buildLocalizedReply({
+    customerLanguage: 'Malayalam',
+    scriptStyle: 'malayalam_script',
+    template: 'alternative',
+    facts: { ...facts, requestedItem: 'kurta', offeredItem: 'shirts' },
+  })
+  assert.match(reply, /kurta/)
+  assert.match(reply, /shirts/)
+  assert.match(reply, /ഇല്ല/)
+  assert.match(reply, /ഉണ്ട്/)
 })
 
 console.log('\n=== Chat with us language ===')

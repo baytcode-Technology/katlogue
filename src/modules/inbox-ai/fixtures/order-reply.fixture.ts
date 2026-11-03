@@ -14,6 +14,8 @@ import {
   extractPhoneFromText,
   isAllOrdersScopeMessage,
   isOrderStatusMessage,
+  parseCustomerIntentOffline,
+  resolveOrderAsk,
   resolveOrderScope,
 } from '../services/parse-customer-intent.service.js'
 import {
@@ -362,6 +364,23 @@ test('latest-scope facts use full detail block', () => {
   assert.match(facts, /latest \/ last order/)
   assert.match(facts, /Recipient: Nuaim Panackal/)
   assert.match(facts, /Address: Mannancherry/)
+})
+
+test('facts block states delivery date is not on the order', () => {
+  const order = mockOrder({ order_number: 'OCT26-1', items: [] })
+  const facts = formatOrderFactsBlock(order, 'INR')
+  assert.match(facts, /Delivery date: not on this order/)
+  assert.doesNotMatch(facts, /\*/)
+})
+
+test('repeat order details after a full paste is confirm_last', () => {
+  assert.equal(resolveOrderAsk('order details', 'order', true), 'confirm_last')
+  assert.equal(resolveOrderAsk('order details', null, false), 'full')
+})
+
+test('not my order and change address are honest help asks', () => {
+  assert.equal(parseCustomerIntentOffline('this is not my order').orderAsk, 'not_mine')
+  assert.equal(parseCustomerIntentOffline('change address').orderAsk, 'address')
 })
 
 if (failed > 0) {

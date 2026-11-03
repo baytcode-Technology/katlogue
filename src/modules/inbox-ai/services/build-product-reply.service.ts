@@ -10,8 +10,13 @@ import {
 } from './build-localized-reply.service.js'
 import {
   categorySearchTerm,
+  isBarePriceAsk,
   type ParsedCustomerIntent,
 } from './parse-customer-intent.service.js'
+import {
+  isMarkedSoldProduct,
+  isMarkedSoldVariant,
+} from '../../products/utils/product-inventory.js'
 import {
   type CatalogMatch,
   filterMatchesByScore,
@@ -299,6 +304,9 @@ async function buildTemplateReply(input: {
     shopSells?: string[]
     offeredItem?: string | null
     refusalReason?: 'explicit' | 'code_request' | 'off_topic' | 'language_meta'
+    missingWhy?: 'not_sold' | 'sold_out' | null
+    sessionTopic?: ParsedCustomerIntent['sessionTopic']
+    orderAsk?: ParsedCustomerIntent['orderAsk']
   }
 }): Promise<string> {
   const { store, intent, homeUrl, ctx } = input
@@ -341,8 +349,25 @@ async function buildNotFoundReply(
     customerMessage,
     ctx,
     template: 'not_found',
-    extraFacts: { requestedItem: intent.requestedItem, shopSells },
+    extraFacts: {
+      requestedItem: intent.requestedItem,
+      shopSells,
+      missingWhy: intent.missingWhy ?? 'not_sold',
+    },
   })
+}
+
+function catalogMatchSoldOut(match: CatalogMatch): boolean {
+  if (match.variant) {
+    return (
+      isMarkedSoldVariant(match.product, match.variant) ||
+      (match.product.track_inventory && match.variant.stock_qty <= 0)
+    )
+  }
+  return (
+    isMarkedSoldProduct(match.product) ||
+    (match.product.track_inventory && match.product.stock_qty <= 0)
+  )
 }
 
 async function buildRefusalReply(
@@ -417,6 +442,54 @@ export async function buildProductReply(input: {
     }
   }
 
+  if (intent.intent === 'refuse') {
+    return {
+      ...empty,
+      primaryText: await buildTemplateReply({
+        store,
+        intent,
+        homeUrl,
+        customerMessage: customerText,
+        ctx,
+        template: 'close',
+        extraFacts: { sessionTopic: intent.sessionTopic },
+      }),
+    }
+  }
+
+  if (intent.intent === 'language_switch') {
+    if (intent.sessionTopic === 'order' && input.channel === 'whatsapp' && input.customerPhone?.trim()) {
+      const orderReply = await buildOrderReply({
+        store,
+        intent: { ...intent, intent: 'order_status', orderAsk: intent.orderAsk ?? 'confirm_last' },
+        customerPhone: input.customerPhone.trim(),
+        customerMessage: customerText,
+        conversationHistory: ctx.conversationHistory,
+        conversationId: input.conversationId,
+      })
+      return { ...empty, primaryText: orderReply }
+    }
+
+    const shopSells = input.shopSells ?? (await loadShopSells(store.id))
+    return {
+      ...empty,
+      primaryText: await buildTemplateReply({
+        store,
+        intent,
+        homeUrl,
+        customerMessage: customerText,
+        ctx,
+        template: 'language_switch',
+        extraFacts: {
+          requestedItem: intent.requestedItem,
+          shopSells,
+          sessionTopic: intent.sessionTopic,
+          missingWhy: intent.sessionTopic === 'missing' ? 'not_sold' : intent.missingWhy,
+        },
+      }),
+    }
+  }
+
   if (intent.intent === 'greeting') {
     const shopSells = input.shopSells ?? (await loadShopSells(store.id))
     return {
@@ -436,6 +509,12 @@ export async function buildProductReply(input: {
   // A reaction ("ok", "thanks") or a buy ask names no product, so it must never
   // reach the catalog search — that is what produced "sorry, we don't have ok".
   if (intent.intent === 'acknowledgement' || intent.intent === 'buy_intent') {
+    const afterOrderOrRefuse =
+      intent.intent === 'acknowledgement' &&
+      (intent.sessionTopic === 'order' ||
+        intent.sessionTopic === 'missing' ||
+        intent.orderAsk === 'eta' ||
+        intent.orderAsk === 'urgency')
     return {
       ...empty,
       primaryText: await buildTemplateReply({
@@ -444,7 +523,12 @@ export async function buildProductReply(input: {
         homeUrl,
         customerMessage: customerText,
         ctx,
-        template: intent.intent === 'buy_intent' ? 'buy_assist' : 'acknowledgement',
+        template: afterOrderOrRefuse
+          ? 'close'
+          : intent.intent === 'buy_intent'
+            ? 'buy_assist'
+            : 'acknowledgement',
+        extraFacts: { sessionTopic: intent.sessionTopic },
       }),
     }
   }
@@ -501,6 +585,12 @@ export async function buildProductReply(input: {
     !intent.size &&
     intent.alternativeCategories.length === 0
   ) {
+    const shopSells = input.shopSells ?? (await loadShopSells(store.id))
+    const template = isBarePriceAsk(customerText)
+      ? 'price_ask'
+      : intent.sessionTopic === 'order'
+        ? 'close'
+        : 'acknowledgement'
     return {
       ...empty,
       primaryText: await buildTemplateReply({
@@ -509,12 +599,30 @@ export async function buildProductReply(input: {
         homeUrl,
         customerMessage: customerText,
         ctx,
-        template: 'acknowledgement',
+        template,
+        extraFacts: { shopSells, sessionTopic: intent.sessionTopic },
       }),
     }
   }
 
-  const offer = await resolveCatalogOffer(store, intent)
+  let offer = await resolveCatalogOffer(store, intent)
+
+  if (offer.matches.length > 0) {
+    const available = offer.matches.filter((match) => !catalogMatchSoldOut(match))
+    if (available.length === 0) {
+      return {
+        ...empty,
+        primaryText: await buildNotFoundReply(
+          store,
+          { ...intent, missingWhy: 'sold_out' },
+          homeUrl,
+          customerText,
+          ctx
+        ),
+      }
+    }
+    offer = { ...offer, matches: available }
+  }
 
   if (offer.matches.length > 0) {
     const reply = await buildProductReplyFromMatches({

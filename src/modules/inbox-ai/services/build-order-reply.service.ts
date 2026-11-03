@@ -15,9 +15,11 @@ import { allowTypedPhoneLookup } from '../typed-phone-limit.js'
 import { buildLocalizedReply } from './build-localized-reply.service.js'
 import { getStoreHomeUrl } from './catalog-search.service.js'
 import type {
+  OrderAsk,
   OrderScope,
   ParsedCustomerIntent,
 } from './parse-customer-intent.service.js'
+import type { LocalizedReplyTemplate } from './build-localized-reply.service.js'
 
 type ParsedSnapshot = {
   productName: string
@@ -130,6 +132,8 @@ export function formatOrderFactsBlock(order: OrderWithDetails, currency: string)
   if (order.tracking_number?.trim()) {
     lines.push(`Tracking: ${order.tracking_number.trim()}`)
   }
+
+  lines.push('Delivery date: not on this order')
 
   if (name) lines.push(`Recipient: ${name}`)
   if (address) lines.push(`Address: ${address}`)
@@ -364,15 +368,18 @@ export async function buildOrderReply(input: {
 
   const factsHeader = hints ? `Lookup hints: ${hints}\n\n` : ''
   const orderFacts = `${factsHeader}${formatOrdersFactsForScope(orders, store.currency, scope)}`
+  const orderAsk: OrderAsk = intent.orderAsk ?? 'full'
+  const template = orderTemplateForAsk(orderAsk, orders.length > 0)
+  const attachBlock = template === 'order_wrap' && orders.length > 0 && orderAsk === 'full'
 
-  return buildLocalizedReply({
+  const spoken = await buildLocalizedReply({
     customerLanguage: intent.customerLanguage,
     scriptStyle: intent.scriptStyle,
     customerMessage: input.customerMessage,
     fallbackLanguage: store.ai_language,
     customPrompt: store.ai_system_prompt,
     conversationHistory: input.conversationHistory,
-    template: 'order_assistant',
+    template,
     facts: {
       storeName: store.name,
       homeUrl,
@@ -380,6 +387,22 @@ export async function buildOrderReply(input: {
       customerAsk: input.customerMessage ?? null,
       orderOutcome: orders.length > 0 ? 'found' : 'none',
       orderScope: scope,
+      orderAsk,
+      sessionTopic: 'order',
     },
   })
+
+  if (!attachBlock) return spoken
+  const first = orders[0]
+  const plainBlock = first ? formatOrderFactsBlock(first, store.currency) : orderFacts
+  return `${spoken}\n\n${plainBlock}`
+}
+
+function orderTemplateForAsk(orderAsk: OrderAsk, found: boolean): LocalizedReplyTemplate {
+  if (!found) return 'order_assistant'
+  if (orderAsk === 'cancel' || orderAsk === 'address' || orderAsk === 'not_mine') {
+    return 'order_help'
+  }
+  if (orderAsk === 'full') return 'order_wrap'
+  return 'order_followup'
 }

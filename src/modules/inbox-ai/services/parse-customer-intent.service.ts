@@ -16,16 +16,37 @@ export type CustomerIntent =
   | 'category_search'
   | 'image_request'
   | 'order_status'
+  | 'language_switch'
+  | 'refuse'
   | 'off_topic'
   | 'explicit'
 
-export type OrderScope = 'latest' | 'all' | 'specific' | 'product' | null
+export type OrderScope = 'latest' | 'all' | 'specific' | 'product'
+
+/** What they asked about an existing order. `full` is the only time we paste the block. */
+export type OrderAsk =
+  | 'full'
+  | 'confirm_last'
+  | 'eta'
+  | 'urgency'
+  | 'payment'
+  | 'items'
+  | 'cancel'
+  | 'address'
+  | 'not_mine'
+
+/** Why a catalog miss: this shop does not sell it vs sold out. */
+export type MissingWhy = 'not_sold' | 'sold_out'
+
+export type SessionTopic = 'order' | 'product' | 'missing' | null
 
 /** Intents that carry no product to look up in the catalog. */
 const NON_CATALOG_INTENTS: ReadonlySet<CustomerIntent> = new Set<CustomerIntent>([
   'acknowledgement',
   'buy_intent',
   'order_status',
+  'refuse',
+  'language_switch',
 ])
 
 export type ParsedCustomerIntent = {
@@ -42,8 +63,11 @@ export type ParsedCustomerIntent = {
   orderNumber: string | null
   orderNumberHint: string | null
   orderProductHint: string | null
-  orderScope: OrderScope
+  orderScope: OrderScope | null
+  orderAsk: OrderAsk | null
   typedPhone: string | null
+  sessionTopic: SessionTopic
+  missingWhy: MissingWhy | null
   /** Later products they also accepted, in the order they named them. */
   alternativeCategories: string[]
   /** Set when message is off-topic due to language-capability questions */
@@ -77,6 +101,7 @@ export type LlmIntentResult = {
   orderNumberHint?: string | null
   orderProductHint?: string | null
   orderScope?: OrderScope
+  orderAsk?: OrderAsk | null
   typedPhone?: string | null
 }
 
@@ -108,7 +133,8 @@ Normalize product search terms to English for database lookup.
 
 Return JSON only:
 {
-  "intent": "greeting" | "acknowledgement" | "buy_intent" | "product_search" | "sku_lookup" | "category_search" | "image_request" | "order_status" | "off_topic" | "explicit",
+  "intent": "greeting" | "acknowledgement" | "buy_intent" | "product_search" | "sku_lookup" | "category_search" | "image_request" | "order_status" | "language_switch" | "refuse" | "off_topic" | "explicit",
+  "orderAsk": "full" | "confirm_last" | "eta" | "urgency" | "payment" | "items" | "cancel" | "address" | "not_mine" | null,
   "customerLanguage": "exact language name e.g. English, Hindi, Malayalam, Tamil, Punjabi, Arabic",
   "requestedItem": "product they want in English e.g. white shirt, or null",
   "searchQuery": "English product terms without color/size e.g. shirt",
@@ -125,10 +151,12 @@ Return JSON only:
 }
 
 Rules:
+- refuse: they do not want anything. "onnum venda", "illa enickonnum venda okay", "no thanks", "not interested", "vendam" with no new product. searchQuery: "". NEVER product_search or buy_intent.
+- language_switch: they asked to continue in another language. "malayalathil paray", "in Hindi", "English il". Keep the last topic. Not off_topic.
 - acknowledgement: the customer is only reacting, not asking for a new product. "ok", "okay", "k", "ok sir", "thanks", "thank you", "super", "nice", "good", "got it", "fine", "mm", "hmm", "ശരി", "sheri", "ok saar", "adipoli", or emoji only.
   For acknowledgement ALWAYS return searchQuery: "", color: null, categoryName: null, requestedItem: null — even if earlier messages were about shirts. Do NOT repeat the previous product.
   "ok" → intent: "acknowledgement", searchQuery: "". NEVER product_search.
-  "ok" is an acknowledgement even right after we sent a product — they are reacting to that product.
+  After we already sent an order status, "ok" is still acknowledgement — do not start a sale.
   But "ok blue shirt undo?" mentions a NEW product → product_search, searchQuery: "shirt", color: "blue".
 - buy_intent: the customer wants to buy or order what was already discussed, without naming a new product. "I'll take it", "ok I want this", "how to order", "order cheyyam", "order cheyyan pattumo", "book it", "edukkam", "എടുക്കാം", "വേണം" alone, "how to pay", "cash on delivery undo".
   For buy_intent ALSO return searchQuery: "", categoryName: null. Keep size/color if they stated one (e.g. "L edukkam" → size: "L").
@@ -140,8 +168,11 @@ Rules:
 - "my last order" / "last order status" / "ente last order" → order_status, orderScope: "latest".
 - "all my orders" / "my orders" / "total orders" / "how many orders" / "ella orders" / "orders okke" / "ente orders ellam" → order_status, orderScope: "all".
 - "where is my order" (no last/all) → order_status, orderScope: "latest".
+- orderAsk for order_status: "order details" → full. "is this my last order" → confirm_last. "eppo deliver" / when will it come → eta. "pettann vehnam" / urgent → urgency. COD / payment pending → payment. cancel / change address / not my order → cancel / address / not_mine. Repeat of the same question → not full.
+- "cancel my order" → order_status, orderAsk: "cancel". Do not invent a cancel.
+- "this is not my order" → order_status, orderAsk: "not_mine".
 - Messages in any language about products = product_search (unless clearly about an existing order).
-- off_topic for: "do you know Malayalam?", "can you speak Hindi?", reading PDFs/files, general knowledge, app/code questions, unrelated chat — NO shopping intent.
+- off_topic for: "do you know Malayalam?", "can you speak Hindi?", reading PDFs/files, general knowledge, app/code questions, unrelated chat — NO shopping intent. Asking to reply in Malayalam is language_switch, not off_topic.
 - explicit only for sexual/violent/harassing content.`
 
 /** Greeting with no product ask. "Hi, I need a blue shirt" must not match. */
@@ -167,7 +198,47 @@ const BUY_INTENT_PATTERN =
   /\b(how\s+(do\s+i|to|can\s+i)\s+(order|buy|pay)|i(?:'| a)?ll?\s+take\s+(it|this)|i\s+want\s+(it|this)|book\s+(it|this)|place\s+(the\s+)?order|order\s+cheyy?(am|aam|an|anam|umo|ano)|order\s+cheyyan\s+pattum(o)?|edukk?(am|aam|ano|umo)|vaangan|vangam|cash\s+on\s+delivery|\bcod\b|online\s+payment|delivery\s+charge|free\s+delivery)\b|എടുക്കാം|ഓർഡർ\s*ചെയ്യ|വാങ്ങ/i
 
 const LANGUAGE_META_PATTERN =
-  /\b(do\s+you\s+know|can\s+you\s+speak|do\s+you\s+speak|know\s+malayalam|know\s+tamil|know\s+hindi|speak\s+malayalam|speak\s+tamil|speak\s+hindi|മലയാളം\s*അറിയാമോ|അറിയാമോ|നിങ്ങൾക്ക്\s*മലയാളം|നിനക്ക്\s*മലയാളം)\b/i
+  /\b(do\s+you\s+know|can\s+you\s+speak|do\s+you\s+speak|know\s+malayalam|know\s+tamil|know\s+hindi|മലയാളം\s*അറിയാമോ|അറിയാമോ|നിങ്ങൾക്ക്\s*മലയാളം|നിനക്ക്\s*മലയാളം)\b/i
+
+/** Ask to continue in another language — not “do you know Malayalam?” */
+const LANGUAGE_SWITCH_PATTERN =
+  /\b(malayalathil\s+paray|malayalathil|in\s+malayalam|in\s+hindi|in\s+english|hindi\s+il|english\s+il|tamil\s+il|speak\s+(?:in\s+)?(?:malayalam|hindi|english|tamil)|reply\s+in\s+\w+|മലയാളത്തിൽ)\b/i
+
+const REFUSE_PATTERN =
+  /\b(onnum\s*venda|onnum\s*venam\s*illa|enickonnum\s*venda|enik(?:ku)?onnum\s*venda|no\s+thanks|not\s+interested|don'?t\s+want\s+(anything|it)|nothing\s+(needed|thanks)|illa\s+enickonnum\s*venda|vendam\s+okay|onnum\s+venda\s+okay)\b|ഒന്നും\s*വേണ്ട/i
+
+const BARE_PRICE_PATTERN =
+  /^(?:price|vila|ethra|cost|how\s+much|rate)[\s?!.]*$/i
+
+const STOCK_WHY_PATTERN =
+  /\b(stock\s*out|sold\s*out|shopil\s*illa|shopil\s*illayo|atho\s+shopil)\b/i
+
+const ORDER_CONFIRM_LAST_PATTERN =
+  /\b(is\s+this\s+(in\s+)?my\s+last\s+order|this\s+(is\s+)?my\s+last\s+order|ithu\s+(ente\s+)?last\s+order|last\s+order\s+(ano|alle)|confirm\s+(the\s+)?(last\s+)?order)\b/i
+
+const ORDER_ETA_PATTERN =
+  /\b(eppo\s+(deliver|kitt|var)|when\s+(will|is).*(deliver|come|arrive)|delivery\s+(date|time)|epp[o]?zhe\s+kitt|kitte?\s*(um|um\?)|arrive)\b/i
+
+const ORDER_URGENCY_PATTERN =
+  /\b(pettann|urgent|urgently|asap|fast(er)?|quickly|soon\s+as\s+possible|vehnam\s+eppo|eppo\s+kittum)\b/i
+
+const ORDER_PAYMENT_PATTERN =
+  /\b(payment\s+(pending|status|done)|paid|cod|cash\s+on\s+delivery)\b/i
+
+const ORDER_ITEMS_PATTERN =
+  /\b(items?\s+in\s+(the\s+)?order|what\s+(did\s+i|was)\s+order|order\s+items?|product\s+in\s+(the\s+)?order)\b/i
+
+const ORDER_CANCEL_PATTERN =
+  /\b(cancel\s+(my\s+)?order|order\s+cancel|cancel\s+cheyy|റദ്ദ്)\b/i
+
+const ORDER_ADDRESS_PATTERN =
+  /\b(change\s+(the\s+)?address|wrong\s+address|address\s+maar|update\s+address)\b/i
+
+const ORDER_NOT_MINE_PATTERN =
+  /\b(not\s+my\s+order|wrong\s+order|ithu\s+ente\s+order\s+alla|this\s+isn'?t\s+my\s+order)\b/i
+
+const ORDER_FULL_PATTERN =
+  /\b(order\s+details?|full\s+(order\s+)?(details?|status)|order\s+status)\b/i
 
 const OFF_TOPIC_PATTERN =
   /\b(read\s+(this\s+)?pdf|read\s+this\s+file|open\s+this\s+link|who\s+(built|made|created)\s+(this|the)\s+(app|website|bot)|what\s+is\s+ai|tell\s+me\s+a\s+joke|news\s+today)\b/i
@@ -288,7 +359,96 @@ function isBuyIntent(text: string): boolean {
 }
 
 function isLanguageMetaQuestion(text: string): boolean {
-  return LANGUAGE_META_PATTERN.test(text.trim())
+  const trimmed = text.trim()
+  if (isLanguageSwitchMessage(trimmed) && !LANGUAGE_META_PATTERN.test(trimmed)) return false
+  return LANGUAGE_META_PATTERN.test(trimmed)
+}
+
+export function isLanguageSwitchMessage(text: string): boolean {
+  const trimmed = text.trim()
+  if (LANGUAGE_META_PATTERN.test(trimmed) && !LANGUAGE_SWITCH_PATTERN.test(trimmed)) return false
+  if (LANGUAGE_META_PATTERN.test(trimmed) && /\b(do\s+you\s+know|can\s+you\s+speak|അറിയാമോ)\b/i.test(trimmed)) {
+    return false
+  }
+  return LANGUAGE_SWITCH_PATTERN.test(trimmed)
+}
+
+export function isRefuseMessage(text: string): boolean {
+  return REFUSE_PATTERN.test(text.trim())
+}
+
+export function isBarePriceAsk(text: string): boolean {
+  return BARE_PRICE_PATTERN.test(text.trim())
+}
+
+export function isDeliveryAskWithoutOrder(text: string, sessionTopic: SessionTopic): boolean {
+  if (sessionTopic === 'order') return false
+  const trimmed = text.trim()
+  return ORDER_ETA_PATTERN.test(trimmed) || ORDER_URGENCY_PATTERN.test(trimmed)
+}
+
+export function detectSessionTopic(lines?: ConversationHistoryLine[]): SessionTopic {
+  if (!lines?.length) return null
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i]
+    if (line.role !== 'store') continue
+    if (/\bOrder number\s*:/i.test(line.text) || /\border status\b/i.test(line.text)) return 'order'
+    if (/https?:\/\/\S*\/product\//i.test(line.text)) return 'product'
+    if (/\b(illa|don't keep|do not (?:keep|sell)|not available)\b/i.test(line.text)) return 'missing'
+  }
+  return null
+}
+
+function alreadySentOrderBlock(lines?: ConversationHistoryLine[]): boolean {
+  if (!lines?.length) return false
+  return lines.some((line) => line.role === 'store' && /\bOrder number\s*:/i.test(line.text))
+}
+
+export function resolveOrderAsk(
+  text: string,
+  sessionTopic: SessionTopic = null,
+  sentFullBlock = false
+): OrderAsk | null {
+  const trimmed = text.trim()
+  if (ORDER_CANCEL_PATTERN.test(trimmed)) return 'cancel'
+  if (ORDER_NOT_MINE_PATTERN.test(trimmed)) return 'not_mine'
+  if (ORDER_ADDRESS_PATTERN.test(trimmed)) return 'address'
+  if (ORDER_CONFIRM_LAST_PATTERN.test(trimmed)) return 'confirm_last'
+  if (ORDER_URGENCY_PATTERN.test(trimmed)) return 'urgency'
+  if (ORDER_ETA_PATTERN.test(trimmed)) return 'eta'
+  if (ORDER_PAYMENT_PATTERN.test(trimmed) && !isBuyIntent(trimmed)) return 'payment'
+  if (ORDER_ITEMS_PATTERN.test(trimmed)) return 'items'
+  if (ORDER_FULL_PATTERN.test(trimmed)) return sentFullBlock ? 'confirm_last' : 'full'
+  if (sentFullBlock && isOrderStatusMessage(trimmed)) return 'confirm_last'
+  if (sessionTopic === 'order' && (ORDER_ETA_PATTERN.test(trimmed) || ORDER_URGENCY_PATTERN.test(trimmed))) {
+    return ORDER_URGENCY_PATTERN.test(trimmed) ? 'urgency' : 'eta'
+  }
+  if (isOrderStatusMessage(trimmed)) return 'full'
+  return null
+}
+
+function isOrderFollowUpMessage(text: string, sessionTopic: SessionTopic): boolean {
+  const trimmed = text.trim()
+  if (ORDER_CONFIRM_LAST_PATTERN.test(trimmed)) return true
+  if (ORDER_CANCEL_PATTERN.test(trimmed) || ORDER_NOT_MINE_PATTERN.test(trimmed) || ORDER_ADDRESS_PATTERN.test(trimmed)) {
+    return true
+  }
+  if (sessionTopic !== 'order') return false
+  return (
+    ORDER_ETA_PATTERN.test(trimmed) ||
+    ORDER_URGENCY_PATTERN.test(trimmed) ||
+    ORDER_PAYMENT_PATTERN.test(trimmed) ||
+    ORDER_ITEMS_PATTERN.test(trimmed)
+  )
+}
+
+function languageFromSwitchRequest(text: string): string | null {
+  const lower = text.toLowerCase()
+  if (/malayalam|malayalathil|മലയാള/.test(lower)) return 'Malayalam'
+  if (/\bhindi\b|हिंदी/.test(lower)) return 'Hindi'
+  if (/\btamil\b|தமிழ்/.test(lower)) return 'Tamil'
+  if (/\benglish\b/.test(lower)) return 'English'
+  return null
 }
 
 function isOffTopicMessage(text: string): boolean {
@@ -580,7 +740,10 @@ function colorFollowUpIntent(
       orderNumberHint: null,
       orderProductHint: null,
       orderScope: null,
+      orderAsk: null,
       typedPhone: null,
+      sessionTopic: detectSessionTopic(recentMessages),
+      missingWhy: null,
     },
     trimmed,
     storeCategories
@@ -693,7 +856,7 @@ export function resolveOrderScope(
   text: string,
   orderNumber: string | null,
   orderProductHint: string | null
-): OrderScope {
+): OrderScope | null {
   if (orderNumber || extractOrderNumberHint(text)) return 'specific'
   if (isAllOrdersScopeMessage(text)) return 'all'
   if (orderProductHint && ORDER_PRODUCT_PATTERN.test(text)) return 'product'
@@ -722,7 +885,9 @@ function normalizeIntent(
   hasProductSignals: boolean,
   hasCatalogSignals: boolean
 ): CustomerIntent {
-  if (intent === 'order_status') return 'order_status'
+  if (intent === 'order_status' || intent === 'refuse' || intent === 'language_switch') {
+    return intent
+  }
   if (intent === 'off_topic' && hasProductSignals) return 'product_search'
   // "ok" is a reaction, but "ok blue shirt undo?" names a new product.
   if ((intent === 'acknowledgement' || intent === 'buy_intent') && hasCatalogSignals) {
@@ -734,12 +899,22 @@ function normalizeIntent(
 function finalizeIntent(
   partial: Omit<
     ParsedCustomerIntent,
-    'requestedItem' | 'orderNumberHint' | 'typedPhone' | 'scriptStyle' | 'alternativeCategories'
+    | 'requestedItem'
+    | 'orderNumberHint'
+    | 'typedPhone'
+    | 'scriptStyle'
+    | 'alternativeCategories'
+    | 'orderAsk'
+    | 'sessionTopic'
+    | 'missingWhy'
   > & {
     requestedItem?: string | null
     orderNumberHint?: string | null
     typedPhone?: string | null
     scriptStyle?: ScriptStyle
+    orderAsk?: OrderAsk | null
+    sessionTopic?: SessionTopic
+    missingWhy?: MissingWhy | null
   },
   trimmed: string,
   storeCategories: string[] = []
@@ -767,11 +942,14 @@ function finalizeIntent(
   // "we don't have ok" reply).
   const isNonCatalog = NON_CATALOG_INTENTS.has(intent)
 
-  const requestedItem = isNonCatalog
-    ? null
-    : partial.requestedItem?.trim() ||
-      buildRequestedItem(partial.searchQuery, partial.color, partial.size, partial.categoryName) ||
-      (partial.searchQuery.trim() || null)
+  const requestedItem =
+    intent === 'language_switch'
+      ? partial.requestedItem?.trim() || null
+      : isNonCatalog
+        ? null
+        : partial.requestedItem?.trim() ||
+          buildRequestedItem(partial.searchQuery, partial.color, partial.size, partial.categoryName) ||
+          (partial.searchQuery.trim() || null)
 
   const detected = detectLanguageAndScript(trimmed)
   const customerLanguage =
@@ -794,7 +972,10 @@ function finalizeIntent(
     orderNumberHint: partial.orderNumberHint?.trim() || null,
     orderProductHint: partial.orderProductHint?.trim() || null,
     orderScope: partial.orderScope ?? null,
+    orderAsk: partial.orderAsk ?? null,
     typedPhone: partial.typedPhone?.trim() || null,
+    sessionTopic: partial.sessionTopic ?? null,
+    missingWhy: partial.missingWhy ?? null,
     alternativeCategories: isNonCatalog
       ? []
       : extractAlternativeCategories(trimmed, storeCategories),
@@ -804,7 +985,8 @@ function finalizeIntent(
 export function fromLlmResult(
   parsed: LlmIntentResult,
   trimmed: string,
-  storeCategories: string[] = []
+  storeCategories: string[] = [],
+  recentMessages?: ConversationHistoryLine[]
 ): ParsedCustomerIntent {
   const requestedCategory = extractRequestedCategory(trimmed, storeCategories)
   const colorFromText = extractRequestedColor(trimmed, requestedCategory)
@@ -828,15 +1010,25 @@ export function fromLlmResult(
   // The message itself is the authority on whether a product was named. When the
   // customer only reacted ("ok"), the LLM sometimes carries the previous product
   // over from history — that produced replies about products they never re-asked for.
+  const sessionTopic = detectSessionTopic(recentMessages)
   const mentionsProduct = Boolean(requestedCategory || colorFromText || skuFromText)
-  const looksLikeOrderQuestion = isOrderStatusMessage(trimmed)
-  const reactionOnly = !mentionsProduct && !looksLikeOrderQuestion
-  const intent: CustomerIntent =
-    reactionOnly && isAcknowledgement(trimmed)
-      ? 'acknowledgement'
-      : reactionOnly && isBuyIntent(trimmed)
-        ? 'buy_intent'
-        : parsed.intent ?? 'product_search'
+  const looksLikeOrderQuestion =
+    isOrderStatusMessage(trimmed) || isOrderFollowUpMessage(trimmed, sessionTopic)
+  const reactionOnly = !mentionsProduct && !looksLikeOrderQuestion && !isRefuseMessage(trimmed) && !isLanguageSwitchMessage(trimmed)
+  let intent: CustomerIntent =
+    isRefuseMessage(trimmed)
+      ? 'refuse'
+      : isLanguageSwitchMessage(trimmed)
+        ? 'language_switch'
+        : looksLikeOrderQuestion
+          ? 'order_status'
+          : reactionOnly && isAcknowledgement(trimmed)
+            ? 'acknowledgement'
+            : reactionOnly && isBuyIntent(trimmed)
+              ? 'buy_intent'
+              : parsed.intent ?? 'product_search'
+
+  if (intent === 'off_topic' && isLanguageSwitchMessage(trimmed)) intent = 'language_switch'
 
   const llmConflicts =
     Boolean(requestedCategory) &&
@@ -867,13 +1059,27 @@ export function fromLlmResult(
       ? resolveOrderScope(trimmed, orderNumber, orderProductHint)
       : null)
 
+  const orderAsk =
+    intent === 'order_status'
+      ? parsed.orderAsk ?? resolveOrderAsk(trimmed, sessionTopic, alreadySentOrderBlock(recentMessages))
+      : null
+
+  const switchLanguage =
+    intent === 'language_switch' ? languageFromSwitchRequest(trimmed) : null
+
   return finalizeIntent(
     {
       intent,
-      customerLanguage: parsed.customerLanguage ?? detectLanguageFromText(trimmed),
-      requestedItem: llmConflicts
-        ? buildRequestedItem(searchQuery, color, size, categoryName)
-        : parsed.requestedItem ?? null,
+      customerLanguage:
+        switchLanguage ?? parsed.customerLanguage ?? detectLanguageFromText(trimmed),
+      requestedItem:
+        intent === 'language_switch'
+          ? categoryFromSession(recentMessages, trimmed, storeCategories) ||
+            parsed.requestedItem?.trim() ||
+            null
+          : llmConflicts
+            ? buildRequestedItem(searchQuery, color, size, categoryName)
+            : parsed.requestedItem ?? null,
       searchQuery,
       color,
       size,
@@ -884,7 +1090,9 @@ export function fromLlmResult(
       orderNumberHint,
       orderProductHint,
       orderScope,
+      orderAsk,
       typedPhone,
+      sessionTopic,
     },
     trimmed,
     storeCategories
@@ -906,15 +1114,70 @@ export function parseCustomerIntentOffline(
     options?.storeCategories
   )
   if (followUp) return followUp
-  return regexFallback(trimmed, options?.storeCategories)
+  return regexFallback(trimmed, options?.storeCategories, options?.recentMessages)
 }
 
-function regexFallback(trimmed: string, storeCategories: string[] = []): ParsedCustomerIntent {
+function regexFallback(
+  trimmed: string,
+  storeCategories: string[] = [],
+  recentMessages?: ConversationHistoryLine[]
+): ParsedCustomerIntent {
   const skuFromText = extractSku(trimmed)
   const categoryFromText = extractCategory(trimmed, storeCategories)
   const colorFromText = extractRequestedColor(trimmed, categoryFromText)
   const sizeFromText = extractSize(trimmed)
   const detectedLang = detectLanguageFromText(trimmed)
+  const sessionTopic = detectSessionTopic(recentMessages)
+
+  if (isRefuseMessage(trimmed) && !categoryFromText && !skuFromText) {
+    return finalizeIntent(
+      {
+        intent: 'refuse',
+        customerLanguage: detectedLang,
+        searchQuery: '',
+        color: null,
+        size: null,
+        sku: null,
+        categoryName: null,
+        wantsImage: false,
+        orderNumber: null,
+        orderNumberHint: null,
+        orderProductHint: null,
+        orderScope: null,
+        orderAsk: null,
+        typedPhone: null,
+        sessionTopic,
+      },
+      trimmed,
+      storeCategories
+    )
+  }
+
+  if (isLanguageSwitchMessage(trimmed)) {
+    const lastCategory = categoryFromSession(recentMessages, trimmed, storeCategories)
+    return finalizeIntent(
+      {
+        intent: 'language_switch',
+        customerLanguage: languageFromSwitchRequest(trimmed) ?? detectedLang,
+        requestedItem: lastCategory,
+        searchQuery: '',
+        color: null,
+        size: null,
+        sku: null,
+        categoryName: lastCategory,
+        wantsImage: false,
+        orderNumber: null,
+        orderNumberHint: null,
+        orderProductHint: null,
+        orderScope: null,
+        orderAsk: null,
+        typedPhone: null,
+        sessionTopic,
+      },
+      trimmed,
+      storeCategories
+    )
+  }
 
   if (isLanguageMetaQuestion(trimmed)) {
     return finalizeIntent(
@@ -932,6 +1195,7 @@ function regexFallback(trimmed: string, storeCategories: string[] = []): ParsedC
         orderProductHint: null,
         orderScope: null,
         typedPhone: null,
+        sessionTopic,
         offTopicReason: 'language_meta',
       },
       trimmed,
@@ -955,6 +1219,7 @@ function regexFallback(trimmed: string, storeCategories: string[] = []): ParsedC
         orderProductHint: null,
         orderScope: null,
         typedPhone: null,
+        sessionTopic,
         offTopicReason: 'general',
       },
       trimmed,
@@ -978,6 +1243,7 @@ function regexFallback(trimmed: string, storeCategories: string[] = []): ParsedC
         orderProductHint: null,
         orderScope: null,
         typedPhone: null,
+        sessionTopic,
       },
       trimmed,
       storeCategories
@@ -986,6 +1252,30 @@ function regexFallback(trimmed: string, storeCategories: string[] = []): ParsedC
 
   const orderNumberFromText = extractOrderNumber(trimmed)
 
+  if (sessionTopic === 'order' && ORDER_PAYMENT_PATTERN.test(trimmed) && !categoryFromText) {
+    return finalizeIntent(
+      {
+        intent: 'order_status',
+        customerLanguage: detectedLang,
+        searchQuery: '',
+        color: null,
+        size: null,
+        sku: null,
+        categoryName: null,
+        wantsImage: false,
+        orderNumber: orderNumberFromText,
+        orderNumberHint: extractOrderNumberHint(trimmed),
+        orderProductHint: extractOrderProductHint(trimmed),
+        orderScope: resolveOrderScope(trimmed, orderNumberFromText, extractOrderProductHint(trimmed)),
+        orderAsk: 'payment',
+        typedPhone: extractPhoneFromText(trimmed),
+        sessionTopic,
+      },
+      trimmed,
+      storeCategories
+    )
+  }
+
   // "ഓർഡർ ചെയ്യാം" / "how to order" is a customer wanting to buy, not asking
   // where an existing order is. ORDER_STATUS_PATTERN matches the bare word
   // "ഓർഡർ", so buy intent has to be checked first.
@@ -993,7 +1283,8 @@ function regexFallback(trimmed: string, storeCategories: string[] = []): ParsedC
     isBuyIntent(trimmed) &&
     !orderNumberFromText &&
     !extractOrderNumberHint(trimmed) &&
-    !ORDER_TRACKING_WORD_PATTERN.test(trimmed)
+    !ORDER_TRACKING_WORD_PATTERN.test(trimmed) &&
+    sessionTopic !== 'order'
   ) {
     return finalizeIntent(
       {
@@ -1010,13 +1301,14 @@ function regexFallback(trimmed: string, storeCategories: string[] = []): ParsedC
         orderProductHint: null,
         orderScope: null,
         typedPhone: null,
+        sessionTopic,
       },
       trimmed,
       storeCategories
     )
   }
 
-  if (isOrderStatusMessage(trimmed)) {
+  if (isOrderStatusMessage(trimmed) || isOrderFollowUpMessage(trimmed, sessionTopic)) {
     const orderProductHint = extractOrderProductHint(trimmed)
     const orderScope = resolveOrderScope(trimmed, orderNumberFromText, orderProductHint)
     return finalizeIntent(
@@ -1033,7 +1325,9 @@ function regexFallback(trimmed: string, storeCategories: string[] = []): ParsedC
         orderNumberHint: extractOrderNumberHint(trimmed),
         orderProductHint,
         orderScope,
+        orderAsk: resolveOrderAsk(trimmed, sessionTopic, alreadySentOrderBlock(recentMessages)),
         typedPhone: extractPhoneFromText(trimmed),
+        sessionTopic,
       },
       trimmed,
       storeCategories
@@ -1056,6 +1350,7 @@ function regexFallback(trimmed: string, storeCategories: string[] = []): ParsedC
         orderProductHint: null,
         orderScope: null,
         typedPhone: null,
+        sessionTopic,
       },
       trimmed,
       storeCategories
@@ -1082,10 +1377,90 @@ function regexFallback(trimmed: string, storeCategories: string[] = []): ParsedC
           orderProductHint: null,
           orderScope: null,
           typedPhone: null,
+          sessionTopic,
         },
         trimmed
       )
     }
+  }
+
+  if (sessionTopic === 'missing' && STOCK_WHY_PATTERN.test(trimmed) && !skuFromText) {
+    const lastCategory = categoryFromText || categoryFromSession(recentMessages, trimmed, storeCategories)
+    return finalizeIntent(
+      {
+        intent: 'product_search',
+        customerLanguage: detectedLang,
+        requestedItem: lastCategory,
+        searchQuery: lastCategory ? categorySearchTerm(lastCategory) : '',
+        color: null,
+        size: null,
+        sku: null,
+        categoryName: lastCategory,
+        wantsImage: false,
+        orderNumber: null,
+        orderNumberHint: null,
+        orderProductHint: null,
+        orderScope: null,
+        orderAsk: null,
+        typedPhone: null,
+        sessionTopic,
+        missingWhy: 'not_sold',
+      },
+      trimmed,
+      storeCategories
+    )
+  }
+
+  if (isBarePriceAsk(trimmed) && !categoryFromText && !skuFromText) {
+    return finalizeIntent(
+      {
+        intent: 'product_search',
+        customerLanguage: detectedLang,
+        searchQuery: '',
+        color: null,
+        size: null,
+        sku: null,
+        categoryName: null,
+        wantsImage: false,
+        orderNumber: null,
+        orderNumberHint: null,
+        orderProductHint: null,
+        orderScope: null,
+        orderAsk: null,
+        typedPhone: null,
+        sessionTopic,
+      },
+      trimmed,
+      storeCategories
+    )
+  }
+
+  if (
+    isDeliveryAskWithoutOrder(trimmed, sessionTopic) &&
+    !categoryFromText &&
+    !skuFromText
+  ) {
+    return finalizeIntent(
+      {
+        intent: 'acknowledgement',
+        customerLanguage: detectedLang,
+        searchQuery: '',
+        color: null,
+        size: null,
+        sku: null,
+        categoryName: null,
+        wantsImage: false,
+        orderNumber: null,
+        orderNumberHint: null,
+        orderProductHint: null,
+        orderScope: null,
+        orderAsk: ORDER_URGENCY_PATTERN.test(trimmed) ? 'urgency' : 'eta',
+        typedPhone: null,
+        sessionTopic: sessionTopic ?? 'product',
+      },
+      trimmed,
+      storeCategories
+    )
   }
 
   const searchQuery = categoryFromText
@@ -1107,6 +1482,7 @@ function regexFallback(trimmed: string, storeCategories: string[] = []): ParsedC
       orderProductHint: null,
       orderScope: null,
       typedPhone: null,
+      sessionTopic,
     },
     trimmed,
     storeCategories
@@ -1162,7 +1538,18 @@ export async function parseCustomerIntent(
   }
 
   if (isLanguageMetaQuestion(trimmed)) {
-    return regexFallback(trimmed, storeCategories)
+    return regexFallback(trimmed, storeCategories, options?.recentMessages)
+  }
+
+  const sessionTopic = detectSessionTopic(options?.recentMessages)
+  if (
+    isRefuseMessage(trimmed) ||
+    isLanguageSwitchMessage(trimmed) ||
+    isOrderFollowUpMessage(trimmed, sessionTopic) ||
+    isDeliveryAskWithoutOrder(trimmed, sessionTopic) ||
+    isBarePriceAsk(trimmed)
+  ) {
+    return regexFallback(trimmed, storeCategories, options?.recentMessages)
   }
 
   // A bare reaction needs no classification, and skipping the LLM stops it from
@@ -1174,7 +1561,7 @@ export async function parseCustomerIntent(
     !extractSku(trimmed) &&
     !isOrderStatusMessage(trimmed)
   ) {
-    return regexFallback(trimmed, storeCategories)
+    return regexFallback(trimmed, storeCategories, options?.recentMessages)
   }
 
   if (
@@ -1184,7 +1571,7 @@ export async function parseCustomerIntent(
     !extractSku(trimmed) &&
     !isOrderStatusMessage(trimmed)
   ) {
-    return regexFallback(trimmed, storeCategories)
+    return regexFallback(trimmed, storeCategories, options?.recentMessages)
   }
 
   const followUp = colorFollowUpIntent(
@@ -1197,7 +1584,8 @@ export async function parseCustomerIntent(
   const llmInput = buildIntentPrompt(trimmed, options?.recentMessages, storeCategories)
   const parsed = await completeJson<LlmIntentResult>(INTENT_SCHEMA, llmInput)
   if (parsed?.intent && parsed.customerLanguage) {
-    const result = fromLlmResult(parsed, trimmed, storeCategories)
+    const result = fromLlmResult(parsed, trimmed, storeCategories, options?.recentMessages)
+    if (result.intent === 'language_switch') return result
     if (parsed.intent === 'off_topic' && isLanguageMetaQuestion(trimmed)) {
       return { ...result, offTopicReason: 'language_meta' }
     }
@@ -1211,9 +1599,10 @@ export async function parseCustomerIntent(
     return fromLlmResult(
       { ...parsed, customerLanguage: parsed.customerLanguage ?? detectLanguageFromText(trimmed) },
       trimmed,
-      storeCategories
+      storeCategories,
+      options?.recentMessages
     )
   }
 
-  return regexFallback(trimmed, storeCategories)
+  return regexFallback(trimmed, storeCategories, options?.recentMessages)
 }

@@ -16,6 +16,7 @@ import {
 } from '../../support/lib/wrap-malayalam-support-reply.js'
 import {
   buildCannedLocalizedReply,
+  isHonestOrderTalk,
   isHonestStockTalk,
   isReplyScriptValid,
   shouldSkipModelForMalayalamScript,
@@ -236,6 +237,110 @@ test('rejects Malayalam/Tamil how-to body and falls back to English', () => {
     'உண்டு சார் Settings'
   )
   assert.match(bothBad, /Talk with us/)
+})
+
+test('refuse close has no size or order push', () => {
+  const reply = buildCannedLocalizedReply({
+    customerLanguage: 'Malayalam',
+    scriptStyle: 'latin',
+    template: 'close',
+    facts: { ...facts, sessionTopic: 'missing' },
+  })
+  assert.match(reply, /Sheri saar/)
+  assert.equal(/size/i.test(reply), false)
+  assert.equal(/order cheyy/i.test(reply), false)
+  assert.equal(/trousers/i.test(reply), false)
+})
+
+test('ok after order does not restart a sale', () => {
+  const reply = buildCannedLocalizedReply({
+    customerLanguage: 'Malayalam',
+    scriptStyle: 'latin',
+    template: 'close',
+    facts: { ...facts, sessionTopic: 'order' },
+  })
+  assert.match(reply, /ship aayal parayam/i)
+  assert.equal(/size/i.test(reply), false)
+  assert.equal(/trousers/i.test(reply), false)
+})
+
+test('not_sold vs sold_out canned lines differ', () => {
+  const notSold = buildCannedLocalizedReply({
+    customerLanguage: 'Malayalam',
+    scriptStyle: 'latin',
+    template: 'not_found',
+    facts: {
+      ...facts,
+      requestedItem: 'shoes',
+      missingWhy: 'not_sold',
+      shopSells: ['Men', 'shirts'],
+    },
+  })
+  assert.match(notSold, /shopil illa/i)
+  const soldOut = buildCannedLocalizedReply({
+    customerLanguage: 'Malayalam',
+    scriptStyle: 'latin',
+    template: 'not_found',
+    facts: {
+      ...facts,
+      requestedItem: 'shoes',
+      missingWhy: 'sold_out',
+      shopSells: ['Men', 'shirts'],
+    },
+  })
+  assert.match(soldOut, /stock illa/i)
+})
+
+test('language switch canned stays on the missing item', () => {
+  const reply = buildCannedLocalizedReply({
+    customerLanguage: 'Malayalam',
+    scriptStyle: 'latin',
+    template: 'language_switch',
+    facts: {
+      ...facts,
+      requestedItem: 'shoes',
+      sessionTopic: 'missing',
+      missingWhy: 'not_sold',
+      shopSells: ['Men', 'shirts'],
+    },
+  })
+  assert.match(reply, /shoes/i)
+  assert.equal(/^Hai saar/i.test(reply.trim()), false)
+})
+
+test('order follow-up canned has no ippo illa', () => {
+  const reply = buildCannedLocalizedReply({
+    customerLanguage: 'Malayalam',
+    scriptStyle: 'latin',
+    template: 'order_followup',
+    facts: {
+      ...facts,
+      orderAsk: 'eta',
+      orderOutcome: 'found',
+      orderFacts: 'Order number: OCT26-1\nFulfillment: Unfulfilled\nDelivery date: not on this order',
+    },
+  })
+  assert.equal(/ippo illa/i.test(reply), false)
+  assert.match(reply, /delivery date illa/i)
+})
+
+test('rejects ippo illa on an order reply', () => {
+  assert.equal(isHonestOrderTalk('Ippo illa saar, order details nokku', 'order_followup'), false)
+  assert.equal(
+    isHonestOrderTalk('Ee orderil delivery date illa saar. Ippo unfulfilled aanu.', 'order_followup'),
+    true
+  )
+})
+
+test('cancel canned does not say cancelled', () => {
+  const reply = buildCannedLocalizedReply({
+    customerLanguage: 'Malayalam',
+    scriptStyle: 'latin',
+    template: 'order_help',
+    facts: { ...facts, orderAsk: 'cancel' },
+  })
+  assert.equal(/cancelled/i.test(reply), false)
+  assert.match(reply, /cancel cheyyan pattilla/i)
 })
 
 test('support prompt matches Manglish', () => {

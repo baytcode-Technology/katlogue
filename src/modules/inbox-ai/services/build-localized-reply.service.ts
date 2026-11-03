@@ -12,7 +12,12 @@ import {
   resolveHonorific,
   type ShopOwnerTemplateTask,
 } from '../prompts/shop-owner-persona.js'
-import type { MissingWhy, OrderAsk, SessionTopic } from './parse-customer-intent.service.js'
+import type {
+  MissingWhy,
+  OrderAsk,
+  SessionTopic,
+  ShopInfoAsk,
+} from './parse-customer-intent.service.js'
 
 export { isStiffTranslationMalayalam }
 
@@ -51,6 +56,7 @@ export type LocalizedReplyFacts = {
   shopPolicyCustomerCopy?: string | null
   paymentCustomerFacts?: string | null
   restockNote?: string | null
+  shopInfoAsk?: ShopInfoAsk | null
 }
 
 /**
@@ -332,11 +338,13 @@ function buildFallback(
 
     case 'shop_info': {
       const policies = facts.shopPolicyCustomerCopy?.trim()
-      const payments = facts.paymentCustomerFacts?.trim()
+      const payments =
+        facts.shopInfoAsk === 'payment' || facts.shopInfoAsk === 'general'
+          ? facts.paymentCustomerFacts?.trim()
+          : ''
       const body = [policies, payments].filter(Boolean).join('\n')
-      return body
-        ? `${p.ackThanks}\n\n${body}\n\n${p.browseHere}: ${facts.homeUrl}`
-        : `${p.ackThanks} Staff will check and reply.\n\n${p.browseHere}: ${facts.homeUrl}`
+      if (body) return `${p.ackThanks}\n\n${body}`
+      return `${p.ackThanks} Staff will check and reply.`
     }
 
     case 'price_ask': {
@@ -436,6 +444,22 @@ const ORDER_COPIED_FACTS_PATTERN =
 const ORDER_FORCED_QUESTION_PATTERN =
   /\b(enthelum chodyangal|any (other )?questions|proceed with the order|need any details about the trousers)\b/i
 
+export function isHonestShopInfoTalk(
+  reply: string,
+  template: LocalizedReplyTemplate,
+  ask?: ShopInfoAsk | null
+): boolean {
+  if (template !== 'shop_info') return true
+  if (ORDER_FORCED_QUESTION_PATTERN.test(reply)) return false
+  if (
+    ask === 'location' &&
+    /\b(delivery charge|usual delivery|order cheyyan vendi|enthelum chodyangal)\b/i.test(reply)
+  ) {
+    return false
+  }
+  return true
+}
+
 export function isHonestOrderTalk(reply: string, template: LocalizedReplyTemplate): boolean {
   if (
     template !== 'order_assistant' &&
@@ -510,6 +534,7 @@ function buildFactsBlock(template: LocalizedReplyTemplate, facts: LocalizedReply
   if (facts.orderScope) lines.push(`Order reply scope: ${facts.orderScope}`)
   if (facts.missingWhy) lines.push(`Missing why: ${facts.missingWhy}`)
   if (facts.sessionTopic) lines.push(`Last shop topic: ${facts.sessionTopic}`)
+  if (facts.shopInfoAsk) lines.push(`Shop ask (answer only this): ${facts.shopInfoAsk}`)
   if (facts.shopPolicyFacts?.trim()) lines.push(`Shop policies:\n${facts.shopPolicyFacts.trim()}`)
   if (facts.paymentFacts?.trim()) lines.push(`Payment methods:\n${facts.paymentFacts.trim()}`)
   if (facts.restockNote?.trim()) {
@@ -619,6 +644,10 @@ export async function buildLocalizedReply(input: LocalizedReplyInput): Promise<s
       }
       if (!isHonestOrderTalk(trimmed, input.template)) {
         console.warn('[inbox-ai] reply rejected: stock talk on order %s', input.template)
+        continue
+      }
+      if (!isHonestShopInfoTalk(trimmed, input.template, input.facts.shopInfoAsk)) {
+        console.warn('[inbox-ai] reply rejected: shop_info dump on %s', input.facts.shopInfoAsk)
         continue
       }
       return trimmed

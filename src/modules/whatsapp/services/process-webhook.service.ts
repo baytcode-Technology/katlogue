@@ -221,6 +221,8 @@ export async function processWhatsAppWebhook(body: unknown): Promise<void> {
               unread_count: Number(conversation.unread_count ?? 0),
               reply_mode: conversation.reply_mode,
               ai_paused_until: conversation.ai_paused_until,
+              staff_waiting_at: conversation.staff_waiting_at,
+              staff_warned_at: conversation.staff_warned_at,
             },
           })
         }

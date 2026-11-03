@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import {
   addBusinessDays,
   formatShopPolicyCustomerCopy,
+  formatShopPolicyCustomerCopyForAsk,
   formatShopPolicyFacts,
   parseShopPolicies,
   resolvePromisedByDate,
@@ -76,6 +77,7 @@ test('canned shop_info does not dump invent-instructions or a fake discount', ()
     facts: {
       storeName: 'Demo',
       homeUrl: 'https://demo.aishopy.io',
+      shopInfoAsk: 'general',
       shopPolicyCustomerCopy: formatShopPolicyCustomerCopy(
         parseShopPolicies({ default_delivery_business_days: 2, current_offer_note: null }),
         'INR'
@@ -91,6 +93,20 @@ test('canned shop_info does not dump invent-instructions or a fake discount', ()
   assert.match(reply, /COD: available/)
   assert.doesNotMatch(reply, /do not invent/)
   assert.doesNotMatch(reply, /10%/)
+})
+
+test('location canned copy does not dump delivery charge', () => {
+  const policies = parseShopPolicies({
+    has_physical_store: true,
+    address: 'Mannancherry, Alappuzha',
+    hours: 'Monday to Saturday 10am-8pm',
+    default_delivery_business_days: 4,
+    delivery_fee: 40,
+  })
+  const location = formatShopPolicyCustomerCopyForAsk(policies, 'INR', 'location')
+  assert.match(location, /Mannancherry/)
+  assert.doesNotMatch(location, /Delivery charge/)
+  assert.doesNotMatch(location, /Usual delivery/)
 })
 
 test('order fact card includes promised_by when set', () => {

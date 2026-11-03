@@ -11,6 +11,7 @@ import {
 import {
   categorySearchTerm,
   isBarePriceAsk,
+  resolveShopInfoAsk,
   type ParsedCustomerIntent,
 } from './parse-customer-intent.service.js'
 import {
@@ -37,10 +38,11 @@ import {
   parseShopPolicies,
   formatShopPolicyFacts,
   formatShopPolicyCustomerCopy,
+  formatShopPolicyCustomerCopyForAsk,
 } from '../../../shared/lib/shop-policies.js'
 import { parseStoredPaymentConfig } from '../../payments/lib/payment-config.js'
-import { checkMessageSafety } from './safety-filter.service.js'
 import { buildOrderReply } from './build-order-reply.service.js'
+import { checkMessageSafety } from './safety-filter.service.js'
 import type { InboxAiChannel } from './conversation-history.service.js'
 
 export type ProductReplyResult = {
@@ -318,6 +320,7 @@ async function buildTemplateReply(input: {
     shopPolicyCustomerCopy?: string | null
     paymentCustomerFacts?: string | null
     restockNote?: string | null
+    shopInfoAsk?: ReturnType<typeof resolveShopInfoAsk> | null
   }
 }): Promise<string> {
   const { store, intent, homeUrl, ctx } = input
@@ -542,6 +545,7 @@ export async function buildProductReply(input: {
   if (intent.intent === 'shop_info') {
     const shopSells = input.shopSells ?? (await loadShopSells(store.id))
     const policy = shopPolicyAndPayments(store)
+    const shopInfoAsk = resolveShopInfoAsk(customerText)
     return {
       ...empty,
       primaryText: await buildTemplateReply({
@@ -551,7 +555,16 @@ export async function buildProductReply(input: {
         customerMessage: customerText,
         ctx,
         template: 'shop_info',
-        extraFacts: { shopSells, ...policy },
+        extraFacts: {
+          shopSells,
+          ...policy,
+          shopInfoAsk,
+          shopPolicyCustomerCopy: formatShopPolicyCustomerCopyForAsk(
+            parseShopPolicies(store.shop_policies),
+            store.currency,
+            shopInfoAsk
+          ),
+        },
       }),
     }
   }

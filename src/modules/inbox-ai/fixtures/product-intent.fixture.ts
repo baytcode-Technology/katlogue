@@ -534,6 +534,29 @@ test('product catalogue is a greeting, not a random SKU search', () => {
   assert.equal(parsed.intent, 'greeting')
 })
 
+test('shop location after an order stays shop_info, not a sale', () => {
+  const parsed = parseCustomerIntentOffline('ningada shop varunnath evidahn', {
+    recentMessages: [
+      { role: 'store', text: 'Order number: OCT26-1\nFulfillment: Unfulfilled' },
+      { role: 'store', text: 'Ee orderil delivery date illa. Ippo unfulfilled aanu. Staff nokkum.' },
+    ],
+  })
+  assert.equal(parsed.intent, 'shop_info')
+})
+
+test('one month wait plus refund is this order, not shop policy', () => {
+  const parsed = parseCustomerIntentOffline(
+    'njan ith order cheythitt already 1 month aayi enick correct date ariyahanm eppo product deliver aavum enn allel enick refund vehnam',
+    {
+      recentMessages: [
+        { role: 'store', text: 'Order number: OCT26-1\nFulfillment: Unfulfilled' },
+      ],
+    }
+  )
+  assert.equal(parsed.intent, 'order_status')
+  assert.equal(parsed.orderAsk, 'delay')
+})
+
 if (failed > 0) {
   console.error(`\n${failed} fixture(s) failed validation`)
   process.exit(1)

@@ -71,7 +71,7 @@ const TEMPLATE_TASKS: Record<ShopOwnerTemplateTask, string> = {
     'They asked the price without naming an item. Ask which item from THIS shop\'s departments in the facts. Do not dump a random product or invent a price.',
 
   shop_info:
-    'They asked about THIS shop: location, hours, delivery charge/days, payment methods, returns, refunds, or offers. Answer only from the shop policy and payment facts. If a fact says "not set", say staff will check — never invent a fee, date, discount, or address. One or two short lines. Share the store link if useful. Do not dump the catalog.',
+    'They asked about THIS shop. Answer ONLY that ask (location, hours, delivery charge, payment, returns, or offers) from the shop policy / payment facts. One or two short lines. If a fact says "not set", say staff will check — never invent a fee, date, discount, or address. Do NOT dump the whole shop card. Do NOT mention delivery days when they only asked where the shop is. Do NOT ask "any questions" / "enthelum chodyangal". Share the store link only if they asked how to order. If last topic is an existing order, do not restart a sale.',
 
   product_lines:
     `The facts say we ARE sending a matching product. Write the human lines around those details. Return JSON only:
@@ -92,7 +92,7 @@ Keep every line natural shop talk, not marketing copy. No markdown.`,
     'They already saw the order. Answer THIS message only, using the short fact card. Hint in facts (why / eta / delay / urgency / payment / items / confirm_last) is the kind of ask, not a script — write a new sentence. Do not paste the order. No "any questions?". If the same kind of ask was just answered, say it shorter, do not clone the last store line.',
 
   order_help:
-    'They want to cancel, change address, or say this is not their order. Do NOT invent a cancel or a new address. One honest line: we cannot change it in this chat; ask for the order number (and WhatsApp number used at checkout if not-my-order) and say staff will check. No fake "cancelled".',
+    'They want to cancel, change address, refund this order, or say this is not their order. Do NOT invent a cancel, refund, or a new address. One honest line: we cannot change it in this chat; staff will check. If they waited a long time, say what is on the fact card (unfulfilled / no promised date) then staff will check. No fake "refunded" or "cancelled".',
 
   order_needs_phone:
     'Say order status can only be checked on WhatsApp using the phone number used when placing the order. Ask them to message from that number. Be warm, not robotic.',

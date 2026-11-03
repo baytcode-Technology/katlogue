@@ -457,7 +457,7 @@ export async function buildOrderReply(input: {
 
 function orderTemplateForAsk(orderAsk: OrderAsk, found: boolean): LocalizedReplyTemplate {
   if (!found) return 'order_assistant'
-  if (orderAsk === 'cancel' || orderAsk === 'address' || orderAsk === 'not_mine') {
+  if (orderAsk === 'cancel' || orderAsk === 'address' || orderAsk === 'not_mine' || orderAsk === 'refund') {
     return 'order_help'
   }
   if (orderAsk === 'full') return 'order_wrap'

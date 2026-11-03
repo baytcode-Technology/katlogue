@@ -37,6 +37,7 @@ export type OrderAsk =
   | 'cancel'
   | 'address'
   | 'not_mine'
+  | 'refund'
 
 /** Why a catalog miss: this shop does not sell it vs sold out. */
 export type MissingWhy = 'not_sold' | 'sold_out'
@@ -138,7 +139,7 @@ Normalize product search terms to English for database lookup.
 Return JSON only:
 {
   "intent": "greeting" | "acknowledgement" | "buy_intent" | "product_search" | "sku_lookup" | "category_search" | "image_request" | "order_status" | "language_switch" | "refuse" | "shop_info" | "off_topic" | "explicit",
-  "orderAsk": "full" | "confirm_last" | "eta" | "why" | "delay" | "urgency" | "payment" | "items" | "cancel" | "address" | "not_mine" | null,
+  "orderAsk": "full" | "confirm_last" | "eta" | "why" | "delay" | "urgency" | "payment" | "items" | "cancel" | "address" | "not_mine" | "refund" | null,
   "customerLanguage": "exact language name e.g. English, Hindi, Malayalam, Tamil, Punjabi, Arabic",
   "requestedItem": "product they want in English e.g. white shirt, or null",
   "searchQuery": "English product terms without color/size e.g. shirt",
@@ -155,7 +156,7 @@ Return JSON only:
 }
 
 Rules:
-- shop_info: shop location, hours, catalogue, what you sell, delivery charge/days (no existing order), payment methods, return/refund policy, offers. searchQuery: "". Not product_search.
+- shop_info: shop location, hours, catalogue, what you sell, delivery charge/days (no existing order), payment methods, return/refund policy, offers. searchQuery: "". Not product_search. If they talk about an order they already placed (1 month wait, refund for that order, eppo deliver that product), use order_status, not shop_info.
 - refuse: they do not want anything. "onnum venda", "illa enickonnum venda okay", "no thanks", "not interested", "vendam" with no new product. searchQuery: "". NEVER product_search or buy_intent.
 - language_switch: they asked to continue in another language. "malayalathil paray", "in Hindi", "English il". Keep the last topic. Not off_topic.
 - acknowledgement: the customer is only reacting, not asking for a new product. "ok", "okay", "k", "ok sir", "thanks", "thank you", "super", "nice", "good", "got it", "fine", "mm", "hmm", "ശരി", "sheri", "ok saar", "adipoli", or emoji only.
@@ -216,7 +217,18 @@ const BARE_PRICE_PATTERN =
   /^(?:price|vila|ethra|cost|how\s+much|rate)[\s?!.]*$/i
 
 const SHOP_INFO_PATTERN =
-  /\b(what\s+(do\s+you\s+sell|products?\s+do\s+you)|product\s+catalogue|catalog|special\s+offers?|discounts?\s+currently|where\s+is\s+(your\s+)?shop|physical\s+store|shop\s+(located|timings?|hours)|online\s+orders?|deliver(y)?\s+(to|charge|fee|take|time)|free\s+delivery|same[\s-]?day|next[\s-]?day|payment\s+methods?|google\s+pay|gpay|upi|cash\s+on\s+delivery|\bcod\b|return\s+policy|replacement|exchange|refund)\b/i
+  /\b(what\s+(do\s+you\s+sell|products?\s+do\s+you)|product\s+catalogue|catalog|special\s+offers?|discounts?\s+currently|where\s+is\s+(your\s+)?shop|physical\s+store|shop\s+(located|timings?|hours)|shop\s+(evide|varun)|ning(alude|ada)\s+shop|evidahn|online\s+orders?|deliver(y)?\s+(to|charge|fee|take|time)|free\s+delivery|same[\s-]?day|next[\s-]?day|payment\s+methods?|google\s+pay|gpay|upi|cash\s+on\s+delivery|\bcod\b|return\s+policy|replacement|exchange|refund\s+policy)\b/i
+
+const SHOP_LOCATION_PATTERN =
+  /\b(where\s+is\s+(your\s+)?shop|physical\s+store|shop\s+(located|evide|varun)|ning(alude|ada)\s+shop|evidahn)\b/i
+
+const SHOP_HOURS_PATTERN = /\b(shop\s+(timings?|hours)|hours|open\s+time)\b/i
+const SHOP_OFFER_PATTERN = /\b(special\s+offers?|discounts?\s+currently|any\s+offer)\b/i
+const SHOP_RETURNS_PATTERN = /\b(return\s+policy|replacement|exchange|refund\s+policy)\b/i
+const SHOP_DELIVERY_POLICY_PATTERN =
+  /\b(deliver(y)?\s+(to|charge|fee|take|time)|free\s+delivery|same[\s-]?day|next[\s-]?day)\b/i
+const SHOP_PAYMENT_PATTERN =
+  /\b(payment\s+methods?|google\s+pay|gpay|upi|cash\s+on\s+delivery|\bcod\b)\b/i
 
 const WHAT_WE_SELL_PATTERN =
   /\b(what\s+(do\s+you\s+sell|products?)|product\s+catalogue|catalog(ue)?)\b/i
@@ -228,7 +240,7 @@ const ORDER_CONFIRM_LAST_PATTERN =
   /\b(is\s+this\s+(in\s+)?my\s+last\s+order|this\s+(is\s+)?my\s+last\s+order|ithu\s+(ente\s+)?last\s+order|last\s+order\s+(ano|alle)|confirm\s+(the\s+)?(last\s+)?order)\b/i
 
 const ORDER_ETA_PATTERN =
-  /\b(eppo\s+(deliver|kitt|var|aavum)|when\s+(will|is).*(deliver|come|arrive)|delivery\s+(date|time)|epp[o]?zhe\s+kitt|kitte?\s*(um|um\?)|arrive)\b/i
+  /\b(eppo\s+(?:\S+\s+){0,3}(deliver|kitt|var|aavum|ethum)|when\s+(will|is).*(deliver|come|arrive)|delivery\s+(date|time)|epp[o]?zhe\s+kitt|kitte?\s*(um|um\?)|arrive|correct\s+date)\b/i
 
 const ORDER_WHY_PATTERN =
   /\b(why|entha|enthina|enthinnu|kittiyillen+a\s+why|time\s+kittiyillen)\b/i
@@ -253,6 +265,9 @@ const ORDER_ADDRESS_PATTERN =
 
 const ORDER_NOT_MINE_PATTERN =
   /\b(not\s+my\s+order|wrong\s+order|ithu\s+ente\s+order\s+alla|this\s+isn'?t\s+my\s+order)\b/i
+
+const ORDER_REFUND_PATTERN =
+  /\b(refund\s+(veh|ven|cheyy|please)|refund\s+vehnam|enick\s+refund|want\s+(a\s+)?refund|money\s+back)\b/i
 
 const ORDER_FULL_PATTERN =
   /\b(order\s+details?|full\s+(order\s+)?(details?|status)|order\s+status)\b/i
@@ -409,7 +424,14 @@ export function detectSessionTopic(lines?: ConversationHistoryLine[]): SessionTo
   for (let i = lines.length - 1; i >= 0; i -= 1) {
     const line = lines[i]
     if (line.role !== 'store') continue
-    if (/\bOrder number\s*:/i.test(line.text) || /\border status\b/i.test(line.text)) return 'order'
+    if (
+      /\bOrder number\s*:/i.test(line.text) ||
+      /\border status\b/i.test(line.text) ||
+      /\bee orderil\b/i.test(line.text) ||
+      /\bunfulfilled aanu\b/i.test(line.text)
+    ) {
+      return 'order'
+    }
     if (/https?:\/\/\S*\/product\//i.test(line.text)) return 'product'
     if (/\b(illa|don't keep|do not (?:keep|sell)|not available)\b/i.test(line.text)) return 'missing'
   }
@@ -430,6 +452,7 @@ export function resolveOrderAsk(
   if (ORDER_CANCEL_PATTERN.test(trimmed)) return 'cancel'
   if (ORDER_NOT_MINE_PATTERN.test(trimmed)) return 'not_mine'
   if (ORDER_ADDRESS_PATTERN.test(trimmed)) return 'address'
+  if (ORDER_REFUND_PATTERN.test(trimmed) && !ORDER_DELAY_PATTERN.test(trimmed)) return 'refund'
   if (ORDER_CONFIRM_LAST_PATTERN.test(trimmed)) return 'confirm_last'
   if (ORDER_DELAY_PATTERN.test(trimmed)) return 'delay'
   if (ORDER_WHY_PATTERN.test(trimmed)) return 'why'
@@ -452,6 +475,7 @@ function isOrderFollowUpMessage(text: string, sessionTopic: SessionTopic): boole
   if (ORDER_CANCEL_PATTERN.test(trimmed) || ORDER_NOT_MINE_PATTERN.test(trimmed) || ORDER_ADDRESS_PATTERN.test(trimmed)) {
     return true
   }
+  if (isPlacedOrderComplaint(trimmed)) return true
   if (sessionTopic !== 'order') return false
   return (
     ORDER_ETA_PATTERN.test(trimmed) ||
@@ -459,8 +483,53 @@ function isOrderFollowUpMessage(text: string, sessionTopic: SessionTopic): boole
     ORDER_DELAY_PATTERN.test(trimmed) ||
     ORDER_URGENCY_PATTERN.test(trimmed) ||
     ORDER_PAYMENT_PATTERN.test(trimmed) ||
-    ORDER_ITEMS_PATTERN.test(trimmed)
+    ORDER_ITEMS_PATTERN.test(trimmed) ||
+    ORDER_REFUND_PATTERN.test(trimmed)
   )
+}
+
+export type ShopInfoAsk =
+  | 'location'
+  | 'hours'
+  | 'delivery'
+  | 'payment'
+  | 'returns'
+  | 'offers'
+  | 'general'
+
+export function isPlacedOrderComplaint(text: string): boolean {
+  const trimmed = text.trim()
+  const aboutPlacedOrder =
+    /\b(ith(u)?\s+order|order\s+cheyth|already\s+\d+|ente\s+order|last\s+order|my\s+order)\b/i.test(
+      trimmed
+    )
+  return (
+    aboutPlacedOrder &&
+    (ORDER_DELAY_PATTERN.test(trimmed) ||
+      ORDER_ETA_PATTERN.test(trimmed) ||
+      ORDER_REFUND_PATTERN.test(trimmed) ||
+      ORDER_WHY_PATTERN.test(trimmed))
+  )
+}
+
+export function resolveShopInfoAsk(text: string): ShopInfoAsk {
+  const trimmed = text.trim()
+  if (SHOP_LOCATION_PATTERN.test(trimmed)) return 'location'
+  if (SHOP_HOURS_PATTERN.test(trimmed)) return 'hours'
+  if (SHOP_OFFER_PATTERN.test(trimmed)) return 'offers'
+  if (SHOP_RETURNS_PATTERN.test(trimmed)) return 'returns'
+  if (SHOP_PAYMENT_PATTERN.test(trimmed)) return 'payment'
+  if (SHOP_DELIVERY_POLICY_PATTERN.test(trimmed)) return 'delivery'
+  return 'general'
+}
+
+export function isShopInfoMessage(text: string, sessionTopic: SessionTopic): boolean {
+  const trimmed = text.trim()
+  if (isPlacedOrderComplaint(trimmed)) return false
+  if (/\border\s+evide\b/i.test(trimmed)) return false
+  if (SHOP_LOCATION_PATTERN.test(trimmed) || SHOP_HOURS_PATTERN.test(trimmed)) return true
+  if (sessionTopic === 'order') return false
+  return SHOP_INFO_PATTERN.test(trimmed)
 }
 
 function languageFromSwitchRequest(text: string): string | null {
@@ -1055,11 +1124,7 @@ export function fromLlmResult(
               : parsed.intent ?? 'product_search'
 
   if (intent === 'off_topic' && isLanguageSwitchMessage(trimmed)) intent = 'language_switch'
-  if (
-    SHOP_INFO_PATTERN.test(trimmed) &&
-    sessionTopic !== 'order' &&
-    !mentionsProduct
-  ) {
+  if (isShopInfoMessage(trimmed, sessionTopic) && !mentionsProduct) {
     intent = WHAT_WE_SELL_PATTERN.test(trimmed) ? 'greeting' : 'shop_info'
   }
 
@@ -1283,12 +1348,7 @@ function regexFallback(
     )
   }
 
-  if (
-    SHOP_INFO_PATTERN.test(trimmed) &&
-    sessionTopic !== 'order' &&
-    !skuFromText &&
-    !categoryFromText
-  ) {
+  if (isShopInfoMessage(trimmed, sessionTopic) && !skuFromText && !categoryFromText) {
     return finalizeIntent(
       {
         intent: WHAT_WE_SELL_PATTERN.test(trimmed) ? 'greeting' : 'shop_info',
@@ -1609,7 +1669,7 @@ export async function parseCustomerIntent(
     isOrderFollowUpMessage(trimmed, sessionTopic) ||
     isDeliveryAskWithoutOrder(trimmed, sessionTopic) ||
     isBarePriceAsk(trimmed) ||
-    (SHOP_INFO_PATTERN.test(trimmed) && sessionTopic !== 'order')
+    isShopInfoMessage(trimmed, sessionTopic)
   ) {
     return regexFallback(trimmed, storeCategories, options?.recentMessages)
   }

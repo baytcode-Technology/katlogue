@@ -180,3 +180,44 @@ export function formatShopPolicyCustomerCopy(policies: ShopPolicies, currency: s
   if (policies.pickup_note) lines.push(policies.pickup_note)
   return lines.join('\n')
 }
+
+export type ShopPolicyAsk =
+  | 'location'
+  | 'hours'
+  | 'delivery'
+  | 'payment'
+  | 'returns'
+  | 'offers'
+  | 'general'
+
+export function formatShopPolicyCustomerCopyForAsk(
+  policies: ShopPolicies,
+  currency: string,
+  ask: ShopPolicyAsk
+): string {
+  if (ask === 'payment') return ''
+  const full = formatShopPolicyCustomerCopy(policies, currency)
+  if (!full.trim()) return ''
+  const lines = full.split('\n').filter(Boolean)
+  const match =
+    ask === 'location'
+      ? /^(shop:|we have a physical)/i
+      : ask === 'hours'
+        ? /^hours:/i
+        : ask === 'delivery'
+          ? /^(usual delivery|delivery charge|free delivery|same-day|next-day|we deliver)/i
+          : ask === 'returns'
+            ? /^(returns:|exchange:|refund after|return )/i
+            : ask === 'offers'
+              ? /./
+              : /^(shop:|we have a physical|hours:)/i
+  const picked =
+    ask === 'offers'
+      ? policies.current_offer_note
+        ? [policies.current_offer_note]
+        : []
+      : ask === 'general'
+        ? lines.slice(0, 2)
+        : lines.filter((line) => match.test(line))
+  return picked.join('\n')
+}

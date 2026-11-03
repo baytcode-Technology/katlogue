@@ -27,6 +27,7 @@ export type InsertOrderRow = {
   shipping_address: Record<string, unknown>
   notes?: string | null
   checkout_token?: string | null
+  promised_by?: string | null
 }
 
 
@@ -291,6 +292,11 @@ export async function updateOrder(orderId: number, patch: UpdateOrderInput): Pro
   if (patch.payment_status !== undefined) row.payment_status = patch.payment_status
 
   if (patch.fulfillment_status !== undefined) row.fulfillment_status = patch.fulfillment_status
+  if (patch.promised_by !== undefined) row.promised_by = patch.promised_by
+  if (patch.delay_note !== undefined) row.delay_note = patch.delay_note
+  if (patch.courier_name !== undefined) row.courier_name = patch.courier_name
+  if (patch.tracking_url !== undefined) row.tracking_url = patch.tracking_url
+  if (patch.tracking_number !== undefined) row.tracking_number = patch.tracking_number
 
 
 

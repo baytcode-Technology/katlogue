@@ -46,6 +46,11 @@ export type LocalizedReplyFacts = {
   missingWhy?: MissingWhy | null
   sessionTopic?: SessionTopic
   orderAsk?: OrderAsk | null
+  shopPolicyFacts?: string | null
+  paymentFacts?: string | null
+  shopPolicyCustomerCopy?: string | null
+  paymentCustomerFacts?: string | null
+  restockNote?: string | null
 }
 
 /**
@@ -325,6 +330,15 @@ function buildFallback(
       return p.closeOk
     }
 
+    case 'shop_info': {
+      const policies = facts.shopPolicyCustomerCopy?.trim()
+      const payments = facts.paymentCustomerFacts?.trim()
+      const body = [policies, payments].filter(Boolean).join('\n')
+      return body
+        ? `${p.ackThanks}\n\n${body}\n\n${p.browseHere}: ${facts.homeUrl}`
+        : `${p.ackThanks} Staff will check and reply.\n\n${p.browseHere}: ${facts.homeUrl}`
+    }
+
     case 'price_ask': {
       const sells = facts.shopSells?.filter(Boolean) ?? []
       const list = sells.length > 0 ? p.weSell(sells.join(', ')) : ''
@@ -496,6 +510,11 @@ function buildFactsBlock(template: LocalizedReplyTemplate, facts: LocalizedReply
   if (facts.orderScope) lines.push(`Order reply scope: ${facts.orderScope}`)
   if (facts.missingWhy) lines.push(`Missing why: ${facts.missingWhy}`)
   if (facts.sessionTopic) lines.push(`Last shop topic: ${facts.sessionTopic}`)
+  if (facts.shopPolicyFacts?.trim()) lines.push(`Shop policies:\n${facts.shopPolicyFacts.trim()}`)
+  if (facts.paymentFacts?.trim()) lines.push(`Payment methods:\n${facts.paymentFacts.trim()}`)
+  if (facts.restockNote?.trim()) {
+    lines.push(`Restock note (use only if why=sold_out): ${facts.restockNote.trim()}`)
+  }
   if (facts.orderAsk) lines.push(`Order ask: ${facts.orderAsk}`)
   if (facts.orderFacts?.trim()) lines.push(`Order facts:\n${facts.orderFacts.trim()}`)
 

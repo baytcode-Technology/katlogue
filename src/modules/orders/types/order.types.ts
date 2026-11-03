@@ -109,6 +109,14 @@ export type Order = {
 
   tracking_number: string | null
 
+  promised_by: string | null
+
+  delay_note: string | null
+
+  courier_name: string | null
+
+  tracking_url: string | null
+
   notes: string | null
 
   admin_notes: string | null
@@ -184,6 +192,16 @@ export type UpdateOrderInput = Partial<{
   payment_status: OrderPaymentStatus
 
   fulfillment_status: OrderFulfillmentStatus
+
+  promised_by: string | null
+
+  delay_note: string | null
+
+  courier_name: string | null
+
+  tracking_url: string | null
+
+  tracking_number: string | null
 
 }>
 

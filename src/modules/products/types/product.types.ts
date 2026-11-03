@@ -19,6 +19,8 @@ export type Product = {
   is_active: boolean
   sort_order: number
   metadata: Record<string, unknown>
+  delivery_business_days: number | null
+  restock_note: string | null
   created_at: string
   updated_at: string
 }
@@ -56,6 +58,8 @@ export type CreateProductInput = {
   is_active?: boolean
   sort_order: number
   metadata: Record<string, unknown>
+  delivery_business_days?: number | null
+  restock_note?: string | null
   variants?: CreateProductVariantInput[]
 }
 
@@ -82,4 +86,6 @@ export type UpdateProductInput = {
   is_active?: boolean
   sort_order?: number
   metadata?: Record<string, unknown>
+  delivery_business_days?: number | null
+  restock_note?: string | null
 }

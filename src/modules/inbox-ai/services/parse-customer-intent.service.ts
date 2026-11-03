@@ -18,6 +18,7 @@ export type CustomerIntent =
   | 'order_status'
   | 'language_switch'
   | 'refuse'
+  | 'shop_info'
   | 'off_topic'
   | 'explicit'
 
@@ -49,6 +50,7 @@ const NON_CATALOG_INTENTS: ReadonlySet<CustomerIntent> = new Set<CustomerIntent>
   'order_status',
   'refuse',
   'language_switch',
+  'shop_info',
 ])
 
 export type ParsedCustomerIntent = {
@@ -135,7 +137,7 @@ Normalize product search terms to English for database lookup.
 
 Return JSON only:
 {
-  "intent": "greeting" | "acknowledgement" | "buy_intent" | "product_search" | "sku_lookup" | "category_search" | "image_request" | "order_status" | "language_switch" | "refuse" | "off_topic" | "explicit",
+  "intent": "greeting" | "acknowledgement" | "buy_intent" | "product_search" | "sku_lookup" | "category_search" | "image_request" | "order_status" | "language_switch" | "refuse" | "shop_info" | "off_topic" | "explicit",
   "orderAsk": "full" | "confirm_last" | "eta" | "why" | "delay" | "urgency" | "payment" | "items" | "cancel" | "address" | "not_mine" | null,
   "customerLanguage": "exact language name e.g. English, Hindi, Malayalam, Tamil, Punjabi, Arabic",
   "requestedItem": "product they want in English e.g. white shirt, or null",
@@ -153,6 +155,7 @@ Return JSON only:
 }
 
 Rules:
+- shop_info: shop location, hours, catalogue, what you sell, delivery charge/days (no existing order), payment methods, return/refund policy, offers. searchQuery: "". Not product_search.
 - refuse: they do not want anything. "onnum venda", "illa enickonnum venda okay", "no thanks", "not interested", "vendam" with no new product. searchQuery: "". NEVER product_search or buy_intent.
 - language_switch: they asked to continue in another language. "malayalathil paray", "in Hindi", "English il". Keep the last topic. Not off_topic.
 - acknowledgement: the customer is only reacting, not asking for a new product. "ok", "okay", "k", "ok sir", "thanks", "thank you", "super", "nice", "good", "got it", "fine", "mm", "hmm", "ശരി", "sheri", "ok saar", "adipoli", or emoji only.
@@ -211,6 +214,12 @@ const REFUSE_PATTERN =
 
 const BARE_PRICE_PATTERN =
   /^(?:price|vila|ethra|cost|how\s+much|rate)[\s?!.]*$/i
+
+const SHOP_INFO_PATTERN =
+  /\b(what\s+(do\s+you\s+sell|products?\s+do\s+you)|product\s+catalogue|catalog|special\s+offers?|discounts?\s+currently|where\s+is\s+(your\s+)?shop|physical\s+store|shop\s+(located|timings?|hours)|online\s+orders?|deliver(y)?\s+(to|charge|fee|take|time)|free\s+delivery|same[\s-]?day|next[\s-]?day|payment\s+methods?|google\s+pay|gpay|upi|cash\s+on\s+delivery|\bcod\b|return\s+policy|replacement|exchange|refund)\b/i
+
+const WHAT_WE_SELL_PATTERN =
+  /\b(what\s+(do\s+you\s+sell|products?)|product\s+catalogue|catalog(ue)?)\b/i
 
 const STOCK_WHY_PATTERN =
   /\b(stock\s*out|sold\s*out|shopil\s*illa|shopil\s*illayo|atho\s+shopil)\b/i
@@ -897,7 +906,12 @@ function normalizeIntent(
   hasProductSignals: boolean,
   hasCatalogSignals: boolean
 ): CustomerIntent {
-  if (intent === 'order_status' || intent === 'refuse' || intent === 'language_switch') {
+  if (
+    intent === 'order_status' ||
+    intent === 'refuse' ||
+    intent === 'language_switch' ||
+    intent === 'shop_info'
+  ) {
     return intent
   }
   if (intent === 'off_topic' && hasProductSignals) return 'product_search'
@@ -1041,6 +1055,13 @@ export function fromLlmResult(
               : parsed.intent ?? 'product_search'
 
   if (intent === 'off_topic' && isLanguageSwitchMessage(trimmed)) intent = 'language_switch'
+  if (
+    SHOP_INFO_PATTERN.test(trimmed) &&
+    sessionTopic !== 'order' &&
+    !mentionsProduct
+  ) {
+    intent = WHAT_WE_SELL_PATTERN.test(trimmed) ? 'greeting' : 'shop_info'
+  }
 
   const llmConflicts =
     Boolean(requestedCategory) &&
@@ -1248,6 +1269,34 @@ function regexFallback(
         color: null,
         size: null,
         sku: skuFromText,
+        categoryName: null,
+        wantsImage: false,
+        orderNumber: null,
+        orderNumberHint: null,
+        orderProductHint: null,
+        orderScope: null,
+        typedPhone: null,
+        sessionTopic,
+      },
+      trimmed,
+      storeCategories
+    )
+  }
+
+  if (
+    SHOP_INFO_PATTERN.test(trimmed) &&
+    sessionTopic !== 'order' &&
+    !skuFromText &&
+    !categoryFromText
+  ) {
+    return finalizeIntent(
+      {
+        intent: WHAT_WE_SELL_PATTERN.test(trimmed) ? 'greeting' : 'shop_info',
+        customerLanguage: detectedLang,
+        searchQuery: '',
+        color: null,
+        size: null,
+        sku: null,
         categoryName: null,
         wantsImage: false,
         orderNumber: null,
@@ -1559,7 +1608,8 @@ export async function parseCustomerIntent(
     isLanguageSwitchMessage(trimmed) ||
     isOrderFollowUpMessage(trimmed, sessionTopic) ||
     isDeliveryAskWithoutOrder(trimmed, sessionTopic) ||
-    isBarePriceAsk(trimmed)
+    isBarePriceAsk(trimmed) ||
+    (SHOP_INFO_PATTERN.test(trimmed) && sessionTopic !== 'order')
   ) {
     return regexFallback(trimmed, storeCategories, options?.recentMessages)
   }

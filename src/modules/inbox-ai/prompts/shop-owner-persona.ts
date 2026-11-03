@@ -21,6 +21,7 @@ export type ShopOwnerTemplateTask =
   | 'close'
   | 'language_switch'
   | 'price_ask'
+  | 'shop_info'
   | 'product_lines'
   | 'order_assistant'
   | 'order_wrap'
@@ -52,7 +53,7 @@ const TEMPLATE_TASKS: Record<ShopOwnerTemplateTask, string> = {
     'The customer wants to buy. Sound pleased and make ordering easy. Confirm you can arrange it, ask for the ONE detail still missing (size or quantity), and tell them to tap the product link to place the order. Use only the product name and link from the facts. Never invent prices, delivery dates, or payment methods.',
 
   not_found:
-    'They asked for something missing. If facts say why=not_sold, this shop does not sell that item. If why=sold_out, the shop sells it but it is out of stock. Answer that why first. Then name ONLY the departments in the facts. Ask if they want any of those. Share the store link. Do NOT list product titles, prices, SKUs, or links. Do NOT open with "Ind saar", "ഉണ്ട് സാർ", or "stock und". Do NOT offer a random other department as if it were the same item.',
+    'They asked for something missing. If facts say why=not_sold, this shop does not sell that item. If why=sold_out, the shop sells it but it is out of stock. Answer that why first. If why=sold_out and a restock note is in the facts, you may mention that note — never invent a restock date. Then name ONLY the departments in the facts. Ask if they want any of those. Share the store link. Do NOT list product titles, prices, SKUs, or links. Do NOT open with "Ind saar", "ഉണ്ട് സാർ", or "stock und". Do NOT offer a random other department as if it were the same item.',
 
   alternative:
     'They named more than one item and the first is not in this shop. We are about to send the next item they asked for. Write ONE or TWO short lines only: the missing item is not here, and we have the offered item. Use only those two names from the facts. Do NOT write a product title, price, SKU, size, or link. Do NOT apologise more than once. No list.',
@@ -68,6 +69,9 @@ const TEMPLATE_TASKS: Record<ShopOwnerTemplateTask, string> = {
 
   price_ask:
     'They asked the price without naming an item. Ask which item from THIS shop\'s departments in the facts. Do not dump a random product or invent a price.',
+
+  shop_info:
+    'They asked about THIS shop: location, hours, delivery charge/days, payment methods, returns, refunds, or offers. Answer only from the shop policy and payment facts. If a fact says "not set", say staff will check — never invent a fee, date, discount, or address. One or two short lines. Share the store link if useful. Do not dump the catalog.',
 
   product_lines:
     `The facts say we ARE sending a matching product. Write the human lines around those details. Return JSON only:

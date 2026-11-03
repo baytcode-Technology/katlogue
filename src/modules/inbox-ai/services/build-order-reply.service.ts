@@ -133,7 +133,14 @@ export function formatOrderFactsBlock(order: OrderWithDetails, currency: string)
     lines.push(`Tracking: ${order.tracking_number.trim()}`)
   }
 
-  lines.push('Delivery date: not on this order')
+  if (order.promised_by?.trim()) {
+    lines.push(`Promised by: ${order.promised_by.trim()}`)
+  } else {
+    lines.push('Delivery date: not on this order')
+  }
+  if (order.delay_note?.trim()) lines.push(`Delay note: ${order.delay_note.trim()}`)
+  if (order.courier_name?.trim()) lines.push(`Courier: ${order.courier_name.trim()}`)
+  if (order.tracking_url?.trim()) lines.push(`Tracking link: ${order.tracking_url.trim()}`)
 
   if (name) lines.push(`Recipient: ${name}`)
   if (address) lines.push(`Address: ${address}`)
@@ -162,13 +169,17 @@ export function formatOrderFactCard(order: OrderWithDetails, currency: string): 
     `Fulfillment: ${formatOrderStatusLabel(order.fulfillment_status)}`,
     `Payment method: ${formatPaymentProviderLabel(order.payment?.provider)}`,
     `Tracking: ${tracking ? tracking : 'none on this order'}`,
-    'Delivery date: not on this order',
+    `Tracking URL: ${order.tracking_url?.trim() ? order.tracking_url.trim() : 'none on this order'}`,
+    `Courier: ${order.courier_name?.trim() ? order.courier_name.trim() : 'none on this order'}`,
+    `Promised by: ${order.promised_by?.trim() ? order.promised_by.trim() : 'not set — do not invent a date'}`,
+    `Delay note: ${order.delay_note?.trim() ? order.delay_note.trim() : 'none'}`,
+    `Delivery date on this order: ${order.promised_by?.trim() ? order.promised_by.trim() : 'not on this order'}`,
     `Total: ${formatMoney(order.total, currency)}`,
   ].join('\n')
 }
 
 const COPIED_FACT_LINE =
-  /^(?:[\s*•\-]+)?(?:order number|placed(?: on)?|order status|payment status|fulfillment|payment method|recipient|address|items?|total|delivery date|tracking|shipping)\s*:/i
+  /^(?:[\s*•\-]+)?(?:order number|placed(?: on)?|order status|payment status|fulfillment|payment method|recipient|address|items?|total|delivery date|tracking(?: url| link)?|shipping|promised by|delay note|courier)\s*:/i
 
 /** Drop a rewritten facts dump from the spoken wrap so code can paste one block. */
 export function stripCopiedOrderFacts(spoken: string): string {

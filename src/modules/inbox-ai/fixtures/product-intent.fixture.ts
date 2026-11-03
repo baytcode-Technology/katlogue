@@ -523,6 +523,17 @@ test('price? with no item is a bare price ask', () => {
   assert.equal(parsed.categoryName, null)
 })
 
+test('COD without a product is shop_info, not a sale', () => {
+  const parsed = parseCustomerIntentOffline('Do you offer COD?')
+  assert.equal(parsed.intent, 'shop_info')
+  assert.equal(parsed.searchQuery, '')
+})
+
+test('product catalogue is a greeting, not a random SKU search', () => {
+  const parsed = parseCustomerIntentOffline('product catalogue')
+  assert.equal(parsed.intent, 'greeting')
+})
+
 if (failed > 0) {
   console.error(`\n${failed} fixture(s) failed validation`)
   process.exit(1)

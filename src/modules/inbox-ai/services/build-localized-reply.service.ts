@@ -130,11 +130,14 @@ const EN: PhraseSet = {
   notSoldLead: (item) => `We don't keep ${item} in this shop sir.`,
   priceAsk: 'Which item from this shop should I price for you sir?',
   orderEtaUnknown: 'No delivery date on this order yet sir. Still unfulfilled. I will update you when it ships.',
-  orderCannotCancel: 'I cannot cancel or change that in chat sir. Send the order number and staff will check.',
-  orderNotMine: 'If this is not your order, send the order number or the WhatsApp number used at checkout. Staff will check.',
+  orderCannotCancel:
+    'I cannot cancel or change that in chat sir. Our customer helpline will contact you.',
+  orderNotMine:
+    'If this is not your order, send the order number or the WhatsApp number used at checkout. Our customer helpline will contact you.',
   shipAfterOrder: 'We ship after you place the order sir. No delivery date until then.',
   orderFoundLead: 'I found your order sir.',
-  orderStaffCheck: 'No delivery date on this order yet. Still unfulfilled. Staff will check.',
+  orderStaffCheck:
+    'No delivery date on this order yet. Still unfulfilled. Our customer helpline will contact you.',
 }
 
 const ML: PhraseSet = {
@@ -167,11 +170,14 @@ const ML: PhraseSet = {
   notSoldLead: (item) => `${item} ഈ ഷോപ്പിൽ ഇല്ല സാർ.`,
   priceAsk: 'ഏത് സാധനത്തിന്റെ വില വേണം സാർ?',
   orderEtaUnknown: 'ഈ ഓർഡറിൽ ഡെലിവറി തീയതി ഇല്ല സാർ. ഇപ്പോൾ unfulfilled ആണ്. ഷിപ്പ് ആയാൽ പറയാം.',
-  orderCannotCancel: 'ചാറ്റിൽ ക്യാൻസൽ ചെയ്യാൻ പറ്റില്ല സാർ. ഓർഡർ നമ്പർ അയച്ചാൽ സ്റ്റാഫ് നോക്കും.',
-  orderNotMine: 'ഇത് താങ്കളുടെ ഓർഡർ അല്ലെങ്കിൽ ഓർഡർ നമ്പർ അല്ലെങ്കിൽ ചെക്ക് ഔട്ട് നമ്പർ അയയ്ക്കൂ. സ്റ്റാഫ് നോക്കും.',
+  orderCannotCancel:
+    'ചാറ്റിൽ ക്യാൻസൽ ചെയ്യാൻ പറ്റില്ല സാർ. കസ്റ്റമർ ഹെൽപ്‌ലൈൻ താങ്കളെ ബന്ധപ്പെടും.',
+  orderNotMine:
+    'ഇത് താങ്കളുടെ ഓർഡർ അല്ലെങ്കിൽ ഓർഡർ നമ്പർ അല്ലെങ്കിൽ ചെക്ക് ഔട്ട് നമ്പർ അയയ്ക്കൂ. കസ്റ്റമർ ഹെൽപ്‌ലൈൻ താങ്കളെ ബന്ധപ്പെടും.',
   shipAfterOrder: 'ഓർഡർ ചെയ്ത ശേഷമേ ഷിപ്പ് ആകൂ സാർ. അതിന് മുമ്പ് ഡെലിവറി തീയതി ഇല്ല.',
   orderFoundLead: 'ഓർഡർ കണ്ടു സാർ.',
-  orderStaffCheck: 'ഈ ഓർഡറിൽ ഡെലിവറി തീയതി ഇല്ല. ഇപ്പോൾ unfulfilled ആണ്. സ്റ്റാഫ് നോക്കും.',
+  orderStaffCheck:
+    'ഈ ഓർഡറിൽ ഡെലിവറി തീയതി ഇല്ല. ഇപ്പോൾ unfulfilled ആണ്. കസ്റ്റമർ ഹെൽപ്‌ലൈൻ താങ്കളെ ബന്ധപ്പെടും.',
 }
 
 const ML_LATIN: PhraseSet = {
@@ -206,12 +212,13 @@ const ML_LATIN: PhraseSet = {
   orderEtaUnknown:
     'Ee orderil delivery date illa saar. Ippo unfulfilled aanu. Ship aayal parayam.',
   orderCannotCancel:
-    'Chatil cancel cheyyan pattilla saar. Order number ayachal staff nokkum.',
+    'Chatil cancel cheyyan pattilla saar. Customer helpline ningale contact cheyyum.',
   orderNotMine:
-    'Ithu ningalude order allengil order number allengil checkout number ayakku. Staff nokkum.',
+    'Ithu ningalude order allengil order number allengil checkout number ayakku. Customer helpline ningale contact cheyyum.',
   shipAfterOrder: 'Order cheytha shesham ship aakum saar. Athinu munp delivery date illa.',
   orderFoundLead: 'Order kandi saar.',
-  orderStaffCheck: 'Ee orderil delivery date illa. Ippo unfulfilled aanu. Staff nokkum.',
+  orderStaffCheck:
+    'Ee orderil delivery date illa. Ippo unfulfilled aanu. Customer helpline ningale contact cheyyum.',
 }
 
 const HI: PhraseSet = {
@@ -244,11 +251,11 @@ const HI: PhraseSet = {
   notSoldLead: (item) => `${item} इस दुकान में नहीं रखते सर।`,
   priceAsk: 'किस चीज़ की कीमत बताऊँ सर?',
   orderEtaUnknown: 'इस ऑर्डर पर डिलीवरी तारीख नहीं है सर। अभी unfulfilled है। शिप होते ही बताऊँगा।',
-  orderCannotCancel: 'चैट में कैंसल नहीं कर सकता सर। ऑर्डर नंबर भेजिए, स्टाफ देखेगा।',
-  orderNotMine: 'अगर यह आपका ऑर्डर नहीं है तो ऑर्डर नंबर या चेकआउट वाला नंबर भेजिए। स्टाफ देखेगा।',
+  orderCannotCancel: 'चैट में कैंसल नहीं कर सकता सर। कस्टमर हेल्पलाइन आपसे संपर्क करेगी।',
+  orderNotMine: 'अगर यह आपका ऑर्डर नहीं है तो ऑर्डर नंबर या चेकआउट वाला नंबर भेजिए। कस्टमर हेल्पलाइन आपसे संपर्क करेगी।',
   shipAfterOrder: 'ऑर्डर के बाद ही शिप होगा सर। उससे पहले डिलीवरी तारीख नहीं है।',
   orderFoundLead: 'ऑर्डर मिल गया सर।',
-  orderStaffCheck: 'इस ऑर्डर पर डिलीवरी तारीख नहीं है। अभी unfulfilled है। स्टाफ देखेगा।',
+  orderStaffCheck: 'इस ऑर्डर पर डिलीवरी तारीख नहीं है। अभी unfulfilled है। कस्टमर हेल्पलाइन आपसे संपर्क करेगी।',
 }
 
 const TA: PhraseSet = {
@@ -281,11 +288,11 @@ const TA: PhraseSet = {
   notSoldLead: (item) => `${item} இந்த கடையில் இல்லை சார்.`,
   priceAsk: 'எந்த பொருளின் விலை வேண்டும் சார்?',
   orderEtaUnknown: 'இந்த ஆர்டரில் டெலிவரி தேதி இல்லை சார். இப்போது unfulfilled. ஷிப் ஆனால் சொல்கிறேன்.',
-  orderCannotCancel: 'சாட்டில் கேன்சல் செய்ய முடியாது சார். ஆர்டர் நம்பர் அனுப்பினால் ஸ்டாப் பார்க்கும்.',
-  orderNotMine: 'இது உங்கள் ஆர்டர் இல்லையென்றால் ஆர்டர் நம்பர் அல்லது செக் அவுட் நம்பர் அனுப்புங்கள். ஸ்டாப் பார்க்கும்.',
+  orderCannotCancel: 'சாட்டில் கேன்சல் செய்ய முடியாது சார். கஸ்டமர் ஹெல்ப்லைன் உங்களை தொடர்பு கொள்ளும்.',
+  orderNotMine: 'இது உங்கள் ஆர்டர் இல்லையென்றால் ஆர்டர் நம்பர் அல்லது செக் அவுட் நம்பர் அனுப்புங்கள். கஸ்டமர் ஹெல்ப்லைன் உங்களை தொடர்பு கொள்ளும்.',
   shipAfterOrder: 'ஆர்டர் செய்த பிறகுதான் ஷிப் ஆகும் சார். அதற்கு முன் டெலிவரி தேதி இல்லை.',
   orderFoundLead: 'ஆர்டர் கிடைத்தது சார்.',
-  orderStaffCheck: 'இந்த ஆர்டரில் டெலிவரி தேதி இல்லை. இப்போது unfulfilled. ஸ்டாப் பார்க்கும்.',
+  orderStaffCheck: 'இந்த ஆர்டரில் டெலிவரி தேதி இல்லை. இப்போது unfulfilled. கஸ்டமர் ஹெல்ப்லைன் உங்களை தொடர்பு கொள்ளும்.',
 }
 
 function resolvePhrases(language: string, scriptStyle?: ScriptStyle): PhraseSet {

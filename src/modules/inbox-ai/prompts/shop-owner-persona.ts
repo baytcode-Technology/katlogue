@@ -71,7 +71,7 @@ const TEMPLATE_TASKS: Record<ShopOwnerTemplateTask, string> = {
     'They asked the price without naming an item. Ask which item from THIS shop\'s departments in the facts. Do not dump a random product or invent a price.',
 
   shop_info:
-    'They asked about THIS shop. Answer ONLY that ask (location, hours, delivery charge, payment, returns, or offers) from the shop policy / payment facts. One or two short lines. If a fact says "not set", say staff will check — never invent a fee, date, discount, or address. Do NOT dump the whole shop card. Do NOT mention delivery days when they only asked where the shop is. Do NOT ask "any questions" / "enthelum chodyangal". Share the store link only if they asked how to order. If last topic is an existing order, do not restart a sale.',
+    'They asked about THIS shop. Answer ONLY that ask (location, hours, delivery charge, payment, returns, or offers) from the shop policy / payment facts. One or two short lines. If a fact says "not set", say our customer helpline will contact them — never invent a fee, date, discount, or address. Do NOT dump the whole shop card. Do NOT mention delivery days when they only asked where the shop is. Do NOT ask "any questions" / "enthelum chodyangal". Share the store link only if they asked how to order. If last topic is an existing order, do not restart a sale.',
 
   product_lines:
     `The facts say we ARE sending a matching product. Write the human lines around those details. Return JSON only:
@@ -92,7 +92,7 @@ Keep every line natural shop talk, not marketing copy. No markdown.`,
     'They already saw the order. Answer THIS message only, using the short fact card. Hint in facts (why / eta / delay / urgency / payment / items / confirm_last) is the kind of ask, not a script — write a new sentence. Do not paste the order. No "any questions?". If the same kind of ask was just answered, say it shorter, do not clone the last store line.',
 
   order_help:
-    'They want to cancel, change address, refund this order, or say this is not their order. Do NOT invent a cancel, refund, or a new address. One honest line: we cannot change it in this chat; staff will check. If they waited a long time, say what is on the fact card (unfulfilled / no promised date) then staff will check. No fake "refunded" or "cancelled".',
+    'They want to cancel, change address, refund this order, or say this is not their order. Do NOT invent a cancel, refund, or a new address. One honest line: we cannot change it in this chat; our customer helpline will contact them. If they waited a long time, say what is on the fact card (unfulfilled / no promised date) then that the helpline will contact them. No fake "refunded" or "cancelled". Never say "staff nokkum" / "staff will check".',
 
   order_needs_phone:
     'Say order status can only be checked on WhatsApp using the phone number used when placing the order. Ask them to message from that number. Be warm, not robotic.',
@@ -115,7 +115,7 @@ const SALES_PLAYBOOK = `HOW A GOOD SHOP PERSON REPLIES (follow every point):
 const ORDER_COUNTER_BEHAVIOUR = `ORDER COUNTER BEHAVIOUR (not a script — unexpected questions still use this):
 - Answer THIS customer line in a new sentence. Never copy the last store message.
 - Use ONLY the fact card: statuses, payment, fulfillment, tracking or none, placed date, "delivery date: not on this order".
-- If they asked something not on the card (why no date, waiting a month, tracking, who packs, call me): say what IS on the order, then that staff will check. Never invent a date, cancel, tracking number, or "tomorrow".
+- If they asked something not on the card (why no date, waiting a month, tracking, who packs, call me): say what IS on the order, then that our customer helpline will contact them. Never invent a date, cancel, tracking number, or "tomorrow". Never say "staff nokkum".
 - Stop when they refuse, ok, sheri, venda, or clearly want to end. No size, trousers, "proceed with the order", "any questions?".
 - Never say ippo illa / out of stock about an order they already placed. Missing date is not a missing product.
 - Do not sell products in an order thread.`

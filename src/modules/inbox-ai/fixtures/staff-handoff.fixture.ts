@@ -97,9 +97,45 @@ async function main() {
     assert.equal(decision, 'warn')
   })
 
-  await test('staff connect line stays Manglish for Latin Malayalam', () => {
-    assert.match(staffConnectLine('Malayalam', 'latin'), /Staff ningale connect/)
-    assert.doesNotMatch(staffConnectLine('Malayalam', 'latin'), /enthelum chodyangal/)
+  await test('after warn, eppo kittum is wait not another AI reply', async () => {
+    const text = 'chumma staff nokkum enn paranja pore enick product eppo kittum enn ariyahanm'
+    const parsed = parseCustomerIntentOffline(text, {
+      recentMessages: [
+        { role: 'store', text: 'Customer helpline ningale contact cheyyum saar. Ee chatil wait cheyyu.' },
+      ],
+    })
+    const decision = await resolveStaffHandoff({
+      store,
+      intent: parsed,
+      customerText: text,
+      staffWarnedAt: '2026-11-03T10:00:00.000Z',
+    })
+    assert.equal(decision, 'wait')
+    const eppol = await resolveStaffHandoff({
+      store,
+      intent: parseCustomerIntentOffline('eppol'),
+      customerText: 'eppol',
+      staffWarnedAt: '2026-11-03T10:00:00.000Z',
+    })
+    assert.equal(eppol, 'wait')
+  })
+
+  await test('order evide with no warning is still not wait', async () => {
+    const parsed = parseCustomerIntentOffline('order evide')
+    const decision = await resolveStaffHandoff({
+      store,
+      intent: parsed,
+      customerText: 'order evide',
+      staffWarnedAt: null,
+    })
+    assert.equal(decision, 'none')
+  })
+
+  await test('helpline connect line is salesman-style, not staff nokkum', () => {
+    assert.match(staffConnectLine('Malayalam', 'latin'), /Customer helpline ningale contact/)
+    assert.doesNotMatch(staffConnectLine('Malayalam', 'latin'), /staff nokkum/i)
+    assert.match(staffConnectLine('English'), /customer helpline will contact you/i)
+    assert.doesNotMatch(staffConnectLine('English'), /staff will check/i)
   })
 
   if (failed > 0) {

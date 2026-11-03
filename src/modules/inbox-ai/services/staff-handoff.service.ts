@@ -14,12 +14,12 @@ export type StaffHandoffAction = 'none' | 'warn' | 'policy' | 'wait'
 export function staffConnectLine(language: string, scriptStyle?: string): string {
   const lang = language.trim().toLowerCase()
   if (lang === 'malayalam' && scriptStyle === 'malayalam_script') {
-    return 'സ്റ്റാഫ് താങ്കളെ ബന്ധപ്പെടും സാർ. ഈ ചാറ്റിൽ കാത്തിരിക്കൂ.'
+    return 'കസ്റ്റമർ ഹെൽപ്‌ലൈൻ താങ്കളെ ബന്ധപ്പെടും സാർ. ഈ ചാറ്റിൽ കാത്തിരിക്കൂ.'
   }
   if (lang === 'malayalam') {
-    return 'Staff ningale connect cheyyum saar. Ee chatil wait cheyyu.'
+    return 'Customer helpline ningale contact cheyyum saar. Ee chatil wait cheyyu.'
   }
-  return 'Staff will connect you sir. Please wait in this chat.'
+  return 'Our customer helpline will contact you sir. Please wait in this chat.'
 }
 
 export function isStaffHandoffIssue(
@@ -82,8 +82,8 @@ export async function resolveStaffHandoff(input: {
   customerPhone?: string | null
   conversationId?: number | null
 }): Promise<StaffHandoffAction> {
-  if (!isStaffHandoffIssue(input.intent, input.customerText)) return 'none'
   if (input.staffWarnedAt) return 'wait'
+  if (!isStaffHandoffIssue(input.intent, input.customerText)) return 'none'
   const canAnswer = await canAnswerFromFacts(input)
   return canAnswer ? 'policy' : 'warn'
 }

@@ -538,7 +538,7 @@ test('shop location after an order stays shop_info, not a sale', () => {
   const parsed = parseCustomerIntentOffline('ningada shop varunnath evidahn', {
     recentMessages: [
       { role: 'store', text: 'Order number: OCT26-1\nFulfillment: Unfulfilled' },
-      { role: 'store', text: 'Ee orderil delivery date illa. Ippo unfulfilled aanu. Staff nokkum.' },
+      { role: 'store', text: 'Ee orderil delivery date illa. Ippo unfulfilled aanu. Customer helpline ningale contact cheyyum.' },
     ],
   })
   assert.equal(parsed.intent, 'shop_info')

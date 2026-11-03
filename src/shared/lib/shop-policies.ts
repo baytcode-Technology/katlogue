@@ -140,7 +140,7 @@ export function formatShopPolicyFacts(policies: ShopPolicies, currency: string):
   if (policies.return_days != null) {
     lines.push(`Return window: ${policies.return_days} day(s)`)
   } else {
-    lines.push('Return window: not set — staff will check')
+    lines.push('Return window: not set — customer helpline will contact them')
   }
   lines.push(`Exchange: ${policies.exchange_allowed ? 'yes' : 'not listed'}`)
   if (policies.refund_days_after_cancel != null) {

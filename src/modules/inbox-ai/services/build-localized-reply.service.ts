@@ -27,6 +27,8 @@ export type LocalizedReplyFacts = {
   homeUrl: string
   requestedItem?: string | null
   availableProducts?: string[]
+  /** Active shop categories (Men, shirts) — not a dump of product titles. */
+  shopSells?: string[]
   refusalReason?: 'explicit' | 'code_request' | 'off_topic' | 'language_meta'
   orderFacts?: string | null
   customerAsk?: string | null
@@ -59,6 +61,8 @@ type PhraseSet = {
   buyTapLink: string
   notFoundLead: (item: string) => string
   weHave: (items: string) => string
+  weSell: (items: string) => string
+  wantAny: string
   alternativeLead: (missing: string, offered: string) => string
   browseHere: string
   refusalRedirect: (storeName: string) => string
@@ -81,12 +85,14 @@ const EN: PhraseSet = {
   buyTapLink: 'Tap the link to place the order',
   notFoundLead: (item) => `We don't keep ${item} sir.`,
   weHave: (items) => `We have ${items}.`,
+  weSell: (items) => `This shop has ${items}.`,
+  wantAny: 'Would you like any of those?',
   alternativeLead: (missing, offered) =>
     `We don't have ${missing} sir. We have ${offered}.`,
   browseHere: 'Browse here',
   refusalRedirect: (storeName) => `What can I help you find at ${storeName} sir?`,
   hereItIs: 'Here it is sir.',
-  closingAskSize: 'Which size do you need?',
+  closingAskSize: 'Shall I help you order?',
   moreOptions: 'We have more options too:',
   orderNotFound:
     'Sorry sir, I could not find that order on this WhatsApp number. When did you place it, or which number did you use? I will check again.',
@@ -106,11 +112,13 @@ const ML: PhraseSet = {
   buyTapLink: 'ഓർഡർ ചെയ്യാൻ ലിങ്ക് ഇതാ',
   notFoundLead: (item) => `${item} ഇപ്പോൾ ഇല്ല സാർ.`,
   weHave: (items) => `${items} ഉണ്ട്.`,
+  weSell: (items) => `ഈ ഷോപ്പ് ${items} ആണ്.`,
+  wantAny: 'അതിൽ എന്തെങ്കിലും വേണോ?',
   alternativeLead: (missing, offered) => `${missing} ഇപ്പോൾ ഇല്ല സാർ. ${offered} ഉണ്ട്.`,
   browseHere: 'ഇവിടെ നോക്കൂ',
   refusalRedirect: (storeName) => `${storeName}-ൽ നിന്ന് എന്താണ് വേണ്ടത്?`,
   hereItIs: 'ഉണ്ട് സാർ',
-  closingAskSize: 'ഏത് സൈസ് വേണം?',
+  closingAskSize: 'ഓർഡർ ചെയ്യണോ സാർ?',
   moreOptions: 'ഇതുപോലെ വേറെയും ഉണ്ട്:',
   orderNotFound:
     'ആ ഓർഡർ ഈ നമ്പറിൽ കാണുന്നില്ല സാർ. എപ്പോഴാണ് ഓർഡർ ചെയ്തത്, അല്ലെങ്കിൽ ഏത് നമ്പർ ഉപയോഗിച്ചു?',
@@ -130,11 +138,13 @@ const ML_LATIN: PhraseSet = {
   buyTapLink: 'Order cheyyan link ithaa',
   notFoundLead: (item) => `${item} ippo illa saar.`,
   weHave: (items) => `${items} ind.`,
+  weSell: (items) => `Ee shop ${items} aanu.`,
+  wantAny: 'Athil enthelum veeno?',
   alternativeLead: (missing, offered) => `${missing} ippo illa saar. ${offered} ind.`,
   browseHere: 'Ivide nokku',
   refusalRedirect: (storeName) => `${storeName}-il ninnu enthaanu vendath?`,
   hereItIs: 'Ind saar',
-  closingAskSize: 'Ethu size vendam?',
+  closingAskSize: 'Order cheyyano saar?',
   moreOptions: 'Ithupole vereyum ind:',
   orderNotFound:
     'Aa order ee number il kaanunnilla saar. Eppozhaanu order cheythath, allengil ethu number upayogichu?',
@@ -154,11 +164,13 @@ const HI: PhraseSet = {
   buyTapLink: 'ऑर्डर करने के लिए इस लिंक पर जाएं',
   notFoundLead: (item) => `${item} अभी नहीं है सर।`,
   weHave: (items) => `हमारे पास ${items} है।`,
+  weSell: (items) => `यह दुकान ${items} की है।`,
+  wantAny: 'इनमें से कुछ देखना है?',
   alternativeLead: (missing, offered) => `${missing} नहीं है सर। ${offered} है।`,
   browseHere: 'यहाँ देखें',
   refusalRedirect: (storeName) => `${storeName} से आपको क्या चाहिए सर?`,
   hereItIs: 'जी सर, यह देखिए।',
-  closingAskSize: 'कौन सा साइज़ चाहिए सर?',
+  closingAskSize: 'ऑर्डर कर दूँ सर?',
   moreOptions: 'ऐसे और भी हैं:',
   orderNotFound:
     'माफ़ कीजिए सर, इस व्हाट्सएप नंबर पर वह ऑर्डर नहीं मिला। आपने कब ऑर्डर किया था, या कौन सा नंबर इस्तेमाल किया था?',
@@ -178,11 +190,13 @@ const TA: PhraseSet = {
   buyTapLink: 'ஆர்டர் செய்ய இந்த லிங்கை அழுத்துங்கள்',
   notFoundLead: (item) => `${item} இப்போது இல்லை சார்.`,
   weHave: (items) => `எங்களிடம் ${items} உள்ளது.`,
+  weSell: (items) => `இந்த கடை ${items}.`,
+  wantAny: 'இதில் ஏதாவது வேண்டுமா?',
   alternativeLead: (missing, offered) => `${missing} இல்லை சார். ${offered} உள்ளது.`,
   browseHere: 'இங்கே பாருங்கள்',
   refusalRedirect: (storeName) => `${storeName}-ல் உங்களுக்கு என்ன வேண்டும் சார்?`,
   hereItIs: 'இருக்கு சார், இதோ.',
-  closingAskSize: 'எந்த சைஸ் வேண்டும் சார்?',
+  closingAskSize: 'ஆர்டர் செய்யட்டுமா சார்?',
   moreOptions: 'இது போல வேறும் உள்ளது:',
   orderNotFound:
     'மன்னிக்கவும் சார், இந்த வாட்ஸ்அப் எண்ணில் அந்த ஆர்டர் கிடைக்கவில்லை. எப்போது ஆர்டர் செய்தீர்கள், அல்லது எந்த எண்ணைப் பயன்படுத்தினீர்கள்?',
@@ -208,8 +222,11 @@ function buildFallback(
   p: PhraseSet
 ): string {
   switch (template) {
-    case 'greeting':
-      return `${p.welcome(facts.storeName)}\n\n${p.ourStore}: ${facts.homeUrl}\n\n${p.whatLooking}`
+    case 'greeting': {
+      const sells = facts.shopSells?.filter(Boolean) ?? []
+      const ask = sells.length > 0 ? `${p.weSell(sells.join(', '))} ${p.wantAny}` : p.whatLooking
+      return `${p.welcome(facts.storeName)}\n\n${p.ourStore}: ${facts.homeUrl}\n\n${ask}`
+    }
 
     case 'acknowledgement': {
       const product = facts.lastShownProduct?.title
@@ -225,9 +242,8 @@ function buildFallback(
     case 'not_found': {
       const item = facts.requestedItem?.trim()
       const lead = item ? p.notFoundLead(item) : ''
-      const list = facts.availableProducts?.length
-        ? p.weHave(facts.availableProducts.join(', '))
-        : ''
+      const sells = facts.shopSells?.filter(Boolean) ?? []
+      const list = sells.length > 0 ? `${p.weSell(sells.join(', '))} ${p.wantAny}` : ''
       const head = upperFirst([lead, list].filter(Boolean).join(' '))
       const tail = `${p.browseHere}: ${facts.homeUrl}`
       return head ? `${head}\n\n${tail}` : `${p.whatLooking}\n\n${tail}`
@@ -256,26 +272,28 @@ function buildFallback(
   }
 }
 
-const MALAYALAM_SCRIPT_CANNED_TEMPLATES: ReadonlySet<LocalizedReplyTemplate> = new Set([
-  'greeting',
-  'acknowledgement',
-  'buy_assist',
-  'not_found',
-  'alternative',
-  'refusal',
-  'product_lines',
-])
-
+/** Model writes shop talk. Canned wording is only used if the model fails. */
 export function shouldSkipModelForMalayalamScript(
-  language: string,
-  scriptStyle: ScriptStyle | undefined,
+  _language: string,
+  _scriptStyle: ScriptStyle | undefined,
+  _template: LocalizedReplyTemplate
+): boolean {
+  return false
+}
+
+const STOCK_CLAIM_PATTERN =
+  /^(ind saar|undu saar|stock ind|ഉണ്ട് സാർ|സ്റ്റോക്ക് ഉണ്ട്)/i
+
+export function isHonestStockTalk(
+  reply: string,
   template: LocalizedReplyTemplate
 ): boolean {
-  return (
-    isMalayalam(language) &&
-    scriptStyle === 'malayalam_script' &&
-    MALAYALAM_SCRIPT_CANNED_TEMPLATES.has(template)
-  )
+  if (template !== 'not_found' && template !== 'greeting' && template !== 'alternative') {
+    return true
+  }
+  const first = reply.trim().split(/[.!\n]/)[0]?.trim() ?? ''
+  if (!STOCK_CLAIM_PATTERN.test(first)) return true
+  return /\b(illa|ill|ഇല്ല)\b/i.test(first)
 }
 
 /**
@@ -312,10 +330,10 @@ export function isReplyScriptValid(
 
 function buildStrictScriptReminder(language: string, scriptStyle?: ScriptStyle): string {
   if (isMalayalam(language) && scriptStyle !== 'malayalam_script') {
-    return 'Write the reply in Manglish — Malayalam words spelled with English letters (e.g. "Ind saar, ethu size vendam?"). Do not use Malayalam script and do not write plain English.'
+    return 'Write the reply in Manglish — Malayalam words spelled with English letters. Do not use Malayalam script and do not write plain English. Do not open with "Ind saar" unless the facts confirm we have a matching product.'
   }
   if (isMalayalam(language)) {
-    return 'Write the reply in Malayalam script only (e.g. "ഉണ്ട് സാർ, ഏത് സൈസ് വേണം?"). No English sentences, no Tamil, no Hindi.'
+    return 'Write the reply in Malayalam script only. No English sentences, no Tamil, no Hindi. Do not open with "ഉണ്ട് സാർ" unless the facts confirm we have a matching product.'
   }
   return `Write the reply in ${language} only, using the script ${language} is normally written in.`
 }
@@ -325,8 +343,11 @@ function buildFactsBlock(template: LocalizedReplyTemplate, facts: LocalizedReply
 
   if (facts.requestedItem) lines.push(`Item NOT available: ${facts.requestedItem}`)
   if (facts.offeredItem) lines.push(`Offering instead: ${facts.offeredItem}`)
+  if (facts.shopSells?.length) {
+    lines.push(`This shop sells (categories only — do not invent products): ${facts.shopSells.join(', ')}`)
+  }
   if (facts.availableProducts?.length) {
-    lines.push(`Items we DO have: ${facts.availableProducts.join(', ')}`)
+    lines.push(`Named alternatives we can send: ${facts.availableProducts.join(', ')}`)
   }
   if (facts.refusalReason) lines.push(`Reason: ${facts.refusalReason}`)
   if (facts.customerAsk?.trim()) lines.push(`Customer asked: ${facts.customerAsk.trim()}`)
@@ -392,9 +413,14 @@ function buildSystemPrompt(
   )
 }
 
+export function buildCannedLocalizedReply(input: LocalizedReplyInput): string {
+  const lang = resolveLanguage(input)
+  return buildFallback(input.template, input.facts, resolvePhrases(lang, input.scriptStyle))
+}
+
 export async function buildLocalizedReply(input: LocalizedReplyInput): Promise<string> {
   const lang = resolveLanguage(input)
-  const canned = buildFallback(input.template, input.facts, resolvePhrases(lang, input.scriptStyle))
+  const canned = buildCannedLocalizedReply(input)
 
   if (shouldSkipModelForMalayalamScript(lang, input.scriptStyle, input.template)) {
     return canned
@@ -422,6 +448,10 @@ export async function buildLocalizedReply(input: LocalizedReplyInput): Promise<s
           input.scriptStyle ?? 'unknown',
           input.template
         )
+        continue
+      }
+      if (!isHonestStockTalk(trimmed, input.template)) {
+        console.warn('[inbox-ai] reply rejected: claimed stock on %s', input.template)
         continue
       }
       return trimmed

@@ -14,6 +14,10 @@ import {
   type ConversationHistoryLine,
   type ParsedCustomerIntent,
 } from './parse-customer-intent.service.js'
+import {
+  formatShopCategories,
+  getStoreCatalogSummary,
+} from './catalog-search.service.js'
 import type { LastShownProduct } from './build-localized-reply.service.js'
 
 export type ComposeInboxAiReplyInput = {
@@ -56,8 +60,12 @@ export async function composeInboxAiReply(
   const text = input.customerText.trim()
   const recentMessages = filterSessionHistory(input.recentMessages ?? [])
   const conversationHistory = formatConversationHistory(recentMessages)
+  const shopSells = formatShopCategories(await getStoreCatalogSummary(input.store.id))
 
-  const intent = await parseCustomerIntent(text, { recentMessages })
+  const intent = await parseCustomerIntent(text, {
+    recentMessages,
+    storeCategories: shopSells,
+  })
   const lastShownProduct =
     intent.intent === 'greeting' ? null : extractLastShownProduct(recentMessages)
 
@@ -70,6 +78,7 @@ export async function composeInboxAiReply(
     channel: input.channel,
     customerPhone: input.customerPhone ?? null,
     conversationId: input.conversationId ?? null,
+    shopSells,
   })
 
   const wouldSendImage =

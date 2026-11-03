@@ -90,6 +90,44 @@ export const themeConfigSchema = z.strictObject({
   productCard: z.enum(['classic', 'minimal', 'bold']).optional(),
 })
 
+const optionalNote = z
+  .union([z.string().trim().max(500), z.literal(''), z.null()])
+  .optional()
+  .transform((v) => (v === '' || v == null ? null : v))
+
+const optionalDays = z
+  .union([z.coerce.number().int().min(1).max(90), z.null()])
+  .optional()
+  .nullable()
+
+const optionalMoney = z
+  .union([z.coerce.number().min(0), z.null()])
+  .optional()
+  .nullable()
+
+const optionalCount = z
+  .union([z.coerce.number().int().min(0).max(365), z.null()])
+  .optional()
+  .nullable()
+
+export const shopPoliciesSchema = z.object({
+  has_physical_store: z.boolean().optional(),
+  address: optionalNote,
+  hours: optionalNote,
+  default_delivery_business_days: optionalDays,
+  delivery_fee: optionalMoney,
+  free_delivery_above: optionalMoney,
+  same_day_delivery: z.boolean().optional(),
+  next_day_delivery: z.boolean().optional(),
+  service_area: optionalNote,
+  return_days: optionalCount,
+  exchange_allowed: z.boolean().optional(),
+  refund_days_after_cancel: optionalCount,
+  return_note: optionalNote,
+  current_offer_note: optionalNote,
+  pickup_note: optionalNote,
+})
+
 const optionalUrl = z
   .union([z.string().trim().url('Must be a valid URL'), z.literal('')])
   .optional()
@@ -129,6 +167,7 @@ export const updateStoreSchema = z
     is_active: z.boolean().optional(),
     // null resets the theme to defaults
     theme_config: themeConfigSchema.nullable().optional(),
+    shop_policies: shopPoliciesSchema.optional(),
   })
   .refine((data) => Object.values(data).some((value) => value !== undefined), {
     message: 'At least one field is required to update',

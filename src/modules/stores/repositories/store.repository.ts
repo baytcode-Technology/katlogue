@@ -97,6 +97,7 @@ export async function updateStore(storeId: number, patch: UpdateStoreInput): Pro
   }
   if (patch.is_active !== undefined) row.is_active = patch.is_active
   if (patch.theme_config !== undefined) row.theme_config = patch.theme_config
+  if (patch.shop_policies !== undefined) row.shop_policies = patch.shop_policies
 
   const { data, error } = await supabaseAdmin
     .from('stores')

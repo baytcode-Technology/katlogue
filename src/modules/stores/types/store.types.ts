@@ -1,3 +1,7 @@
+import type { ShopPolicies } from '../../../shared/lib/shop-policies.js'
+
+export type { ShopPolicies }
+
 export type ThemeTemplate = 'classic' | 'boutique' | 'modern'
 export type ProductCardStyle = 'classic' | 'minimal' | 'bold'
 
@@ -34,6 +38,7 @@ export type Store = {
   payment_config: Record<string, unknown>
   notification_preferences: Record<string, unknown>
   theme_config: ThemeConfig | null
+  shop_policies: ShopPolicies | Record<string, unknown>
   ai_system_prompt: string | null
   ai_language: string | null
   ai_auto_reply_enabled: boolean
@@ -75,6 +80,7 @@ export type UpdateStoreInput = {
   ai_third_party_consent_at?: string | null
   is_active?: boolean
   theme_config?: ThemeConfig | null
+  shop_policies?: Partial<ShopPolicies>
 }
 
 export type CreateStoreInput = {

@@ -33,6 +33,12 @@ import {
   resolveEffectiveSearchQuery,
   searchCatalogFromIntent,
 } from './catalog-search.service.js'
+import {
+  parseShopPolicies,
+  formatShopPolicyFacts,
+  formatShopPolicyCustomerCopy,
+} from '../../../shared/lib/shop-policies.js'
+import { parseStoredPaymentConfig } from '../../payments/lib/payment-config.js'
 import { checkMessageSafety } from './safety-filter.service.js'
 import { buildOrderReply } from './build-order-reply.service.js'
 import type { InboxAiChannel } from './conversation-history.service.js'
@@ -307,6 +313,11 @@ async function buildTemplateReply(input: {
     missingWhy?: 'not_sold' | 'sold_out' | null
     sessionTopic?: ParsedCustomerIntent['sessionTopic']
     orderAsk?: ParsedCustomerIntent['orderAsk']
+    shopPolicyFacts?: string | null
+    paymentFacts?: string | null
+    shopPolicyCustomerCopy?: string | null
+    paymentCustomerFacts?: string | null
+    restockNote?: string | null
   }
 }): Promise<string> {
   const { store, intent, homeUrl, ctx } = input
@@ -333,12 +344,49 @@ async function loadShopSells(storeId: number): Promise<string[]> {
   return formatShopCategories(summary)
 }
 
+function shopPaymentFacts(store: Store): { llm: string; customer: string } {
+  const payments = parseStoredPaymentConfig(store.payment_config)
+  const cod = payments.cod?.enabled === false ? 'no' : 'yes'
+  const upi = payments.upi?.enabled && payments.upi?.vpa ? 'yes at checkout' : 'no'
+  const cards = payments.razorpay?.enabled ? 'yes at checkout' : 'no'
+  return {
+    llm: [
+      `COD: ${cod}`,
+      `UPI / Google Pay: ${upi}`,
+      `Cards / Razorpay: ${cards}`,
+      'Pay online after confirming: yes, on the checkout link. Do not invent other methods.',
+    ].join('\n'),
+    customer: [
+      `COD: ${cod === 'yes' ? 'available' : 'not enabled'}`,
+      `UPI / Google Pay: ${upi === 'no' ? 'not enabled' : 'available at checkout'}`,
+      `Cards: ${cards === 'no' ? 'not enabled' : 'available at checkout'}`,
+    ].join('\n'),
+  }
+}
+
+function shopPolicyAndPayments(store: Store): {
+  shopPolicyFacts: string
+  paymentFacts: string
+  shopPolicyCustomerCopy: string
+  paymentCustomerFacts: string
+} {
+  const policies = parseShopPolicies(store.shop_policies)
+  const payments = shopPaymentFacts(store)
+  return {
+    shopPolicyFacts: formatShopPolicyFacts(policies, store.currency),
+    paymentFacts: payments.llm,
+    shopPolicyCustomerCopy: formatShopPolicyCustomerCopy(policies, store.currency),
+    paymentCustomerFacts: payments.customer,
+  }
+}
+
 async function buildNotFoundReply(
   store: Store,
   intent: ParsedCustomerIntent,
   homeUrl: string,
   customerMessage: string,
-  ctx: ReplyContext
+  ctx: ReplyContext,
+  restockNote?: string | null
 ): Promise<string> {
   const shopSells = ctx.shopSells ?? (await loadShopSells(store.id))
 
@@ -353,6 +401,7 @@ async function buildNotFoundReply(
       requestedItem: intent.requestedItem,
       shopSells,
       missingWhy: intent.missingWhy ?? 'not_sold',
+      restockNote: restockNote?.trim() || null,
     },
   })
 }
@@ -490,6 +539,23 @@ export async function buildProductReply(input: {
     }
   }
 
+  if (intent.intent === 'shop_info') {
+    const shopSells = input.shopSells ?? (await loadShopSells(store.id))
+    const policy = shopPolicyAndPayments(store)
+    return {
+      ...empty,
+      primaryText: await buildTemplateReply({
+        store,
+        intent,
+        homeUrl,
+        customerMessage: customerText,
+        ctx,
+        template: 'shop_info',
+        extraFacts: { shopSells, ...policy },
+      }),
+    }
+  }
+
   if (intent.intent === 'greeting') {
     const shopSells = input.shopSells ?? (await loadShopSells(store.id))
     return {
@@ -617,7 +683,8 @@ export async function buildProductReply(input: {
           { ...intent, missingWhy: 'sold_out' },
           homeUrl,
           customerText,
-          ctx
+          ctx,
+          offer.matches[0]?.product.restock_note
         ),
       }
     }

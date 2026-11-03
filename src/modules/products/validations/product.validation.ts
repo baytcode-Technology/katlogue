@@ -47,6 +47,8 @@ export const createProductSchema = z.object({
   is_active: z.boolean().optional(),
   sort_order: z.coerce.number().int().default(0),
   metadata: z.record(z.string(), z.unknown()).default({}),
+  delivery_business_days: z.coerce.number().int().min(1).max(90).nullable().optional(),
+  restock_note: z.union([z.string().trim().max(500), z.null()]).optional(),
   variants: z.array(createProductVariantSchema).default([]),
 })
   .refine((data) => data.images.includes(data.thumbnail_url), {
@@ -88,6 +90,8 @@ export const updateProductSchema = z
     is_active: z.boolean().optional(),
     sort_order: z.coerce.number().int().optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
+    delivery_business_days: z.union([z.coerce.number().int().min(1).max(90), z.null()]).optional(),
+    restock_note: z.union([z.string().trim().max(500), z.null()]).optional(),
   })
   .refine((data) => Object.values(data).some((value) => value !== undefined), {
     message: 'At least one field is required to update',

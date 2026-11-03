@@ -21,19 +21,32 @@ export const orderFulfillmentStatusSchema = z.enum([
   'fulfilled',
 ])
 
+const optionalText = z.union([z.string().trim().max(500), z.null()]).optional()
+
 export const updateOrderSchema = z
   .object({
     store_id: entityId('Invalid store id'),
     order_status: orderLifecycleStatusSchema.optional(),
     payment_status: orderPaymentStatusSchema.optional(),
     fulfillment_status: orderFulfillmentStatusSchema.optional(),
+    promised_by: z.union([z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/), z.null()]).optional(),
+    delay_note: optionalText,
+    courier_name: optionalText,
+    tracking_url: z.union([z.string().trim().url(), z.literal(''), z.null()]).optional()
+      .transform((v) => (v === '' ? null : v)),
+    tracking_number: optionalText,
   })
   .refine(
     (data) =>
       data.order_status !== undefined ||
       data.payment_status !== undefined ||
-      data.fulfillment_status !== undefined,
-    { message: 'At least one status field is required to update' }
+      data.fulfillment_status !== undefined ||
+      data.promised_by !== undefined ||
+      data.delay_note !== undefined ||
+      data.courier_name !== undefined ||
+      data.tracking_url !== undefined ||
+      data.tracking_number !== undefined,
+    { message: 'At least one field is required to update' }
   )
 
 export const getOrderQuerySchema = z.object({

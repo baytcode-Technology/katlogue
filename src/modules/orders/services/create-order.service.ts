@@ -35,6 +35,10 @@ import {
   hasPremiumAccess,
 } from '../../../shared/lib/subscription.js'
 import { normalizeWhatsAppNumber } from '../../../shared/utils/phone.js'
+import {
+  parseShopPolicies,
+  resolvePromisedByDate,
+} from '../../../shared/lib/shop-policies.js'
 import { notifyNewOrder } from '../../notifications/services/send-store-notification.service.js'
 import { emitToStore } from '../../../websocket/index.js'
 import { SOCKET_EVENTS } from '../../../websocket/events.js'
@@ -329,6 +333,11 @@ export async function createOrder(
 
   const checkoutToken = randomBytes(24).toString('hex')
   const orderNumber = await orderRepository.allocateOrderNumber(storeId)
+  const shopPolicies = parseShopPolicies(store.shop_policies)
+  const promisedBy = resolvePromisedByDate({
+    shopDefaultDays: shopPolicies.default_delivery_business_days,
+    productDays: lines.map((line) => line.product.delivery_business_days),
+  })
 
   let conversationId = input.conversation_id ?? null
   if (conversationId) {
@@ -353,6 +362,7 @@ export async function createOrder(
     shipping_address: shippingAddress,
     notes: input.notes ?? null,
     checkout_token: checkoutToken,
+    promised_by: promisedBy,
   })
 
   try {

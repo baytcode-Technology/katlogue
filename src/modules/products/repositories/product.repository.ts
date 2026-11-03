@@ -74,6 +74,8 @@ export async function insertProduct(input: CreateProductInput): Promise<Product>
     is_active: status === 'active',
     sort_order: input.sort_order,
     metadata: input.metadata,
+    delivery_business_days: input.delivery_business_days ?? null,
+    restock_note: input.restock_note ?? null,
   }
 
   const { data, error } = await supabaseAdmin
@@ -185,6 +187,10 @@ export async function updateProduct(
   }
   if (patch.sort_order !== undefined) row.sort_order = patch.sort_order
   if (patch.metadata !== undefined) row.metadata = patch.metadata
+  if (patch.delivery_business_days !== undefined) {
+    row.delivery_business_days = patch.delivery_business_days
+  }
+  if (patch.restock_note !== undefined) row.restock_note = patch.restock_note
 
   const { data, error } = await supabaseAdmin
     .from('products')

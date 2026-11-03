@@ -133,7 +133,14 @@ export function formatOrderFactsBlock(order: OrderWithDetails, currency: string)
     lines.push(`Tracking: ${order.tracking_number.trim()}`)
   }
 
-  lines.push('Delivery date: not on this order')
+  if (order.promised_by?.trim()) {
+    lines.push(`Promised by: ${order.promised_by.trim()}`)
+  } else {
+    lines.push('Delivery date: not on this order')
+  }
+  if (order.delay_note?.trim()) lines.push(`Delay note: ${order.delay_note.trim()}`)
+  if (order.courier_name?.trim()) lines.push(`Courier: ${order.courier_name.trim()}`)
+  if (order.tracking_url?.trim()) lines.push(`Tracking link: ${order.tracking_url.trim()}`)
 
   if (name) lines.push(`Recipient: ${name}`)
   if (address) lines.push(`Address: ${address}`)
@@ -149,6 +156,54 @@ export function formatOrderFactsBlock(order: OrderWithDetails, currency: string)
 
   lines.push(`Total: ${formatMoney(order.total, currency)}`)
   return lines.join('\n')
+}
+
+/** Short card for the model — not the WhatsApp dump the customer already saw. */
+export function formatOrderFactCard(order: OrderWithDetails, currency: string): string {
+  const tracking = order.tracking_number?.trim()
+  return [
+    `Order number: ${order.order_number}`,
+    `Placed: ${formatOrderDate(order.created_at)}`,
+    `Order status: ${formatOrderStatusLabel(order.order_status)}`,
+    `Payment status: ${formatOrderStatusLabel(order.payment_status)}`,
+    `Fulfillment: ${formatOrderStatusLabel(order.fulfillment_status)}`,
+    `Payment method: ${formatPaymentProviderLabel(order.payment?.provider)}`,
+    `Tracking: ${tracking ? tracking : 'none on this order'}`,
+    `Tracking URL: ${order.tracking_url?.trim() ? order.tracking_url.trim() : 'none on this order'}`,
+    `Courier: ${order.courier_name?.trim() ? order.courier_name.trim() : 'none on this order'}`,
+    `Promised by: ${order.promised_by?.trim() ? order.promised_by.trim() : 'not set — do not invent a date'}`,
+    `Delay note: ${order.delay_note?.trim() ? order.delay_note.trim() : 'none'}`,
+    `Delivery date on this order: ${order.promised_by?.trim() ? order.promised_by.trim() : 'not on this order'}`,
+    `Total: ${formatMoney(order.total, currency)}`,
+  ].join('\n')
+}
+
+const COPIED_FACT_LINE =
+  /^(?:[\s*•\-]+)?(?:order number|placed(?: on)?|order status|payment status|fulfillment|payment method|recipient|address|items?|total|delivery date|tracking(?: url| link)?|shipping|promised by|delay note|courier)\s*:/i
+
+/** Drop a rewritten facts dump from the spoken wrap so code can paste one block. */
+export function stripCopiedOrderFacts(spoken: string): string {
+  const kept = spoken.split('\n').filter((line) => {
+    const trimmed = line.trim()
+    if (!trimmed) return true
+    if (COPIED_FACT_LINE.test(trimmed)) return false
+    if (/^[•*]\s+/.test(trimmed) && /₹|x\d|OCT|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|NOV|DEC/i.test(trimmed)) {
+      return false
+    }
+    return true
+  })
+  return kept.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+export function redactOrderHistory(history: string | null | undefined): string | null {
+  if (!history?.trim()) return null
+  return history.replace(
+    /Store:[\s\S]*?(?=\nCustomer:|$)/g,
+    (block) =>
+      /\bOrder number\s*:/i.test(block)
+        ? 'Store: [order details already sent — do not copy]\n'
+        : block
+  )
 }
 
 function sortOrdersNewestFirst(orders: OrderWithDetails[]): OrderWithDetails[] {
@@ -366,11 +421,13 @@ export async function buildOrderReply(input: {
     .filter(Boolean)
     .join('; ')
 
-  const factsHeader = hints ? `Lookup hints: ${hints}\n\n` : ''
-  const orderFacts = `${factsHeader}${formatOrdersFactsForScope(orders, store.currency, scope)}`
   const orderAsk: OrderAsk = intent.orderAsk ?? 'full'
   const template = orderTemplateForAsk(orderAsk, orders.length > 0)
   const attachBlock = template === 'order_wrap' && orders.length > 0 && orderAsk === 'full'
+  const first = orders[0] ?? null
+  const modelFacts = first
+    ? `${hints ? `Lookup hints: ${hints}\n` : ''}Ask hint: ${orderAsk}\n${formatOrderFactCard(first, store.currency)}`
+    : `${hints ? `Lookup hints: ${hints}\n\n` : ''}${formatOrdersFactsForScope(orders, store.currency, scope)}`
 
   const spoken = await buildLocalizedReply({
     customerLanguage: intent.customerLanguage,
@@ -378,12 +435,12 @@ export async function buildOrderReply(input: {
     customerMessage: input.customerMessage,
     fallbackLanguage: store.ai_language,
     customPrompt: store.ai_system_prompt,
-    conversationHistory: input.conversationHistory,
+    conversationHistory: redactOrderHistory(input.conversationHistory),
     template,
     facts: {
       storeName: store.name,
       homeUrl,
-      orderFacts,
+      orderFacts: modelFacts,
       customerAsk: input.customerMessage ?? null,
       orderOutcome: orders.length > 0 ? 'found' : 'none',
       orderScope: scope,
@@ -392,10 +449,10 @@ export async function buildOrderReply(input: {
     },
   })
 
-  if (!attachBlock) return spoken
-  const first = orders[0]
-  const plainBlock = first ? formatOrderFactsBlock(first, store.currency) : orderFacts
-  return `${spoken}\n\n${plainBlock}`
+  const cleaned = stripCopiedOrderFacts(spoken)
+  if (!attachBlock) return cleaned
+  const plainBlock = first ? formatOrderFactsBlock(first, store.currency) : cleaned
+  return cleaned ? `${cleaned}\n\n${plainBlock}` : plainBlock
 }
 
 function orderTemplateForAsk(orderAsk: OrderAsk, found: boolean): LocalizedReplyTemplate {

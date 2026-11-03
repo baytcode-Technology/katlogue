@@ -19,12 +19,15 @@ import {
   resolveOrderScope,
 } from '../services/parse-customer-intent.service.js'
 import {
+  formatOrderFactCard,
   formatOrderFactsBlock,
   formatOrderStatusLabel,
   formatOrdersFactsForScope,
   formatPaymentProviderLabel,
   parseOrderItemSnapshot,
+  redactOrderHistory,
   selectOrdersForScope,
+  stripCopiedOrderFacts,
 } from '../services/build-order-reply.service.js'
 import type { OrderWithDetails } from '../../orders/repositories/order.repository.js'
 
@@ -162,6 +165,10 @@ function mockOrder(overrides: Partial<OrderWithDetails> & Pick<OrderWithDetails,
     },
     shipping_method: 'Standard',
     tracking_number: 'TRK123',
+    promised_by: null,
+    delay_note: null,
+    courier_name: null,
+    tracking_url: null,
     notes: null,
     admin_notes: 'secret',
     checkout_token: 'secret-token',
@@ -381,6 +388,46 @@ test('repeat order details after a full paste is confirm_last', () => {
 test('not my order and change address are honest help asks', () => {
   assert.equal(parseCustomerIntentOffline('this is not my order').orderAsk, 'not_mine')
   assert.equal(parseCustomerIntentOffline('change address').orderAsk, 'address')
+})
+
+test('spoken wrap strips a copied facts dump', () => {
+  const spoken = [
+    'Njan ningalude order details kandupidichu. Ithu aanu:',
+    '* Order Number: OCT26-1',
+    '* Placed On: 01 Oct 2026 13:32',
+    '* Total: ₹998',
+    'Ithu deliver cheyyan vendi time kittiyilla.',
+  ].join('\n')
+  const cleaned = stripCopiedOrderFacts(spoken)
+  assert.match(cleaned, /kandupidichu/)
+  assert.match(cleaned, /time kittiyilla/)
+  assert.doesNotMatch(cleaned, /Order Number/)
+  assert.doesNotMatch(cleaned, /Placed On/)
+})
+
+test('fact card has no address dump and no invented tracking', () => {
+  const order = mockOrder({ order_number: 'OCT26-1', tracking_number: null, items: [] })
+  const card = formatOrderFactCard(order, 'INR')
+  assert.match(card, /Order number: OCT26-1/)
+  assert.match(card, /Tracking: none on this order/)
+  assert.match(card, /Delivery date on this order: not on this order/)
+  assert.match(card, /do not invent a date/)
+  assert.doesNotMatch(card, /Recipient:/)
+  assert.doesNotMatch(card, /Address:/)
+})
+
+test('history redacts a pasted order block so the model cannot copy it', () => {
+  const redacted = redactOrderHistory(
+    'Customer: last order details\nStore: Order number: OCT26-1\nPlaced: 01 Oct\nTotal: ₹998\nCustomer: eppo deliver'
+  )
+  assert.match(redacted ?? '', /already sent/)
+  assert.doesNotMatch(redacted ?? '', /OCT26-1/)
+})
+
+test('why vs delay vs eta are different hints', () => {
+  assert.equal(resolveOrderAsk('time kittiyillenna why', 'order', true), 'why')
+  assert.equal(resolveOrderAsk('ipo 1 month kayinj eppo kittum', 'order', true), 'delay')
+  assert.equal(resolveOrderAsk('ithu eppo deliver aavum', 'order', true), 'eta')
 })
 
 if (failed > 0) {

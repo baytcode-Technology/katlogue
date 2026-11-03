@@ -84,6 +84,8 @@ type PhraseSet = {
   orderCannotCancel: string
   orderNotMine: string
   shipAfterOrder: string
+  orderFoundLead: string
+  orderStaffCheck: string
 }
 
 const EN: PhraseSet = {
@@ -120,6 +122,8 @@ const EN: PhraseSet = {
   orderCannotCancel: 'I cannot cancel or change that in chat sir. Send the order number and staff will check.',
   orderNotMine: 'If this is not your order, send the order number or the WhatsApp number used at checkout. Staff will check.',
   shipAfterOrder: 'We ship after you place the order sir. No delivery date until then.',
+  orderFoundLead: 'I found your order sir.',
+  orderStaffCheck: 'No delivery date on this order yet. Still unfulfilled. Staff will check.',
 }
 
 const ML: PhraseSet = {
@@ -155,6 +159,8 @@ const ML: PhraseSet = {
   orderCannotCancel: 'ചാറ്റിൽ ക്യാൻസൽ ചെയ്യാൻ പറ്റില്ല സാർ. ഓർഡർ നമ്പർ അയച്ചാൽ സ്റ്റാഫ് നോക്കും.',
   orderNotMine: 'ഇത് താങ്കളുടെ ഓർഡർ അല്ലെങ്കിൽ ഓർഡർ നമ്പർ അല്ലെങ്കിൽ ചെക്ക് ഔട്ട് നമ്പർ അയയ്ക്കൂ. സ്റ്റാഫ് നോക്കും.',
   shipAfterOrder: 'ഓർഡർ ചെയ്ത ശേഷമേ ഷിപ്പ് ആകൂ സാർ. അതിന് മുമ്പ് ഡെലിവറി തീയതി ഇല്ല.',
+  orderFoundLead: 'ഓർഡർ കണ്ടു സാർ.',
+  orderStaffCheck: 'ഈ ഓർഡറിൽ ഡെലിവറി തീയതി ഇല്ല. ഇപ്പോൾ unfulfilled ആണ്. സ്റ്റാഫ് നോക്കും.',
 }
 
 const ML_LATIN: PhraseSet = {
@@ -193,6 +199,8 @@ const ML_LATIN: PhraseSet = {
   orderNotMine:
     'Ithu ningalude order allengil order number allengil checkout number ayakku. Staff nokkum.',
   shipAfterOrder: 'Order cheytha shesham ship aakum saar. Athinu munp delivery date illa.',
+  orderFoundLead: 'Order kandi saar.',
+  orderStaffCheck: 'Ee orderil delivery date illa. Ippo unfulfilled aanu. Staff nokkum.',
 }
 
 const HI: PhraseSet = {
@@ -228,6 +236,8 @@ const HI: PhraseSet = {
   orderCannotCancel: 'चैट में कैंसल नहीं कर सकता सर। ऑर्डर नंबर भेजिए, स्टाफ देखेगा।',
   orderNotMine: 'अगर यह आपका ऑर्डर नहीं है तो ऑर्डर नंबर या चेकआउट वाला नंबर भेजिए। स्टाफ देखेगा।',
   shipAfterOrder: 'ऑर्डर के बाद ही शिप होगा सर। उससे पहले डिलीवरी तारीख नहीं है।',
+  orderFoundLead: 'ऑर्डर मिल गया सर।',
+  orderStaffCheck: 'इस ऑर्डर पर डिलीवरी तारीख नहीं है। अभी unfulfilled है। स्टाफ देखेगा।',
 }
 
 const TA: PhraseSet = {
@@ -263,6 +273,8 @@ const TA: PhraseSet = {
   orderCannotCancel: 'சாட்டில் கேன்சல் செய்ய முடியாது சார். ஆர்டர் நம்பர் அனுப்பினால் ஸ்டாப் பார்க்கும்.',
   orderNotMine: 'இது உங்கள் ஆர்டர் இல்லையென்றால் ஆர்டர் நம்பர் அல்லது செக் அவுட் நம்பர் அனுப்புங்கள். ஸ்டாப் பார்க்கும்.',
   shipAfterOrder: 'ஆர்டர் செய்த பிறகுதான் ஷிப் ஆகும் சார். அதற்கு முன் டெலிவரி தேதி இல்லை.',
+  orderFoundLead: 'ஆர்டர் கிடைத்தது சார்.',
+  orderStaffCheck: 'இந்த ஆர்டரில் டெலிவரி தேதி இல்லை. இப்போது unfulfilled. ஸ்டாப் பார்க்கும்.',
 }
 
 function resolvePhrases(language: string, scriptStyle?: ScriptStyle): PhraseSet {
@@ -352,21 +364,18 @@ function buildFallback(
 
     case 'order_assistant':
     case 'order_wrap':
-      if (facts.orderOutcome === 'found' && facts.orderFacts?.trim()) {
-        return facts.orderAsk === 'full' ? facts.orderFacts.trim() : p.closeAfterOrder
-      }
+      if (facts.orderOutcome === 'found') return p.orderFoundLead
       return p.orderNotFound
 
     case 'order_followup': {
       if (facts.orderOutcome !== 'found') return p.orderNotFound
-      if (facts.orderAsk === 'eta' || facts.orderAsk === 'urgency') return p.orderEtaUnknown
       if (facts.orderAsk === 'confirm_last' && facts.orderFacts?.trim()) {
         const number = facts.orderFacts.match(/Order number:\s*(\S+)/i)?.[1]
         return number
           ? `Yes ${p.honorific}, that is your last order ${number}.`
-          : p.closeAfterOrder
+          : p.orderStaffCheck
       }
-      return p.closeAfterOrder
+      return p.orderStaffCheck
     }
 
     case 'order_help':
@@ -408,6 +417,10 @@ export function isHonestStockTalk(
 }
 
 const ORDER_STOCK_MISS_PATTERN = /\b(ippo illa|ഇപ്പോൾ ഇല്ല|out of stock)\b/i
+const ORDER_COPIED_FACTS_PATTERN =
+  /\bOrder Number\s*:/i
+const ORDER_FORCED_QUESTION_PATTERN =
+  /\b(enthelum chodyangal|any (other )?questions|proceed with the order|need any details about the trousers)\b/i
 
 export function isHonestOrderTalk(reply: string, template: LocalizedReplyTemplate): boolean {
   if (
@@ -418,7 +431,10 @@ export function isHonestOrderTalk(reply: string, template: LocalizedReplyTemplat
   ) {
     return true
   }
-  return !ORDER_STOCK_MISS_PATTERN.test(reply)
+  if (ORDER_STOCK_MISS_PATTERN.test(reply)) return false
+  if (ORDER_COPIED_FACTS_PATTERN.test(reply)) return false
+  if (ORDER_FORCED_QUESTION_PATTERN.test(reply)) return false
+  return true
 }
 
 /**

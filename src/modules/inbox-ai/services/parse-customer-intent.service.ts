@@ -28,6 +28,8 @@ export type OrderAsk =
   | 'full'
   | 'confirm_last'
   | 'eta'
+  | 'why'
+  | 'delay'
   | 'urgency'
   | 'payment'
   | 'items'
@@ -134,7 +136,7 @@ Normalize product search terms to English for database lookup.
 Return JSON only:
 {
   "intent": "greeting" | "acknowledgement" | "buy_intent" | "product_search" | "sku_lookup" | "category_search" | "image_request" | "order_status" | "language_switch" | "refuse" | "off_topic" | "explicit",
-  "orderAsk": "full" | "confirm_last" | "eta" | "urgency" | "payment" | "items" | "cancel" | "address" | "not_mine" | null,
+  "orderAsk": "full" | "confirm_last" | "eta" | "why" | "delay" | "urgency" | "payment" | "items" | "cancel" | "address" | "not_mine" | null,
   "customerLanguage": "exact language name e.g. English, Hindi, Malayalam, Tamil, Punjabi, Arabic",
   "requestedItem": "product they want in English e.g. white shirt, or null",
   "searchQuery": "English product terms without color/size e.g. shirt",
@@ -168,7 +170,7 @@ Rules:
 - "my last order" / "last order status" / "ente last order" → order_status, orderScope: "latest".
 - "all my orders" / "my orders" / "total orders" / "how many orders" / "ella orders" / "orders okke" / "ente orders ellam" → order_status, orderScope: "all".
 - "where is my order" (no last/all) → order_status, orderScope: "latest".
-- orderAsk for order_status: "order details" → full. "is this my last order" → confirm_last. "eppo deliver" / when will it come → eta. "pettann vehnam" / urgent → urgency. COD / payment pending → payment. cancel / change address / not my order → cancel / address / not_mine. Repeat of the same question → not full.
+- orderAsk is a HINT for the kind of ask, not the reply wording. "order details" → full (only if we have not already pasted the block). "is this my last order" → confirm_last. "time kittiyillenna why" → why. "1 month kayinj" → delay. "eppo deliver" → eta. "pettann vehnam" → urgency. COD / payment pending → payment. cancel / change address / not my order → cancel / address / not_mine. Repeat after a pasted block → not full.
 - "cancel my order" → order_status, orderAsk: "cancel". Do not invent a cancel.
 - "this is not my order" → order_status, orderAsk: "not_mine".
 - Messages in any language about products = product_search (unless clearly about an existing order).
@@ -217,7 +219,13 @@ const ORDER_CONFIRM_LAST_PATTERN =
   /\b(is\s+this\s+(in\s+)?my\s+last\s+order|this\s+(is\s+)?my\s+last\s+order|ithu\s+(ente\s+)?last\s+order|last\s+order\s+(ano|alle)|confirm\s+(the\s+)?(last\s+)?order)\b/i
 
 const ORDER_ETA_PATTERN =
-  /\b(eppo\s+(deliver|kitt|var)|when\s+(will|is).*(deliver|come|arrive)|delivery\s+(date|time)|epp[o]?zhe\s+kitt|kitte?\s*(um|um\?)|arrive)\b/i
+  /\b(eppo\s+(deliver|kitt|var|aavum)|when\s+(will|is).*(deliver|come|arrive)|delivery\s+(date|time)|epp[o]?zhe\s+kitt|kitte?\s*(um|um\?)|arrive)\b/i
+
+const ORDER_WHY_PATTERN =
+  /\b(why|entha|enthina|enthinnu|kittiyillen+a\s+why|time\s+kittiyillen)\b/i
+
+const ORDER_DELAY_PATTERN =
+  /\b(\d+\s*(day|days|week|weeks|month|months)|oru\s+month|one\s+month|kayinj|delayed|late|ippo\s+\d+\s+month)\b/i
 
 const ORDER_URGENCY_PATTERN =
   /\b(pettann|urgent|urgently|asap|fast(er)?|quickly|soon\s+as\s+possible|vehnam\s+eppo|eppo\s+kittum)\b/i
@@ -414,6 +422,8 @@ export function resolveOrderAsk(
   if (ORDER_NOT_MINE_PATTERN.test(trimmed)) return 'not_mine'
   if (ORDER_ADDRESS_PATTERN.test(trimmed)) return 'address'
   if (ORDER_CONFIRM_LAST_PATTERN.test(trimmed)) return 'confirm_last'
+  if (ORDER_DELAY_PATTERN.test(trimmed)) return 'delay'
+  if (ORDER_WHY_PATTERN.test(trimmed)) return 'why'
   if (ORDER_URGENCY_PATTERN.test(trimmed)) return 'urgency'
   if (ORDER_ETA_PATTERN.test(trimmed)) return 'eta'
   if (ORDER_PAYMENT_PATTERN.test(trimmed) && !isBuyIntent(trimmed)) return 'payment'
@@ -436,6 +446,8 @@ function isOrderFollowUpMessage(text: string, sessionTopic: SessionTopic): boole
   if (sessionTopic !== 'order') return false
   return (
     ORDER_ETA_PATTERN.test(trimmed) ||
+    ORDER_WHY_PATTERN.test(trimmed) ||
+    ORDER_DELAY_PATTERN.test(trimmed) ||
     ORDER_URGENCY_PATTERN.test(trimmed) ||
     ORDER_PAYMENT_PATTERN.test(trimmed) ||
     ORDER_ITEMS_PATTERN.test(trimmed)

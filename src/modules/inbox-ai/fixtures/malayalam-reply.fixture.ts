@@ -322,6 +322,23 @@ test('order follow-up canned has no ippo illa', () => {
   })
   assert.equal(/ippo illa/i.test(reply), false)
   assert.match(reply, /delivery date illa/i)
+  assert.equal(/enthelum chodyangal/i.test(reply), false)
+})
+
+test('order wrap canned does not dump facts', () => {
+  const reply = buildCannedLocalizedReply({
+    customerLanguage: 'Malayalam',
+    scriptStyle: 'latin',
+    template: 'order_wrap',
+    facts: {
+      ...facts,
+      orderAsk: 'full',
+      orderOutcome: 'found',
+      orderFacts: 'Order number: OCT26-1\nItems: Trousers',
+    },
+  })
+  assert.equal(/Order number/i.test(reply), false)
+  assert.equal(/enthelum chodyangal/i.test(reply), false)
 })
 
 test('rejects ippo illa on an order reply', () => {
@@ -329,6 +346,11 @@ test('rejects ippo illa on an order reply', () => {
   assert.equal(
     isHonestOrderTalk('Ee orderil delivery date illa saar. Ippo unfulfilled aanu.', 'order_followup'),
     true
+  )
+  assert.equal(isHonestOrderTalk('Order Number: OCT26-1\nPlaced On: 01 Oct', 'order_wrap'), false)
+  assert.equal(
+    isHonestOrderTalk('Time kittiyilla. Enthelum chodyangal undengil parayu saar!', 'order_followup'),
+    false
   )
 })
 

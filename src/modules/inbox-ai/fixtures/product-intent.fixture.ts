@@ -476,6 +476,28 @@ test('is this my last order is confirm_last, not another full dump', () => {
   assert.equal(parsed.orderAsk, 'confirm_last')
 })
 
+test('why and one-month wait are hints, not the same eta stamp', () => {
+  const why = parseCustomerIntentOffline('time kittiyillenna why', {
+    recentMessages: [{ role: 'store', text: 'Order number: OCT26-1' }],
+  })
+  assert.equal(why.intent, 'order_status')
+  assert.equal(why.orderAsk, 'why')
+  const delay = parseCustomerIntentOffline(
+    'njan ith oct 1 n book cheythethahn ipo 1 month kayinj eppo kittum',
+    { recentMessages: [{ role: 'store', text: 'Order number: OCT26-1' }] }
+  )
+  assert.equal(delay.intent, 'order_status')
+  assert.equal(delay.orderAsk, 'delay')
+})
+
+test('last order details after a paste is not full again', () => {
+  const parsed = parseCustomerIntentOffline('last order details', {
+    recentMessages: [{ role: 'store', text: 'Order number: OCT26-1\nFulfillment: Unfulfilled' }],
+  })
+  assert.equal(parsed.intent, 'order_status')
+  assert.equal(parsed.orderAsk, 'confirm_last')
+})
+
 test('eppo deliver and pettann vehnam are eta/urgency', () => {
   const eta = parseCustomerIntentOffline('eppo deliver', {
     recentMessages: [{ role: 'store', text: 'Order number: OCT26-1' }],

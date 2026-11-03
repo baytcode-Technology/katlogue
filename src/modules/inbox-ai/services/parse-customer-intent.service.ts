@@ -59,6 +59,8 @@ export type ConversationHistoryLine = {
 
 export type ParseCustomerIntentOptions = {
   recentMessages?: ConversationHistoryLine[]
+  /** This shop's own department names — clothing, mixers, grocery, etc. */
+  storeCategories?: string[]
 }
 
 export type LlmIntentResult = {
@@ -113,7 +115,7 @@ Return JSON only:
   "color": "English color e.g. white, black, or null",
   "size": "S, M, L, XL, or null",
   "sku": "SKU if mentioned or null",
-  "categoryName": "English category e.g. shirts, pants, or null",
+  "categoryName": "this shop's department name if they named one (not always clothing), or null",
   "wantsImage": true if they ask for photo/image,
   "orderNumber": "full order number e.g. JAN26-3 if mentioned, or null",
   "orderNumberHint": "bare digits after order e.g. 88 from 'order 88', or null",
@@ -350,7 +352,33 @@ function categoryWordPattern(cat: string): RegExp {
   return new RegExp(`\\b${base}(?:inte|nte|um)?\\b`, 'gi')
 }
 
-function findCategoryHits(text: string): CategoryHit[] {
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function findStoreCategoryHits(text: string, storeCategories: string[]): CategoryHit[] {
+  const hits: CategoryHit[] = []
+  const names = [...new Set(storeCategories.map((name) => name.trim()).filter((name) => name.length >= 2))]
+    .sort((a, b) => b.length - a.length)
+  const lower = text.toLowerCase()
+  for (const name of names) {
+    const stem = name.replace(/s$/i, '')
+    const token = escapeRegExp(stem.length >= 2 ? stem : name)
+    const re = new RegExp(`\\b${token}s?\\b`, 'gi')
+    let match: RegExpExecArray | null
+    while ((match = re.exec(lower)) !== null) {
+      hits.push({
+        word: name,
+        canonical: name,
+        index: match.index,
+        end: match.index + match[0].length,
+      })
+    }
+  }
+  return hits
+}
+
+function findCategoryHits(text: string, storeCategories: string[] = []): CategoryHit[] {
   const lower = text.toLowerCase()
   const hits: CategoryHit[] = []
   for (const cat of CATEGORY_WORDS) {
@@ -367,6 +395,7 @@ function findCategoryHits(text: string): CategoryHit[] {
       })
     }
   }
+  hits.push(...findStoreCategoryHits(text, storeCategories))
   hits.sort((a, b) => a.index - b.index || b.word.length - a.word.length)
   const deduped: CategoryHit[] = []
   for (const hit of hits) {
@@ -395,8 +424,11 @@ function ownershipInWindow(window: string): boolean {
   return OWNERSHIP_PATTERN.test(withoutOccasion)
 }
 
-export function extractRequestedCategory(text: string): string | null {
-  const hits = findCategoryHits(text)
+export function extractRequestedCategory(
+  text: string,
+  storeCategories: string[] = []
+): string | null {
+  const hits = findCategoryHits(text, storeCategories)
   if (hits.length === 0) return null
   if (hits.length === 1) return hits[0].canonical
 
@@ -417,18 +449,25 @@ export function extractRequestedCategory(text: string): string | null {
   return best.canonical
 }
 
-function extractCategory(text: string): string | null {
-  return extractRequestedCategory(text) ?? findCategoryHits(text)[0]?.canonical ?? null
+function extractCategory(text: string, storeCategories: string[] = []): string | null {
+  return (
+    extractRequestedCategory(text, storeCategories) ??
+    findCategoryHits(text, storeCategories)[0]?.canonical ??
+    null
+  )
 }
 
 /** Other products they named with "or", after the one we search first. */
-export function extractAlternativeCategories(text: string): string[] {
+export function extractAlternativeCategories(
+  text: string,
+  storeCategories: string[] = []
+): string[] {
   if (!/\bor\b|അല്ലെങ്കിൽ/i.test(text)) return []
-  const primary = extractRequestedCategory(text)
+  const primary = extractRequestedCategory(text, storeCategories)
   if (!primary) return []
   const seen = new Set<string>([primary])
   const alternatives: string[] = []
-  for (const hit of findCategoryHits(text)) {
+  for (const hit of findCategoryHits(text, storeCategories)) {
     if (seen.has(hit.canonical)) continue
     if (windowScore(text, hit.index, hit.end) < 0) continue
     seen.add(hit.canonical)
@@ -443,8 +482,12 @@ export function categorySearchTerm(canonical: string): string {
   return [...words].sort((a, b) => a.length - b.length)[0]
 }
 
-function primarySearchTerm(text: string, canonical: string): string {
-  const words = findCategoryHits(text)
+function primarySearchTerm(
+  text: string,
+  canonical: string,
+  storeCategories: string[] = []
+): string {
+  const words = findCategoryHits(text, storeCategories)
     .filter((hit) => hit.canonical === canonical)
     .map((hit) => hit.word)
   if (words.length === 0) return categorySearchTerm(canonical)
@@ -455,7 +498,12 @@ function mentionsOccasion(text: string): boolean {
   return OCCASION_PATTERN.test(text)
 }
 
-function preferTextSearchQuery(text: string, query: string, category: string | null): string {
+function preferTextSearchQuery(
+  text: string,
+  query: string,
+  category: string | null,
+  storeCategories: string[] = []
+): string {
   const cleaned = query
     .replace(
       /\b(marriage|wedding|party|tomorrow|birthday|gift|function|engagement|reception)\b|വിവാഹം|കല്യാണം/gi,
@@ -464,7 +512,7 @@ function preferTextSearchQuery(text: string, query: string, category: string | n
     .replace(/\s+/g, ' ')
     .trim()
   if (!category) return cleaned
-  const term = primarySearchTerm(text, category)
+  const term = primarySearchTerm(text, category, storeCategories)
   if (
     !cleaned ||
     mentionsOccasion(query) ||
@@ -476,8 +524,14 @@ function preferTextSearchQuery(text: string, query: string, category: string | n
   return cleaned
 }
 
-function isColorOnlyFollowUp(text: string): boolean {
-  if (extractRequestedCategory(text) || extractSku(text) || isOrderStatusMessage(text)) return false
+function isColorOnlyFollowUp(text: string, storeCategories: string[] = []): boolean {
+  if (
+    extractRequestedCategory(text, storeCategories) ||
+    extractSku(text) ||
+    isOrderStatusMessage(text)
+  ) {
+    return false
+  }
   const color = extractColor(text)
   if (!color) return false
   const rest = text
@@ -490,14 +544,15 @@ function isColorOnlyFollowUp(text: string): boolean {
 
 function categoryFromSession(
   lines: ConversationHistoryLine[] | undefined,
-  current: string
+  current: string,
+  storeCategories: string[] = []
 ): string | null {
   if (!lines?.length) return null
   for (let i = lines.length - 1; i >= 0; i -= 1) {
     const line = lines[i]
     if (line.role !== 'customer') continue
     if (line.text.trim() === current.trim()) continue
-    const category = extractRequestedCategory(line.text)
+    const category = extractRequestedCategory(line.text, storeCategories)
     if (category) return category
   }
   return null
@@ -505,10 +560,11 @@ function categoryFromSession(
 
 function colorFollowUpIntent(
   trimmed: string,
-  recentMessages?: ConversationHistoryLine[]
+  recentMessages?: ConversationHistoryLine[],
+  storeCategories: string[] = []
 ): ParsedCustomerIntent | null {
-  if (!isColorOnlyFollowUp(trimmed)) return null
-  const categoryName = categoryFromSession(recentMessages, trimmed)
+  if (!isColorOnlyFollowUp(trimmed, storeCategories)) return null
+  const categoryName = categoryFromSession(recentMessages, trimmed, storeCategories)
   if (!categoryName) return null
   return finalizeIntent(
     {
@@ -526,7 +582,8 @@ function colorFollowUpIntent(
       orderScope: null,
       typedPhone: null,
     },
-    trimmed
+    trimmed,
+    storeCategories
   )
 }
 
@@ -684,7 +741,8 @@ function finalizeIntent(
     typedPhone?: string | null
     scriptStyle?: ScriptStyle
   },
-  trimmed: string
+  trimmed: string,
+  storeCategories: string[] = []
 ): ParsedCustomerIntent {
   const hasCatalogSignals = Boolean(
     partial.searchQuery.trim() ||
@@ -737,15 +795,21 @@ function finalizeIntent(
     orderProductHint: partial.orderProductHint?.trim() || null,
     orderScope: partial.orderScope ?? null,
     typedPhone: partial.typedPhone?.trim() || null,
-    alternativeCategories: isNonCatalog ? [] : extractAlternativeCategories(trimmed),
+    alternativeCategories: isNonCatalog
+      ? []
+      : extractAlternativeCategories(trimmed, storeCategories),
   }
 }
 
-export function fromLlmResult(parsed: LlmIntentResult, trimmed: string): ParsedCustomerIntent {
-  const requestedCategory = extractRequestedCategory(trimmed)
+export function fromLlmResult(
+  parsed: LlmIntentResult,
+  trimmed: string,
+  storeCategories: string[] = []
+): ParsedCustomerIntent {
+  const requestedCategory = extractRequestedCategory(trimmed, storeCategories)
   const colorFromText = extractRequestedColor(trimmed, requestedCategory)
   const sizeFromText = extractSize(trimmed)
-  const categoryFromText = requestedCategory || extractCategory(trimmed)
+  const categoryFromText = requestedCategory || extractCategory(trimmed, storeCategories)
   const skuFromText = extractSku(trimmed)
   const orderNumberFromText = extractOrderNumber(trimmed)
   const orderNumberHintFromText = extractOrderNumberHint(trimmed)
@@ -793,7 +857,8 @@ export function fromLlmResult(parsed: LlmIntentResult, trimmed: string): ParsedC
             stripExtractedTerms(trimmed, color, size) ||
             categoryName ||
             '',
-        requestedCategory || categoryName
+        requestedCategory || categoryName,
+        storeCategories
       )
 
   const orderScope =
@@ -821,7 +886,8 @@ export function fromLlmResult(parsed: LlmIntentResult, trimmed: string): ParsedC
       orderScope,
       typedPhone,
     },
-    trimmed
+    trimmed,
+    storeCategories
   )
 }
 
@@ -834,14 +900,18 @@ export function parseCustomerIntentOffline(
   options?: ParseCustomerIntentOptions
 ): ParsedCustomerIntent {
   const trimmed = text.trim()
-  const followUp = colorFollowUpIntent(trimmed, options?.recentMessages)
+  const followUp = colorFollowUpIntent(
+    trimmed,
+    options?.recentMessages,
+    options?.storeCategories
+  )
   if (followUp) return followUp
-  return regexFallback(trimmed)
+  return regexFallback(trimmed, options?.storeCategories)
 }
 
-function regexFallback(trimmed: string): ParsedCustomerIntent {
+function regexFallback(trimmed: string, storeCategories: string[] = []): ParsedCustomerIntent {
   const skuFromText = extractSku(trimmed)
-  const categoryFromText = extractCategory(trimmed)
+  const categoryFromText = extractCategory(trimmed, storeCategories)
   const colorFromText = extractRequestedColor(trimmed, categoryFromText)
   const sizeFromText = extractSize(trimmed)
   const detectedLang = detectLanguageFromText(trimmed)
@@ -864,7 +934,8 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         typedPhone: null,
         offTopicReason: 'language_meta',
       },
-      trimmed
+      trimmed,
+      storeCategories
     )
   }
 
@@ -886,7 +957,8 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         typedPhone: null,
         offTopicReason: 'general',
       },
-      trimmed
+      trimmed,
+      storeCategories
     )
   }
 
@@ -907,7 +979,8 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         orderScope: null,
         typedPhone: null,
       },
-      trimmed
+      trimmed,
+      storeCategories
     )
   }
 
@@ -938,7 +1011,8 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         orderScope: null,
         typedPhone: null,
       },
-      trimmed
+      trimmed,
+      storeCategories
     )
   }
 
@@ -961,7 +1035,8 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         orderScope,
         typedPhone: extractPhoneFromText(trimmed),
       },
-      trimmed
+      trimmed,
+      storeCategories
     )
   }
 
@@ -982,7 +1057,8 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
         orderScope: null,
         typedPhone: null,
       },
-      trimmed
+      trimmed,
+      storeCategories
     )
   }
 
@@ -1013,7 +1089,7 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
   }
 
   const searchQuery = categoryFromText
-    ? primarySearchTerm(trimmed, categoryFromText)
+    ? primarySearchTerm(trimmed, categoryFromText, storeCategories)
     : stripExtractedTerms(trimmed, colorFromText, sizeFromText)
 
   return finalizeIntent(
@@ -1032,17 +1108,28 @@ function regexFallback(trimmed: string): ParsedCustomerIntent {
       orderScope: null,
       typedPhone: null,
     },
-    trimmed
+    trimmed,
+    storeCategories
   )
 }
 
-function buildIntentPrompt(text: string, recentMessages?: ConversationHistoryLine[]): string {
-  if (!recentMessages?.length) return text
+function buildIntentPrompt(
+  text: string,
+  recentMessages?: ConversationHistoryLine[],
+  storeCategories?: string[]
+): string {
+  const departments = storeCategories?.filter(Boolean) ?? []
+  const shopLine = departments.length
+    ? `This shop's departments (search only these; this shop is not always clothing): ${departments.join(', ')}\n\n`
+    : ''
+  if (!recentMessages?.length) {
+    return `${shopLine}Latest customer message:\n${text}`.trim()
+  }
   const customerOnly = recentMessages.filter((m) => m.role === 'customer')
   const history = (customerOnly.length > 0 ? customerOnly : recentMessages)
     .map((m) => `${m.role === 'customer' ? 'Customer' : 'Store'}: ${m.text}`)
     .join('\n')
-  return `Recent conversation (customer messages only — for follow-ups like color-only replies). Latest message product type overrides earlier products:\n${history}\n\nLatest customer message:\n${text}`
+  return `${shopLine}Recent conversation (customer messages only — for follow-ups like color-only replies). Latest message product type overrides earlier products:\n${history}\n\nLatest customer message:\n${text}`
 }
 
 export async function parseCustomerIntent(
@@ -1050,6 +1137,7 @@ export async function parseCustomerIntent(
   options?: ParseCustomerIntentOptions
 ): Promise<ParsedCustomerIntent> {
   const trimmed = text.trim()
+  const storeCategories = options?.storeCategories ?? []
   if (!trimmed) {
     return finalizeIntent(
       {
@@ -1068,43 +1156,48 @@ export async function parseCustomerIntent(
         typedPhone: null,
         offTopicReason: 'general',
       },
-      trimmed
+      trimmed,
+      storeCategories
     )
   }
 
   if (isLanguageMetaQuestion(trimmed)) {
-    return regexFallback(trimmed)
+    return regexFallback(trimmed, storeCategories)
   }
 
   // A bare reaction needs no classification, and skipping the LLM stops it from
   // carrying the previous product over from history.
   if (
     isAcknowledgement(trimmed) &&
-    !extractRequestedCategory(trimmed) &&
+    !extractRequestedCategory(trimmed, storeCategories) &&
     !extractColor(trimmed) &&
     !extractSku(trimmed) &&
     !isOrderStatusMessage(trimmed)
   ) {
-    return regexFallback(trimmed)
+    return regexFallback(trimmed, storeCategories)
   }
 
   if (
     isGreetingOnly(trimmed) &&
-    !extractRequestedCategory(trimmed) &&
+    !extractRequestedCategory(trimmed, storeCategories) &&
     !extractColor(trimmed) &&
     !extractSku(trimmed) &&
     !isOrderStatusMessage(trimmed)
   ) {
-    return regexFallback(trimmed)
+    return regexFallback(trimmed, storeCategories)
   }
 
-  const followUp = colorFollowUpIntent(trimmed, options?.recentMessages)
+  const followUp = colorFollowUpIntent(
+    trimmed,
+    options?.recentMessages,
+    storeCategories
+  )
   if (followUp) return followUp
 
-  const llmInput = buildIntentPrompt(trimmed, options?.recentMessages)
+  const llmInput = buildIntentPrompt(trimmed, options?.recentMessages, storeCategories)
   const parsed = await completeJson<LlmIntentResult>(INTENT_SCHEMA, llmInput)
   if (parsed?.intent && parsed.customerLanguage) {
-    const result = fromLlmResult(parsed, trimmed)
+    const result = fromLlmResult(parsed, trimmed, storeCategories)
     if (parsed.intent === 'off_topic' && isLanguageMetaQuestion(trimmed)) {
       return { ...result, offTopicReason: 'language_meta' }
     }
@@ -1117,9 +1210,10 @@ export async function parseCustomerIntent(
   if (parsed?.intent) {
     return fromLlmResult(
       { ...parsed, customerLanguage: parsed.customerLanguage ?? detectLanguageFromText(trimmed) },
-      trimmed
+      trimmed,
+      storeCategories
     )
   }
 
-  return regexFallback(trimmed)
+  return regexFallback(trimmed, storeCategories)
 }

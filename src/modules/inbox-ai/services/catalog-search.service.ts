@@ -181,6 +181,10 @@ export function formatAvailableProducts(summary: StoreCatalogSummary): string[] 
   return [...names]
 }
 
+export function formatShopCategories(summary: StoreCatalogSummary): string[] {
+  return summary.categoryNames.filter(Boolean)
+}
+
 function unitPrice(product: Product, variant: ProductVariant | null): number {
   return Number(product.base_price) + Number(variant?.price_delta ?? 0)
 }

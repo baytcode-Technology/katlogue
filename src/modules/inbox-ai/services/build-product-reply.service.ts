@@ -17,9 +17,9 @@ import {
   filterMatchesByScore,
   findByCategoryName,
   findBySku,
-  formatAvailableProducts,
   formatOtherMatches,
   formatProductCaption,
+  formatShopCategories,
   getMatchImageUrl,
   getStoreCatalogSummary,
   getStoreHomeUrl,
@@ -44,6 +44,7 @@ type ReplyContext = {
   customPrompt?: string | null
   conversationHistory?: string | null
   lastShownProduct?: LastShownProduct | null
+  shopSells?: string[]
 }
 
 type CatalogSlice = {
@@ -295,7 +296,8 @@ async function buildTemplateReply(input: {
   template: LocalizedReplyTemplate
   extraFacts?: {
     requestedItem?: string | null
-    availableProducts?: string[]
+    shopSells?: string[]
+    offeredItem?: string | null
     refusalReason?: 'explicit' | 'code_request' | 'off_topic' | 'language_meta'
   }
 }): Promise<string> {
@@ -318,6 +320,11 @@ async function buildTemplateReply(input: {
   })
 }
 
+async function loadShopSells(storeId: number): Promise<string[]> {
+  const summary = await getStoreCatalogSummary(storeId)
+  return formatShopCategories(summary)
+}
+
 async function buildNotFoundReply(
   store: Store,
   intent: ParsedCustomerIntent,
@@ -325,8 +332,7 @@ async function buildNotFoundReply(
   customerMessage: string,
   ctx: ReplyContext
 ): Promise<string> {
-  const summary = await getStoreCatalogSummary(store.id)
-  const availableProducts = formatAvailableProducts(summary)
+  const shopSells = ctx.shopSells ?? (await loadShopSells(store.id))
 
   return buildTemplateReply({
     store,
@@ -335,7 +341,7 @@ async function buildNotFoundReply(
     customerMessage,
     ctx,
     template: 'not_found',
-    extraFacts: { requestedItem: intent.requestedItem, availableProducts },
+    extraFacts: { requestedItem: intent.requestedItem, shopSells },
   })
 }
 
@@ -367,6 +373,7 @@ export async function buildProductReply(input: {
   channel?: InboxAiChannel
   customerPhone?: string | null
   conversationId?: number | null
+  shopSells?: string[]
 }): Promise<ProductReplyResult> {
   const { store, customerText, intent } = input
   const homeUrl = applyChatSrcToUrl(
@@ -378,6 +385,7 @@ export async function buildProductReply(input: {
     customPrompt: store.ai_system_prompt,
     conversationHistory: input.conversationHistory,
     lastShownProduct: input.lastShownProduct,
+    shopSells: input.shopSells,
   }
   const empty: ProductReplyResult = {
     primaryText: '',
@@ -410,6 +418,7 @@ export async function buildProductReply(input: {
   }
 
   if (intent.intent === 'greeting') {
+    const shopSells = input.shopSells ?? (await loadShopSells(store.id))
     return {
       ...empty,
       primaryText: await buildTemplateReply({
@@ -419,6 +428,7 @@ export async function buildProductReply(input: {
         customerMessage: customerText,
         ctx,
         template: 'greeting',
+        extraFacts: { shopSells },
       }),
     }
   }

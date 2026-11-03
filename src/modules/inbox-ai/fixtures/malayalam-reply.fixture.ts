@@ -15,7 +15,8 @@ import {
   wrapMalayalamScriptSupportReply,
 } from '../../support/lib/wrap-malayalam-support-reply.js'
 import {
-  buildLocalizedReply,
+  buildCannedLocalizedReply,
+  isHonestStockTalk,
   isReplyScriptValid,
   shouldSkipModelForMalayalamScript,
 } from '../services/build-localized-reply.service.js'
@@ -25,16 +26,6 @@ let failed = 0
 function test(name: string, fn: () => void): void {
   try {
     fn()
-    console.log(`  ok ${name}`)
-  } catch (err) {
-    failed += 1
-    console.error(`  FAIL ${name}:`, err instanceof Error ? err.message : err)
-  }
-}
-
-async function testAsync(name: string, fn: () => Promise<void>): Promise<void> {
-  try {
-    await fn()
     console.log(`  ok ${name}`)
   } catch (err) {
     failed += 1
@@ -92,47 +83,94 @@ test('script check rejects Tamil mixed into Malayalam', () => {
   )
 })
 
-console.log('\n=== Canned Malayalam script path ===')
+console.log('\n=== Staff talk is not a canned prefix ===')
 
-test('skips the model for greeting wrappers', () => {
+test('the model writes greeting and not-found, including Malayalam script', () => {
   assert.equal(
     shouldSkipModelForMalayalamScript('Malayalam', 'malayalam_script', 'greeting'),
-    true
+    false
+  )
+  assert.equal(
+    shouldSkipModelForMalayalamScript('Malayalam', 'malayalam_script', 'not_found'),
+    false
   )
   assert.equal(
     shouldSkipModelForMalayalamScript('Malayalam', 'malayalam_script', 'product_lines'),
-    true
-  )
-  assert.equal(
-    shouldSkipModelForMalayalamScript('Malayalam', 'malayalam_script', 'alternative'),
-    true
-  )
-})
-
-test('keeps the model for Manglish and for order replies', () => {
-  assert.equal(shouldSkipModelForMalayalamScript('Malayalam', 'latin', 'greeting'), false)
-  assert.equal(
-    shouldSkipModelForMalayalamScript('Malayalam', 'malayalam_script', 'order_assistant'),
     false
   )
+  assert.equal(shouldSkipModelForMalayalamScript('Malayalam', 'latin', 'greeting'), false)
 })
 
-await testAsync('Malayalam-script greeting uses spoken canned lines', async () => {
-  const reply = await buildLocalizedReply({
+test('rejects Ind saar on a not-found reply', () => {
+  assert.equal(isHonestStockTalk('Ind saar! Bag stock illa, shirts und.', 'not_found'), false)
+  assert.equal(isHonestStockTalk('Bag illa saar. Ee shop shirts, pants aanu.', 'not_found'), true)
+  assert.equal(isHonestStockTalk('Ind saar 👍 Ethu size vendam?', 'product_lines'), true)
+})
+
+test('canned greeting for an appliance shop uses those departments', () => {
+  const reply = buildCannedLocalizedReply({
+    customerLanguage: 'Malayalam',
+    scriptStyle: 'latin',
+    template: 'greeting',
+    facts: { ...facts, shopSells: ['Appliances', 'Mixers'] },
+  })
+  assert.match(reply, /Appliances/)
+  assert.match(reply, /Mixers/)
+  assert.equal(/\bMen\b/.test(reply), false)
+  assert.equal(/linen shirt/i.test(reply), false)
+  assert.equal(/^Ind saar/i.test(reply.trim()), false)
+})
+
+test('canned greeting asks from shop categories, not size or colour', () => {
+  const reply = buildCannedLocalizedReply({
+    customerLanguage: 'Malayalam',
+    scriptStyle: 'latin',
+    template: 'greeting',
+    facts: { ...facts, shopSells: ['Men', 'shirts', 'pants'] },
+  })
+  assert.match(reply, /Hai saar/)
+  assert.match(reply, /Men/)
+  assert.match(reply, /shirts/)
+  assert.equal(/ethu size/i.test(reply), false)
+  assert.equal(/^Ind saar/i.test(reply.trim()), false)
+  assert.equal(reply.includes('https://shrox.aishopy.io'), true)
+})
+
+test('canned Malayalam-script greeting stays spoken and uses categories', () => {
+  const reply = buildCannedLocalizedReply({
     customerLanguage: 'Malayalam',
     scriptStyle: 'malayalam_script',
     template: 'greeting',
-    facts,
+    facts: { ...facts, shopSells: ['Men', 'shirts'] },
   })
   assert.match(reply, /ഹായ് സാർ/)
-  assert.match(reply, /എന്താണ് വേണ്ടത്/)
+  assert.match(reply, /Men/)
   assert.equal(reply.includes('നമസ്കാരം'), false)
   assert.equal(reply.includes('സ്വാഗതം'), false)
   assert.equal(reply.includes('https://shrox.aishopy.io'), true)
 })
 
-await testAsync('Malayalam-script product wrapper is ഉണ്ട് സാർ', async () => {
-  const reply = await buildLocalizedReply({
+test('canned not-found for a bag does not say Ind saar or list shirts as stock', () => {
+  const reply = buildCannedLocalizedReply({
+    customerLanguage: 'Malayalam',
+    scriptStyle: 'latin',
+    template: 'not_found',
+    facts: {
+      ...facts,
+      requestedItem: 'bag',
+      shopSells: ['Men', 'shirts', 'pants'],
+    },
+  })
+  assert.match(reply, /bag/i)
+  assert.match(reply, /illa/i)
+  assert.match(reply, /Men/)
+  assert.equal(/^Ind saar/i.test(reply.trim()), false)
+  assert.equal(reply.includes('Linen Shirt'), false)
+  assert.equal(reply.includes('/product/'), false)
+})
+
+test('canned product wrapper after a match may say ഉണ്ട് സാർ', () => {
+  const reply = buildCannedLocalizedReply({
     customerLanguage: 'Malayalam',
     scriptStyle: 'malayalam_script',
     template: 'product_lines',
@@ -141,8 +179,8 @@ await testAsync('Malayalam-script product wrapper is ഉണ്ട് സാർ',
   assert.equal(reply, 'ഉണ്ട് സാർ')
 })
 
-await testAsync('Malayalam-script alternative names what is missing and what we have', async () => {
-  const reply = await buildLocalizedReply({
+test('canned alternative names what is missing and what we have', () => {
+  const reply = buildCannedLocalizedReply({
     customerLanguage: 'Malayalam',
     scriptStyle: 'malayalam_script',
     template: 'alternative',

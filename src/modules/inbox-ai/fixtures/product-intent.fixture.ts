@@ -17,6 +17,7 @@ import {
   resolveEffectiveSearchQuery,
   scoreProduct,
   formatProductCaption,
+  formatShopCategories,
 } from '../services/catalog-search.service.js'
 import type { CatalogMatch } from '../services/catalog-search.service.js'
 import { composeCatalogStaffReply, selectCatalogOffer } from '../services/build-product-reply.service.js'
@@ -385,6 +386,38 @@ test('missing kurta falls through to shirts with a code-built caption', () => {
   assert.match(reply, /shirts/i)
   assert.match(reply, /SHIRT-9-L/)
   assert.match(reply, /https:\/\/shrox\.aishopy\.io\/product\/blue-formal-shirt-3/)
+})
+
+test("this shop's own departments match, not only clothing words", () => {
+  const mixer = extractRequestedCategory('mixer undo?', ['Appliances', 'Mixers'])
+  assert.equal(mixer, 'Mixers')
+  const parsed = parseCustomerIntentOffline('mixer undo?', {
+    storeCategories: ['Appliances', 'Mixers'],
+  })
+  assert.equal(parsed.intent, 'product_search')
+  assert.equal(parsed.categoryName, 'Mixers')
+})
+
+test('a bag ask does not treat shirts as named alternatives', () => {
+  const bag = parseCustomerIntentOffline('Enick oru bag vehnam')
+  assert.equal(bag.intent, 'product_search')
+  assert.equal(bag.alternativeCategories.length, 0)
+  assert.equal(/bag/i.test(bag.searchQuery + ' ' + (bag.requestedItem ?? '')), true)
+
+  const offer = selectCatalogOffer({
+    primary: [],
+    alternatives: [],
+    requestedItem: bag.requestedItem,
+  })
+  assert.equal(offer.matches.length, 0)
+  assert.equal(offer.offeredCategory, null)
+
+  const sells = formatShopCategories({
+    productNames: ['Linen Shirt', 'Check Shirt'],
+    categoryNames: ['Men', 'shirts', 'pants'],
+  })
+  assert.deepEqual(sells, ['Men', 'shirts', 'pants'])
+  assert.equal(sells.includes('Linen Shirt'), false)
 })
 
 if (failed > 0) {

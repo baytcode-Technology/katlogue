@@ -274,6 +274,8 @@ export async function sendWhatsAppTextMessage(input: SendWhatsAppTextInput) {
       reply_mode: conversation.reply_mode,
 
       ai_paused_until: conversation.ai_paused_until,
+      staff_waiting_at: conversation.staff_waiting_at,
+      staff_warned_at: conversation.staff_warned_at,
 
     },
 
@@ -302,6 +304,8 @@ export async function sendWhatsAppTextMessage(input: SendWhatsAppTextInput) {
         unread_count: refreshed.unread_count,
         reply_mode: refreshed.reply_mode,
         ai_paused_until: refreshed.ai_paused_until,
+        staff_waiting_at: refreshed.staff_waiting_at,
+        staff_warned_at: refreshed.staff_warned_at,
       },
     })
   }

@@ -12,8 +12,14 @@ import { checkInboxAiRateLimit } from '../rate-limit.js'
 import {
   clearAiPauseForConversation,
   isAiPaused,
+  markStaffWaiting,
+  markStaffWarned,
   tryMarkAiDisclosureSent,
 } from '../repositories/conversation-ai.repository.js'
+import {
+  notifyInstagramChat,
+  notifyWhatsAppChat,
+} from '../../notifications/services/send-store-notification.service.js'
 import { composeInboxAiReply } from './compose-inbox-ai-reply.service.js'
 import {
   fetchRecentConversationHistory,
@@ -168,9 +174,29 @@ async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
       recentMessages,
       customerPhone,
       conversationId: input.conversationId,
+      staffWarnedAt: conversation.staff_warned_at,
     })
 
-    const { intent, lastShownProduct, reply } = composed
+    const { intent, lastShownProduct, reply, staffHandoff } = composed
+
+    if (staffHandoff === 'warn' || staffHandoff === 'policy') {
+      await markStaffWarned({
+        channel: input.channel,
+        storeId: input.storeId,
+        conversationId: input.conversationId,
+      })
+    }
+
+    if (staffHandoff === 'wait') {
+      await markStaffWaiting({
+        channel: input.channel,
+        storeId: input.storeId,
+        conversationId: input.conversationId,
+      })
+      await emitConversationStaffState(input)
+      await notifyOwnerWaiting(store, conversation, input)
+      return
+    }
 
     console.info(
       '[inbox-ai] %s store=%d conversation=%d intent=%s lang=%s script=%s query=%s category=%s color=%s lastShown=%s',
@@ -273,6 +299,86 @@ async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
     })
   } finally {
     emitInboxAiTyping(input, false)
+  }
+}
+
+async function emitConversationStaffState(input: HandleInboundInboxAiInput): Promise<void> {
+  if (input.channel === 'whatsapp') {
+    const conversation = await whatsappChatRepository.findConversationById({
+      storeId: input.storeId,
+      conversationId: input.conversationId,
+    })
+    if (!conversation) return
+    emitToStore(input.storeId, SOCKET_EVENTS.CONVERSATION_UPDATED, {
+      storeId: input.storeId,
+      conversation: {
+        id: conversation.id,
+        customer_wa_number: conversation.customer_wa_number,
+        last_message_at: conversation.last_message_at,
+        last_message_preview: conversation.last_message_preview,
+        unread_count: conversation.unread_count,
+        reply_mode: conversation.reply_mode,
+        ai_paused_until: conversation.ai_paused_until,
+        staff_waiting_at: conversation.staff_waiting_at,
+        staff_warned_at: conversation.staff_warned_at,
+      },
+    })
+    return
+  }
+
+  const conversation = await instagramChatRepository.findConversationById({
+    storeId: input.storeId,
+    conversationId: input.conversationId,
+  })
+  if (!conversation) return
+  emitToStore(input.storeId, SOCKET_EVENTS.INSTAGRAM_CONVERSATION_UPDATED, {
+    storeId: input.storeId,
+    conversation: {
+      id: conversation.id,
+      customer_ig_id: conversation.customer_ig_id,
+      customer_ig_username: conversation.customer_ig_username,
+      last_message_at: conversation.last_message_at,
+      last_message_preview: conversation.last_message_preview,
+      unread_count: conversation.unread_count,
+      reply_mode: conversation.reply_mode,
+      ai_paused_until: conversation.ai_paused_until,
+      staff_waiting_at: conversation.staff_waiting_at,
+      staff_warned_at: conversation.staff_warned_at,
+    },
+  })
+}
+
+async function notifyOwnerWaiting(
+  store: Store,
+  conversation: WhatsAppConversation | InstagramConversation,
+  input: HandleInboundInboxAiInput
+): Promise<void> {
+  try {
+    if (input.channel === 'whatsapp' && 'customer_wa_number' in conversation) {
+      await notifyWhatsAppChat({
+        storeId: store.id,
+        storeSlug: store.slug,
+        conversationId: conversation.id,
+        preview: 'Waiting for your reply',
+        senderLabel: conversation.customer_name?.trim() || conversation.customer_wa_number,
+        customerPhone: conversation.customer_wa_number,
+        title: 'Customer waiting',
+      })
+      return
+    }
+    if ('customer_ig_id' in conversation) {
+      await notifyInstagramChat({
+        storeId: store.id,
+        storeSlug: store.slug,
+        conversationId: conversation.id,
+        preview: 'Waiting for your reply',
+        username: conversation.customer_ig_username,
+        customerIgId: conversation.customer_ig_id,
+        title: 'Customer waiting',
+      })
+    }
+  } catch (err) {
+    console.error('[notifications] staff waiting push failed', err)
   }
 }
 

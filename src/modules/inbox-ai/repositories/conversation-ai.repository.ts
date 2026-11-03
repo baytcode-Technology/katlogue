@@ -20,6 +20,9 @@ export async function updateConversationReplyMode(input: {
     .update({
       reply_mode: input.replyMode,
       ai_paused_until: input.replyMode === 'ai' ? null : new Date().toISOString(),
+      ...(input.replyMode === 'ai'
+        ? { staff_warned_at: null, staff_waiting_at: null }
+        : {}),
       updated_at: new Date().toISOString(),
     })
     .eq('store_id', input.storeId)
@@ -100,4 +103,46 @@ export async function tryMarkAiDisclosureSent(input: {
   }
 
   return Boolean(data)
+}
+
+export async function markStaffWarned(input: {
+  channel: InboxChannel
+  storeId: number
+  conversationId: number
+}): Promise<void> {
+  const now = new Date().toISOString()
+  const { error } = await supabaseAdmin
+    .from(tableForChannel(input.channel))
+    .update({
+      staff_warned_at: now,
+      updated_at: now,
+    })
+    .eq('store_id', input.storeId)
+    .eq('id', input.conversationId)
+    .is('staff_warned_at', null)
+
+  if (error) {
+    throw new AppError(400, error.message, 'CONVERSATION_STAFF_WARN_FAILED')
+  }
+}
+
+export async function markStaffWaiting(input: {
+  channel: InboxChannel
+  storeId: number
+  conversationId: number
+}): Promise<void> {
+  const now = new Date().toISOString()
+  const { error } = await supabaseAdmin
+    .from(tableForChannel(input.channel))
+    .update({
+      reply_mode: 'manual',
+      staff_waiting_at: now,
+      updated_at: now,
+    })
+    .eq('store_id', input.storeId)
+    .eq('id', input.conversationId)
+
+  if (error) {
+    throw new AppError(400, error.message, 'CONVERSATION_STAFF_WAITING_FAILED')
+  }
 }

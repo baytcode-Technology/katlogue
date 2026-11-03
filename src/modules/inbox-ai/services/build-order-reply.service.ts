@@ -326,7 +326,7 @@ export function formatOrdersFactsForScope(
     .join('\n\n')
 }
 
-async function collectOrders(input: {
+export async function collectOrders(input: {
   store: Store
   customerPhone: string
   intent: ParsedCustomerIntent

@@ -19,6 +19,11 @@ import {
   getStoreCatalogSummary,
 } from './catalog-search.service.js'
 import type { LastShownProduct } from './build-localized-reply.service.js'
+import {
+  resolveStaffHandoff,
+  staffConnectLine,
+  type StaffHandoffAction,
+} from './staff-handoff.service.js'
 
 export type ComposeInboxAiReplyInput = {
   store: Store
@@ -27,6 +32,7 @@ export type ComposeInboxAiReplyInput = {
   recentMessages?: ConversationHistoryLine[]
   customerPhone?: string | null
   conversationId?: number | null
+  staffWarnedAt?: string | null
 }
 
 export type ComposeInboxAiReplyResult = {
@@ -35,6 +41,7 @@ export type ComposeInboxAiReplyResult = {
   reply: ProductReplyResult
   replyText: string
   wouldSendImage: boolean
+  staffHandoff: StaffHandoffAction
 }
 
 function formatReplyTextForChannel(
@@ -69,6 +76,52 @@ export async function composeInboxAiReply(
   const lastShownProduct =
     intent.intent === 'greeting' ? null : extractLastShownProduct(recentMessages)
 
+  const staffHandoff = await resolveStaffHandoff({
+    store: input.store,
+    intent,
+    customerText: text,
+    staffWarnedAt: input.staffWarnedAt,
+    customerPhone: input.customerPhone ?? null,
+    conversationId: input.conversationId ?? null,
+  })
+
+  if (staffHandoff === 'wait') {
+    const empty: ProductReplyResult = {
+      primaryText: '',
+      followUpText: null,
+      matches: [],
+      primaryMatch: null,
+      imageUrl: null,
+    }
+    return {
+      intent,
+      lastShownProduct,
+      reply: empty,
+      replyText: '',
+      wouldSendImage: false,
+      staffHandoff,
+    }
+  }
+
+  if (staffHandoff === 'warn') {
+    const line = staffConnectLine(intent.customerLanguage, intent.scriptStyle)
+    const warned: ProductReplyResult = {
+      primaryText: line,
+      followUpText: null,
+      matches: [],
+      primaryMatch: null,
+      imageUrl: null,
+    }
+    return {
+      intent,
+      lastShownProduct,
+      reply: warned,
+      replyText: line,
+      wouldSendImage: false,
+      staffHandoff,
+    }
+  }
+
   const reply = await buildProductReply({
     store: input.store,
     customerText: text,
@@ -90,5 +143,6 @@ export async function composeInboxAiReply(
     reply,
     replyText: formatReplyTextForChannel(input.channel, reply),
     wouldSendImage,
+    staffHandoff,
   }
 }

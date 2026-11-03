@@ -12,6 +12,7 @@ import {
   resolveHonorific,
   type ShopOwnerTemplateTask,
 } from '../prompts/shop-owner-persona.js'
+import type { MissingWhy, OrderAsk, SessionTopic } from './parse-customer-intent.service.js'
 
 export { isStiffTranslationMalayalam }
 
@@ -42,6 +43,9 @@ export type LocalizedReplyFacts = {
   hasOtherOptions?: boolean
   /** The other item they agreed to, when the first one is not in the shop. */
   offeredItem?: string | null
+  missingWhy?: MissingWhy | null
+  sessionTopic?: SessionTopic
+  orderAsk?: OrderAsk | null
 }
 
 /**
@@ -71,6 +75,15 @@ type PhraseSet = {
   moreOptions: string
   orderNotFound: string
   orderNeedsPhone: string
+  closeOk: string
+  closeAfterOrder: string
+  soldOutLead: (item: string) => string
+  notSoldLead: (item: string) => string
+  priceAsk: string
+  orderEtaUnknown: string
+  orderCannotCancel: string
+  orderNotMine: string
+  shipAfterOrder: string
 }
 
 const EN: PhraseSet = {
@@ -98,6 +111,15 @@ const EN: PhraseSet = {
     'Sorry sir, I could not find that order on this WhatsApp number. When did you place it, or which number did you use? I will check again.',
   orderNeedsPhone:
     'Order status can only be checked on WhatsApp using the phone number you used when ordering. Please message us from that number sir.',
+  closeOk: 'Alright sir.',
+  closeAfterOrder: 'Alright sir, I will message you when it ships.',
+  soldOutLead: (item) => `${item} is out of stock sir.`,
+  notSoldLead: (item) => `We don't keep ${item} in this shop sir.`,
+  priceAsk: 'Which item from this shop should I price for you sir?',
+  orderEtaUnknown: 'No delivery date on this order yet sir. Still unfulfilled. I will update you when it ships.',
+  orderCannotCancel: 'I cannot cancel or change that in chat sir. Send the order number and staff will check.',
+  orderNotMine: 'If this is not your order, send the order number or the WhatsApp number used at checkout. Staff will check.',
+  shipAfterOrder: 'We ship after you place the order sir. No delivery date until then.',
 }
 
 const ML: PhraseSet = {
@@ -124,6 +146,15 @@ const ML: PhraseSet = {
     'ആ ഓർഡർ ഈ നമ്പറിൽ കാണുന്നില്ല സാർ. എപ്പോഴാണ് ഓർഡർ ചെയ്തത്, അല്ലെങ്കിൽ ഏത് നമ്പർ ഉപയോഗിച്ചു?',
   orderNeedsPhone:
     'ഓർഡർ ചെയ്ത നമ്പറിൽ നിന്ന് വാട്സാപ്പ് അയച്ചാൽ മാത്രമേ നോക്കാൻ പറ്റൂ സാർ.',
+  closeOk: 'ശരി സാർ.',
+  closeAfterOrder: 'ശരി സാർ, ഷിപ്പ് ആയാൽ പറയാം.',
+  soldOutLead: (item) => `${item} സ്റ്റോക്ക് ഇല്ല സാർ.`,
+  notSoldLead: (item) => `${item} ഈ ഷോപ്പിൽ ഇല്ല സാർ.`,
+  priceAsk: 'ഏത് സാധനത്തിന്റെ വില വേണം സാർ?',
+  orderEtaUnknown: 'ഈ ഓർഡറിൽ ഡെലിവറി തീയതി ഇല്ല സാർ. ഇപ്പോൾ unfulfilled ആണ്. ഷിപ്പ് ആയാൽ പറയാം.',
+  orderCannotCancel: 'ചാറ്റിൽ ക്യാൻസൽ ചെയ്യാൻ പറ്റില്ല സാർ. ഓർഡർ നമ്പർ അയച്ചാൽ സ്റ്റാഫ് നോക്കും.',
+  orderNotMine: 'ഇത് താങ്കളുടെ ഓർഡർ അല്ലെങ്കിൽ ഓർഡർ നമ്പർ അല്ലെങ്കിൽ ചെക്ക് ഔട്ട് നമ്പർ അയയ്ക്കൂ. സ്റ്റാഫ് നോക്കും.',
+  shipAfterOrder: 'ഓർഡർ ചെയ്ത ശേഷമേ ഷിപ്പ് ആകൂ സാർ. അതിന് മുമ്പ് ഡെലിവറി തീയതി ഇല്ല.',
 }
 
 const ML_LATIN: PhraseSet = {
@@ -150,6 +181,18 @@ const ML_LATIN: PhraseSet = {
     'Aa order ee number il kaanunnilla saar. Eppozhaanu order cheythath, allengil ethu number upayogichu?',
   orderNeedsPhone:
     'Order cheytha number il ninnu WhatsApp ayachal mathrame nokkan pattu saar.',
+  closeOk: 'Sheri saar.',
+  closeAfterOrder: 'Sheri saar, ship aayal parayam.',
+  soldOutLead: (item) => `${item} stock illa saar.`,
+  notSoldLead: (item) => `${item} ee shopil illa saar.`,
+  priceAsk: 'Ethu iteminte vila venam saar?',
+  orderEtaUnknown:
+    'Ee orderil delivery date illa saar. Ippo unfulfilled aanu. Ship aayal parayam.',
+  orderCannotCancel:
+    'Chatil cancel cheyyan pattilla saar. Order number ayachal staff nokkum.',
+  orderNotMine:
+    'Ithu ningalude order allengil order number allengil checkout number ayakku. Staff nokkum.',
+  shipAfterOrder: 'Order cheytha shesham ship aakum saar. Athinu munp delivery date illa.',
 }
 
 const HI: PhraseSet = {
@@ -176,6 +219,15 @@ const HI: PhraseSet = {
     'माफ़ कीजिए सर, इस व्हाट्सएप नंबर पर वह ऑर्डर नहीं मिला। आपने कब ऑर्डर किया था, या कौन सा नंबर इस्तेमाल किया था?',
   orderNeedsPhone:
     'ऑर्डर की जानकारी उसी नंबर से व्हाट्सएप पर मैसेज करने पर मिलेगी जिससे ऑर्डर किया था सर।',
+  closeOk: 'ठीक है सर।',
+  closeAfterOrder: 'ठीक है सर, शिप होते ही बताऊँगा।',
+  soldOutLead: (item) => `${item} स्टॉक में नहीं है सर।`,
+  notSoldLead: (item) => `${item} इस दुकान में नहीं रखते सर।`,
+  priceAsk: 'किस चीज़ की कीमत बताऊँ सर?',
+  orderEtaUnknown: 'इस ऑर्डर पर डिलीवरी तारीख नहीं है सर। अभी unfulfilled है। शिप होते ही बताऊँगा।',
+  orderCannotCancel: 'चैट में कैंसल नहीं कर सकता सर। ऑर्डर नंबर भेजिए, स्टाफ देखेगा।',
+  orderNotMine: 'अगर यह आपका ऑर्डर नहीं है तो ऑर्डर नंबर या चेकआउट वाला नंबर भेजिए। स्टाफ देखेगा।',
+  shipAfterOrder: 'ऑर्डर के बाद ही शिप होगा सर। उससे पहले डिलीवरी तारीख नहीं है।',
 }
 
 const TA: PhraseSet = {
@@ -202,6 +254,15 @@ const TA: PhraseSet = {
     'மன்னிக்கவும் சார், இந்த வாட்ஸ்அப் எண்ணில் அந்த ஆர்டர் கிடைக்கவில்லை. எப்போது ஆர்டர் செய்தீர்கள், அல்லது எந்த எண்ணைப் பயன்படுத்தினீர்கள்?',
   orderNeedsPhone:
     'ஆர்டர் செய்யும் போது பயன்படுத்திய எண்ணிலிருந்து வாட்ஸ்அப்பில் அனுப்பினால் மட்டுமே ஆர்டர் விவரம் பார்க்க முடியும் சார்.',
+  closeOk: 'சரி சார்.',
+  closeAfterOrder: 'சரி சார், ஷிப் ஆனால் சொல்கிறேன்.',
+  soldOutLead: (item) => `${item} ஸ்டாக் இல்லை சார்.`,
+  notSoldLead: (item) => `${item} இந்த கடையில் இல்லை சார்.`,
+  priceAsk: 'எந்த பொருளின் விலை வேண்டும் சார்?',
+  orderEtaUnknown: 'இந்த ஆர்டரில் டெலிவரி தேதி இல்லை சார். இப்போது unfulfilled. ஷிப் ஆனால் சொல்கிறேன்.',
+  orderCannotCancel: 'சாட்டில் கேன்சல் செய்ய முடியாது சார். ஆர்டர் நம்பர் அனுப்பினால் ஸ்டாப் பார்க்கும்.',
+  orderNotMine: 'இது உங்கள் ஆர்டர் இல்லையென்றால் ஆர்டர் நம்பர் அல்லது செக் அவுட் நம்பர் அனுப்புங்கள். ஸ்டாப் பார்க்கும்.',
+  shipAfterOrder: 'ஆர்டர் செய்த பிறகுதான் ஷிப் ஆகும் சார். அதற்கு முன் டெலிவரி தேதி இல்லை.',
 }
 
 function resolvePhrases(language: string, scriptStyle?: ScriptStyle): PhraseSet {
@@ -229,9 +290,33 @@ function buildFallback(
     }
 
     case 'acknowledgement': {
+      if (facts.sessionTopic === 'order') return p.closeAfterOrder
       const product = facts.lastShownProduct?.title
       const question = product ? p.closingAskSize : p.askWhatElse
       return `${p.ackThanks} ${question}`
+    }
+
+    case 'close':
+      if (facts.sessionTopic === 'order') return p.closeAfterOrder
+      if (facts.sessionTopic === 'product') return p.shipAfterOrder
+      return p.closeOk
+
+    case 'language_switch': {
+      const item = facts.requestedItem?.trim()
+      if (facts.sessionTopic === 'order') return p.closeAfterOrder
+      if (item && facts.missingWhy === 'sold_out') {
+        return `${p.soldOutLead(item)} ${p.weSell((facts.shopSells ?? []).join(', '))} ${p.wantAny}`
+      }
+      if (item) {
+        return `${p.notSoldLead(item)} ${p.weSell((facts.shopSells ?? []).join(', '))} ${p.wantAny}`
+      }
+      return p.closeOk
+    }
+
+    case 'price_ask': {
+      const sells = facts.shopSells?.filter(Boolean) ?? []
+      const list = sells.length > 0 ? p.weSell(sells.join(', ')) : ''
+      return `${p.priceAsk} ${list}`.trim()
     }
 
     case 'buy_assist': {
@@ -241,7 +326,11 @@ function buildFallback(
 
     case 'not_found': {
       const item = facts.requestedItem?.trim()
-      const lead = item ? p.notFoundLead(item) : ''
+      const lead = item
+        ? facts.missingWhy === 'sold_out'
+          ? p.soldOutLead(item)
+          : p.notSoldLead(item)
+        : ''
       const sells = facts.shopSells?.filter(Boolean) ?? []
       const list = sells.length > 0 ? `${p.weSell(sells.join(', '))} ${p.wantAny}` : ''
       const head = upperFirst([lead, list].filter(Boolean).join(' '))
@@ -262,10 +351,27 @@ function buildFallback(
       return p.hereItIs
 
     case 'order_assistant':
+    case 'order_wrap':
       if (facts.orderOutcome === 'found' && facts.orderFacts?.trim()) {
-        return facts.orderFacts.trim()
+        return facts.orderAsk === 'full' ? facts.orderFacts.trim() : p.closeAfterOrder
       }
       return p.orderNotFound
+
+    case 'order_followup': {
+      if (facts.orderOutcome !== 'found') return p.orderNotFound
+      if (facts.orderAsk === 'eta' || facts.orderAsk === 'urgency') return p.orderEtaUnknown
+      if (facts.orderAsk === 'confirm_last' && facts.orderFacts?.trim()) {
+        const number = facts.orderFacts.match(/Order number:\s*(\S+)/i)?.[1]
+        return number
+          ? `Yes ${p.honorific}, that is your last order ${number}.`
+          : p.closeAfterOrder
+      }
+      return p.closeAfterOrder
+    }
+
+    case 'order_help':
+      if (facts.orderAsk === 'not_mine') return p.orderNotMine
+      return p.orderCannotCancel
 
     case 'order_needs_phone':
       return `${p.orderNeedsPhone}\n\n${p.browseHere}: ${facts.homeUrl}`
@@ -288,12 +394,31 @@ export function isHonestStockTalk(
   reply: string,
   template: LocalizedReplyTemplate
 ): boolean {
-  if (template !== 'not_found' && template !== 'greeting' && template !== 'alternative') {
+  if (
+    template !== 'not_found' &&
+    template !== 'greeting' &&
+    template !== 'alternative' &&
+    template !== 'language_switch'
+  ) {
     return true
   }
   const first = reply.trim().split(/[.!\n]/)[0]?.trim() ?? ''
   if (!STOCK_CLAIM_PATTERN.test(first)) return true
   return /\b(illa|ill|ഇല്ല)\b/i.test(first)
+}
+
+const ORDER_STOCK_MISS_PATTERN = /\b(ippo illa|ഇപ്പോൾ ഇല്ല|out of stock)\b/i
+
+export function isHonestOrderTalk(reply: string, template: LocalizedReplyTemplate): boolean {
+  if (
+    template !== 'order_assistant' &&
+    template !== 'order_wrap' &&
+    template !== 'order_followup' &&
+    template !== 'order_help'
+  ) {
+    return true
+  }
+  return !ORDER_STOCK_MISS_PATTERN.test(reply)
 }
 
 /**
@@ -353,6 +478,9 @@ function buildFactsBlock(template: LocalizedReplyTemplate, facts: LocalizedReply
   if (facts.customerAsk?.trim()) lines.push(`Customer asked: ${facts.customerAsk.trim()}`)
   if (facts.orderOutcome) lines.push(`Order lookup outcome: ${facts.orderOutcome}`)
   if (facts.orderScope) lines.push(`Order reply scope: ${facts.orderScope}`)
+  if (facts.missingWhy) lines.push(`Missing why: ${facts.missingWhy}`)
+  if (facts.sessionTopic) lines.push(`Last shop topic: ${facts.sessionTopic}`)
+  if (facts.orderAsk) lines.push(`Order ask: ${facts.orderAsk}`)
   if (facts.orderFacts?.trim()) lines.push(`Order facts:\n${facts.orderFacts.trim()}`)
 
   if (facts.lastShownProduct?.title) {
@@ -452,6 +580,10 @@ export async function buildLocalizedReply(input: LocalizedReplyInput): Promise<s
       }
       if (!isHonestStockTalk(trimmed, input.template)) {
         console.warn('[inbox-ai] reply rejected: claimed stock on %s', input.template)
+        continue
+      }
+      if (!isHonestOrderTalk(trimmed, input.template)) {
+        console.warn('[inbox-ai] reply rejected: stock talk on order %s', input.template)
         continue
       }
       return trimmed

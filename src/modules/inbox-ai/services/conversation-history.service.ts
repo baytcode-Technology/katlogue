@@ -110,3 +110,18 @@ export function extractLastShownProduct(
 
   return null
 }
+
+export type SessionTopic = 'order' | 'product' | 'missing' | null
+
+/** What the shop last talked about in this visit, so "ok" does not start a new sale. */
+export function detectSessionTopic(lines: ConversationHistoryLine[]): SessionTopic {
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i]
+    if (line.role !== 'store') continue
+    const text = line.text
+    if (/\bOrder number\s*:/i.test(text) || /\border status\b/i.test(text)) return 'order'
+    if (/https?:\/\/\S*\/product\//i.test(text)) return 'product'
+    if (/\b(illa|don't keep|do not (?:keep|sell)|not available)\b/i.test(text)) return 'missing'
+  }
+  return null
+}

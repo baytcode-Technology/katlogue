@@ -9,6 +9,7 @@ import {
   extractRequestedColor,
   fromLlmResult,
   parseCustomerIntentOffline,
+  resolveOrderAsk,
 } from '../services/parse-customer-intent.service.js'
 import { extractLastShownProduct, filterSessionHistory } from '../services/conversation-history.service.js'
 import {
@@ -418,6 +419,86 @@ test('a bag ask does not treat shirts as named alternatives', () => {
   })
   assert.deepEqual(sells, ['Men', 'shirts', 'pants'])
   assert.equal(sells.includes('Linen Shirt'), false)
+})
+
+console.log('\n=== Staff message intents ===')
+
+test('illa enickonnum venda okay is refuse, not a sale', () => {
+  const parsed = parseCustomerIntentOffline('illa enickonnum venda okay')
+  assert.equal(parsed.intent, 'refuse')
+  assert.equal(parsed.searchQuery, '')
+})
+
+test('malayalathil paray after shoes miss continues shoes, not Hi', () => {
+  const parsed = parseCustomerIntentOffline('malayalathil paray', {
+    recentMessages: [
+      { role: 'customer', text: 'shoes undo?' },
+      { role: 'store', text: 'shoes illa saar. Ee shop Men, shirts aanu.' },
+    ],
+  })
+  assert.equal(parsed.intent, 'language_switch')
+  assert.equal(parsed.customerLanguage, 'Malayalam')
+  assert.equal(parsed.sessionTopic, 'missing')
+  assert.equal(parsed.requestedItem, 'shoes')
+})
+
+test('stock out vs shopil illa after shoes miss stays a shoes miss', () => {
+  const parsed = parseCustomerIntentOffline('stock out ayathahno atho shopil illayo?', {
+    recentMessages: [
+      { role: 'customer', text: 'shoes undo?' },
+      { role: 'store', text: 'shoes illa saar. Ee shop Men, shirts aanu.' },
+    ],
+  })
+  assert.equal(parsed.intent, 'product_search')
+  assert.equal(parsed.categoryName, 'shoes')
+  assert.equal(parsed.missingWhy, 'not_sold')
+})
+
+test('ok after an order status is acknowledgement on that order', () => {
+  const parsed = parseCustomerIntentOffline('ok', {
+    recentMessages: [
+      {
+        role: 'store',
+        text: 'Order number: OCT26-1\nPlaced: 26 Oct 2026\nFulfillment: Unfulfilled',
+      },
+    ],
+  })
+  assert.equal(parsed.intent, 'acknowledgement')
+  assert.equal(parsed.sessionTopic, 'order')
+})
+
+test('is this my last order is confirm_last, not another full dump', () => {
+  assert.equal(resolveOrderAsk('is this my last order', 'order', true), 'confirm_last')
+  const parsed = parseCustomerIntentOffline('is this my last order', {
+    recentMessages: [{ role: 'store', text: 'Order number: OCT26-1\nFulfillment: Unfulfilled' }],
+  })
+  assert.equal(parsed.intent, 'order_status')
+  assert.equal(parsed.orderAsk, 'confirm_last')
+})
+
+test('eppo deliver and pettann vehnam are eta/urgency', () => {
+  const eta = parseCustomerIntentOffline('eppo deliver', {
+    recentMessages: [{ role: 'store', text: 'Order number: OCT26-1' }],
+  })
+  assert.equal(eta.intent, 'order_status')
+  assert.equal(eta.orderAsk, 'eta')
+  const urgent = parseCustomerIntentOffline('pettann vehnam eppo kittum', {
+    recentMessages: [{ role: 'store', text: 'Order number: OCT26-1' }],
+  })
+  assert.equal(urgent.intent, 'order_status')
+  assert.equal(urgent.orderAsk, 'urgency')
+})
+
+test('cancel my order is cancel, not a fake product search', () => {
+  const parsed = parseCustomerIntentOffline('cancel my order')
+  assert.equal(parsed.intent, 'order_status')
+  assert.equal(parsed.orderAsk, 'cancel')
+})
+
+test('price? with no item is a bare price ask', () => {
+  const parsed = parseCustomerIntentOffline('price?')
+  assert.equal(parsed.searchQuery, '')
+  assert.equal(parsed.categoryName, null)
 })
 
 if (failed > 0) {

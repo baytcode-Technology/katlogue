@@ -10,14 +10,16 @@ import {
   fromLlmResult,
   parseCustomerIntentOffline,
 } from '../services/parse-customer-intent.service.js'
-import { extractLastShownProduct } from '../services/conversation-history.service.js'
+import { extractLastShownProduct, filterSessionHistory } from '../services/conversation-history.service.js'
 import {
   pickPrimaryCatalogMatch,
   productMatchesRequestedCategory,
   resolveEffectiveSearchQuery,
   scoreProduct,
+  formatProductCaption,
 } from '../services/catalog-search.service.js'
 import type { CatalogMatch } from '../services/catalog-search.service.js'
+import { composeCatalogStaffReply, selectCatalogOffer } from '../services/build-product-reply.service.js'
 import type { Product } from '../../products/types/product.types.js'
 
 let failed = 0
@@ -247,6 +249,142 @@ test('primary match is trousers, not the shirt image product', () => {
 
   const primary = pickPrimaryCatalogMatch(matches, 'pants')
   assert.equal(primary?.product.name, pantsProduct.name)
+})
+
+console.log('\n=== This visit only ===')
+
+test('a hi 15 days later does not keep the old product', () => {
+  const now = Date.parse('2026-11-03T06:00:00.000Z')
+  const old = new Date(now - 15 * 24 * 60 * 60 * 1000).toISOString()
+  const filtered = filterSessionHistory(
+    [
+      { role: 'customer', text: 'blue shirt undo?', at: old },
+      {
+        role: 'store',
+        text: 'Ind saar\n\nhttps://shrox.aishopy.io/product/linen-shirt-4',
+        at: old,
+      },
+      { role: 'customer', text: 'hi', at: new Date(now).toISOString() },
+    ],
+    now
+  )
+  assert.equal(filtered.length, 1)
+  assert.equal(filtered[0]?.text, 'hi')
+  assert.equal(extractLastShownProduct(filtered), null)
+  const parsed = parseCustomerIntentOffline('hi')
+  assert.equal(parsed.intent, 'greeting')
+  assert.equal(parsed.searchQuery, '')
+  assert.equal(parsed.sku, null)
+})
+
+test('a colour follow-up inside the visit keeps the shirt', () => {
+  const now = Date.parse('2026-11-03T06:00:00.000Z')
+  const recent = new Date(now - 10 * 60 * 1000).toISOString()
+  const lines = filterSessionHistory(
+    [
+      { role: 'customer', text: 'blue shirt undo?', at: recent },
+      {
+        role: 'store',
+        text: 'https://shrox.aishopy.io/product/linen-shirt-4',
+        at: recent,
+      },
+    ],
+    now
+  )
+  const parsed = parseCustomerIntentOffline('white?', { recentMessages: lines })
+  assert.equal(parsed.intent, 'product_search')
+  assert.equal(parsed.categoryName, 'shirts')
+  assert.equal(parsed.color, 'White')
+  assert.match(parsed.searchQuery, /shirt/i)
+  assert.equal(parsed.alternativeCategories.length, 0)
+})
+
+console.log('\n=== Staff understanding ===')
+
+test('hi with a product is a product ask, not a greeting', () => {
+  const parsed = parseCustomerIntentOffline('Hi, I need a blue shirt')
+  assert.equal(parsed.intent, 'product_search')
+  assert.equal(parsed.categoryName, 'shirts')
+  assert.equal(parsed.color, 'Blue')
+})
+
+test('marriage is tone; kurta is searched before shirt', () => {
+  const parsed = parseCustomerIntentOffline(
+    'tomorrow I have a marriage so I need a blue kurta or shirt'
+  )
+  assert.equal(parsed.intent, 'product_search')
+  assert.equal(parsed.categoryName, 'kurtas')
+  assert.deepEqual(parsed.alternativeCategories, ['shirts'])
+  assert.equal(parsed.color, 'Blue')
+  assert.match(parsed.searchQuery, /kurta/i)
+  assert.equal(/marriage|tomorrow/i.test(parsed.searchQuery), false)
+})
+
+test('SKU-001 stays whole and an order number is not a SKU', () => {
+  const sku = parseCustomerIntentOffline('SKU-001')
+  assert.equal(sku.intent, 'sku_lookup')
+  assert.equal(sku.sku, 'SKU-001')
+
+  const labeled = parseCustomerIntentOffline('sku SKU-001')
+  assert.equal(labeled.sku, 'SKU-001')
+
+  const bare = parseCustomerIntentOffline('ABC-12')
+  assert.equal(bare.intent, 'sku_lookup')
+  assert.equal(bare.sku, 'ABC-12')
+
+  const order = parseCustomerIntentOffline('order JAN26-5')
+  assert.equal(order.intent, 'order_status')
+  assert.equal(order.sku, null)
+  assert.notEqual(parseCustomerIntentOffline('ok').intent, 'sku_lookup')
+  assert.notEqual(parseCustomerIntentOffline('hi').intent, 'sku_lookup')
+})
+
+test('missing kurta falls through to shirts with a code-built caption', () => {
+  const shirt = {
+    product: { name: 'Blue Formal Shirt', sku: 'SHIRT-9' },
+    variant: {
+      name: 'L',
+      sku: 'SHIRT-9-L',
+      options: { Color: 'Blue', Size: 'L' },
+    },
+    price: 799,
+    url: 'https://shrox.aishopy.io/product/blue-formal-shirt-3',
+    score: 80,
+  } as unknown as CatalogMatch
+  const kurta = {
+    product: { name: 'Blue Kurta' },
+    variant: null,
+    price: 900,
+    url: 'https://shrox.aishopy.io/product/blue-kurta-1',
+    score: 90,
+  } as unknown as CatalogMatch
+
+  const missed = selectCatalogOffer({
+    primary: [],
+    alternatives: [{ category: 'shirts', matches: [shirt] }],
+    requestedItem: 'blue kurta',
+  })
+  assert.equal(missed.missingItem, 'blue kurta')
+  assert.equal(missed.offeredCategory, 'shirts')
+  assert.equal(missed.matches[0], shirt)
+
+  const found = selectCatalogOffer({
+    primary: [kurta],
+    alternatives: [{ category: 'shirts', matches: [shirt] }],
+    requestedItem: 'blue kurta',
+  })
+  assert.equal(found.missingItem, null)
+  assert.equal(found.matches[0], kurta)
+
+  const reply = composeCatalogStaffReply([
+    "We don't have blue kurta sir. We have shirts.",
+    formatProductCaption(shirt, 'INR'),
+    'Which size do you need?',
+  ])
+  assert.match(reply, /kurta/i)
+  assert.match(reply, /shirts/i)
+  assert.match(reply, /SHIRT-9-L/)
+  assert.match(reply, /https:\/\/shrox\.aishopy\.io\/product\/blue-formal-shirt-3/)
 })
 
 if (failed > 0) {

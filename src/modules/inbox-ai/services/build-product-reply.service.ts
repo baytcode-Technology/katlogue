@@ -4,10 +4,14 @@ import { applyChatSrcToUrl } from '../lib/chat-src.js'
 import {
   buildLocalizedReply,
   buildProductReplyLines,
+  staffClosingLine,
   type LastShownProduct,
   type LocalizedReplyTemplate,
 } from './build-localized-reply.service.js'
-import type { ParsedCustomerIntent } from './parse-customer-intent.service.js'
+import {
+  categorySearchTerm,
+  type ParsedCustomerIntent,
+} from './parse-customer-intent.service.js'
 import {
   type CatalogMatch,
   filterMatchesByScore,
@@ -42,59 +46,123 @@ type ReplyContext = {
   lastShownProduct?: LastShownProduct | null
 }
 
-async function resolveMatches(
-  store: Store,
-  customerText: string,
-  intent: ParsedCustomerIntent
-): Promise<CatalogMatch[]> {
+type CatalogSlice = {
+  searchQuery: string
+  color: string | null
+  size: string | null
+  categoryName: string | null
+  sku: string | null
+}
+
+export type CatalogOffer = {
+  matches: CatalogMatch[]
+  missingItem: string | null
+  offeredCategory: string | null
+}
+
+export function selectCatalogOffer(input: {
+  primary: CatalogMatch[]
+  alternatives: Array<{ category: string; matches: CatalogMatch[] }>
+  requestedItem: string | null
+}): CatalogOffer {
+  if (input.primary.length > 0) {
+    return { matches: input.primary, missingItem: null, offeredCategory: null }
+  }
+  for (const alt of input.alternatives) {
+    if (alt.matches.length === 0) continue
+    return {
+      matches: alt.matches,
+      missingItem: input.requestedItem,
+      offeredCategory: alt.category,
+    }
+  }
+  return { matches: [], missingItem: null, offeredCategory: null }
+}
+
+export function composeCatalogStaffReply(parts: Array<string | null | undefined>): string {
+  return parts
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+async function searchSlice(store: Store, slice: CatalogSlice): Promise<CatalogMatch[]> {
   const currency = store.currency
-  let matches: CatalogMatch[] = []
-  const effectiveQuery = resolveEffectiveSearchQuery(intent.searchQuery, intent.categoryName)
+  const effectiveQuery = resolveEffectiveSearchQuery(slice.searchQuery, slice.categoryName)
   const searchIntent = {
     searchQuery: effectiveQuery,
-    color: intent.color,
-    size: intent.size,
-    categoryName: intent.categoryName,
+    color: slice.color,
+    size: slice.size,
+    categoryName: slice.categoryName,
   }
 
-  if (intent.intent === 'sku_lookup' && intent.sku) {
-    const match = await findBySku(store.id, store.slug, currency, intent.sku)
-    return match ? [match] : []
+  let matches = await searchCatalogFromIntent(store.id, store.slug, currency, searchIntent)
+
+  if (matches.length === 0 && slice.sku) {
+    const skuMatch = await findBySku(store.id, store.slug, currency, slice.sku)
+    if (skuMatch) matches = [skuMatch]
   }
 
-  if (intent.intent === 'category_search' && intent.categoryName) {
-    matches = await findByCategoryName(store.id, store.slug, currency, intent.categoryName)
-  } else {
-    matches = await searchCatalogFromIntent(store.id, store.slug, currency, searchIntent)
-
-    if (matches.length === 0 && intent.categoryName) {
-      matches = await findByCategoryName(store.id, store.slug, currency, intent.categoryName)
-    }
-
-    if (matches.length === 0 && intent.sku) {
-      const skuMatch = await findBySku(store.id, store.slug, currency, intent.sku)
-      if (skuMatch) matches = [skuMatch]
-    }
-
-    if (matches.length === 0) {
-      const fallbackQuery = effectiveQuery || customerText
-      matches = await searchCatalogFromIntent(store.id, store.slug, currency, {
-        searchQuery: fallbackQuery,
-        color: intent.color,
-        size: intent.size,
-        categoryName: intent.categoryName,
-      })
-    }
+  if (matches.length === 0 && slice.categoryName && !slice.color) {
+    matches = await findByCategoryName(store.id, store.slug, currency, slice.categoryName)
   }
 
-  if (intent.categoryName) {
-    const categoryMatches = matches.filter((m) =>
-      productMatchesRequestedCategory(m.product, intent.categoryName)
+  if (slice.categoryName) {
+    matches = matches.filter((match) =>
+      productMatchesRequestedCategory(match.product, slice.categoryName)
     )
-    matches = categoryMatches
   }
 
   return filterMatchesByScore(matches)
+}
+
+async function resolveCatalogOffer(
+  store: Store,
+  intent: ParsedCustomerIntent
+): Promise<CatalogOffer> {
+  const currency = store.currency
+
+  if (intent.intent === 'sku_lookup' && intent.sku) {
+    const match = await findBySku(store.id, store.slug, currency, intent.sku)
+    return { matches: match ? [match] : [], missingItem: null, offeredCategory: null }
+  }
+
+  const primary = await searchSlice(store, {
+    searchQuery: intent.searchQuery,
+    color: intent.color,
+    size: intent.size,
+    categoryName: intent.categoryName,
+    sku: intent.sku,
+  })
+
+  const alternatives: Array<{ category: string; matches: CatalogMatch[] }> = []
+  if (primary.length === 0) {
+    for (const category of intent.alternativeCategories) {
+      let matches = await searchSlice(store, {
+        searchQuery: categorySearchTerm(category),
+        color: intent.color,
+        size: intent.size,
+        categoryName: category,
+        sku: null,
+      })
+      if (matches.length === 0 && intent.color) {
+        matches = await searchSlice(store, {
+          searchQuery: categorySearchTerm(category),
+          color: null,
+          size: intent.size,
+          categoryName: category,
+          sku: null,
+        })
+      }
+      alternatives.push({ category, matches })
+    }
+  }
+
+  return selectCatalogOffer({
+    primary,
+    alternatives,
+    requestedItem: intent.requestedItem || intent.categoryName,
+  })
 }
 
 export async function buildProductReplyFromMatches(input: {
@@ -105,13 +173,14 @@ export async function buildProductReplyFromMatches(input: {
   ctx?: ReplyContext
   channel?: InboxAiChannel | null
   conversationId?: number | null
+  offer?: Pick<CatalogOffer, 'missingItem' | 'offeredCategory'> | null
 }): Promise<ProductReplyResult> {
   const { store, intent, customerMessage } = input
   const ctx = input.ctx ?? {}
   const currency = store.currency
   const customerLanguage = intent.customerLanguage
   const scriptStyle = intent.scriptStyle
-  const categoryName = intent.categoryName
+  const categoryName = input.offer?.offeredCategory || intent.categoryName
   const origin = getStoreHomeUrl(store)
   const matches = input.matches.map((match) => ({
     ...match,
@@ -151,6 +220,38 @@ export async function buildProductReplyFromMatches(input: {
   const rest = matches.filter((m) => m !== primary)
   const caption = formatProductCaption(primary, currency)
   const imageUrl = getMatchImageUrl(primary)
+  const missingItem = input.offer?.missingItem?.trim() || null
+
+  if (missingItem) {
+    const lead = await buildLocalizedReply({
+      customerLanguage,
+      scriptStyle,
+      customerMessage,
+      fallbackLanguage: store.ai_language,
+      customPrompt: ctx.customPrompt ?? store.ai_system_prompt,
+      conversationHistory: ctx.conversationHistory,
+      template: 'alternative',
+      facts: {
+        storeName: store.name,
+        homeUrl,
+        requestedItem: missingItem,
+        offeredItem: input.offer?.offeredCategory ?? null,
+      },
+    })
+    const followUpText =
+      rest.length > 0 ? formatOtherMatches(rest, currency) : null
+    return {
+      primaryText: composeCatalogStaffReply([
+        lead,
+        caption,
+        staffClosingLine(customerLanguage, scriptStyle),
+      ]),
+      followUpText,
+      matches,
+      primaryMatch: primary,
+      imageUrl,
+    }
+  }
 
   const lines = await buildProductReplyLines({
     customerLanguage,
@@ -174,10 +275,7 @@ export async function buildProductReplyFromMatches(input: {
 
   // Caption stays code-generated so prices and URLs are never model output; the
   // closing question is what turns a flat product dump into a sales reply.
-  const primaryText = [lines.intro, caption, lines.closing]
-    .map((part) => part?.trim())
-    .filter(Boolean)
-    .join('\n\n')
+  const primaryText = composeCatalogStaffReply([lines.intro, caption, lines.closing])
 
   return {
     primaryText,
@@ -209,12 +307,12 @@ async function buildTemplateReply(input: {
     customerMessage: input.customerMessage,
     fallbackLanguage: store.ai_language,
     customPrompt: ctx.customPrompt ?? store.ai_system_prompt,
-    conversationHistory: ctx.conversationHistory,
+    conversationHistory: input.template === 'greeting' ? null : ctx.conversationHistory,
     template: input.template,
     facts: {
       storeName: store.name,
       homeUrl,
-      lastShownProduct: ctx.lastShownProduct,
+      lastShownProduct: input.template === 'greeting' ? null : ctx.lastShownProduct,
       ...input.extraFacts,
     },
   })
@@ -390,7 +488,8 @@ export async function buildProductReply(input: {
     !intent.color &&
     !intent.categoryName &&
     !intent.sku &&
-    !intent.size
+    !intent.size &&
+    intent.alternativeCategories.length === 0
   ) {
     return {
       ...empty,
@@ -405,17 +504,18 @@ export async function buildProductReply(input: {
     }
   }
 
-  const matches = await resolveMatches(store, customerText, intent)
+  const offer = await resolveCatalogOffer(store, intent)
 
-  if (matches.length > 0) {
+  if (offer.matches.length > 0) {
     const reply = await buildProductReplyFromMatches({
-      matches,
+      matches: offer.matches,
       store,
       intent,
       customerMessage: customerText,
       ctx,
       channel: input.channel,
       conversationId: input.conversationId,
+      offer,
     })
     if (reply.primaryMatch) return reply
   }

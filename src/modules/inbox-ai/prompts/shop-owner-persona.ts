@@ -16,6 +16,7 @@ export type ShopOwnerTemplateTask =
   | 'acknowledgement'
   | 'buy_assist'
   | 'not_found'
+  | 'alternative'
   | 'refusal'
   | 'product_lines'
   | 'order_assistant'
@@ -46,6 +47,9 @@ const TEMPLATE_TASKS: Record<ShopOwnerTemplateTask, string> = {
 
   not_found:
     'We do not stock the exact item they asked for. Do NOT open with an apology or dwell on it. Lead with the closest things we DO have (from the facts), one short line, then ask if they want to see one of those. Share the store link. Stay positive and helpful, like a shop person offering an alternative off the shelf.',
+
+  alternative:
+    'They named more than one item and the first is not in this shop. We are about to send the next item they asked for. Write ONE or TWO short lines only: the missing item is not here, and we have the offered item. Use only those two names from the facts. Do NOT write a product title, price, SKU, size, or link. Do NOT apologise more than once. No list.',
 
   refusal:
     'Do NOT engage with the off-topic request. Politely redirect them in one line to ask about products from this store. Share the store link if helpful. Never discuss languages, PDFs, code, or unrelated topics.',

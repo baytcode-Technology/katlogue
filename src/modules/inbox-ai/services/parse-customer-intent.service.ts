@@ -75,6 +75,8 @@ export type ParsedCustomerIntent = {
   missingWhy: MissingWhy | null
   /** Later products they also accepted, in the order they named them. */
   alternativeCategories: string[]
+  /** They rejected the last sent product and named a different item. */
+  rejectsLastShown: boolean
   /** Set when message is off-topic due to language-capability questions */
   offTopicReason?: 'language_meta' | 'general' | null
 }
@@ -131,6 +133,7 @@ CRITICAL — Extract product only:
 - Pairing / owned-item context: "I have a green shirt, need pants to pair / send pant images" → searchQuery: "pants", categoryName: "pants", color: null. Do NOT search for the item they already own.
 - "ente kayyil oru green shirt ond … pantsinte images ayackavo" → searchQuery: "pants", categoryName: "pants", color: null.
 - Latest message product type ALWAYS overrides prior conversation. If they talked about shirts and now ask for pants, searchQuery is "pants" — never keep "shirt".
+- If they reject the last item ("ith shirt alle, t shirt vendath", "not this, I want a mixer"), searchQuery/categoryName are what they want NOW. categoryName should be this shop's department name when it matches.
 - Follow-ups: if they previously asked about shirts and now say ONLY "white?" or "വെള്ള?" with no new product type → product_search, color: "white", searchQuery: "shirt"
 - Only extract what product they want to buy.
 
@@ -193,7 +196,7 @@ const OCCASION_PATTERN =
  * still reaches product_search.
  */
 const ACK_PATTERN =
-  /^(ok|oke?y|okk+|k|kk|ack|ss|mm+|hm+|sheri|seri|thanks?|thank\s*you|thx|ty|tnx|nice|super|good|great|cool|fine|got\s*it|understood|adipoli|kollam|balle|ശരി|നന്ദി|കൊള്ളാം|അടിപൊളി|ठीक|शुक्रिया|சரி|நன்றி)[\s.!,👍🙏😊😀🙂❤️✅]*(ok|okay|sir|saar|sar|chetta|chechi|bro|madam|സാർ|ചേട്ടാ|ചേച്ചി)?[\s.!,👍🙏😊😀🙂❤️✅]*$/i
+  /^(ok(?:ay|ey)?|okk+|k|kk|ack|ss|mm+|hm+|sheri|seri|thanks?|thank\s*you|thx|ty|tnx|nice|super|good|great|cool|fine|got\s*it|understood|adipoli|kollam|balle|ശരി|നന്ദി|കൊള്ളാം|അടിപൊളി|ठीक|शुक्रिया|சரி|நன்றி)[\s.!,👍🙏😊😀🙂❤️✅]*(ok|okay|sir|saar|sar|chetta|chechi|bro|madam|സാർ|ചേട്ടാ|ചേച്ചി)?[\s.!,👍🙏😊😀🙂❤️✅]*$/i
 
 /** Emoji / punctuation only messages are reactions too. */
 const EMOJI_ONLY_PATTERN =
@@ -201,14 +204,14 @@ const EMOJI_ONLY_PATTERN =
 
 /** Wants to buy / order what was already shown, without naming a new product. */
 const BUY_INTENT_PATTERN =
-  /\b(how\s+(do\s+i|to|can\s+i)\s+(order|buy|pay)|i(?:'| a)?ll?\s+take\s+(it|this)|i\s+want\s+(it|this)|book\s+(it|this)|place\s+(the\s+)?order|order\s+cheyy?(am|aam|an|anam|umo|ano)|order\s+cheyyan\s+pattum(o)?|edukk?(am|aam|ano|umo)|vaangan|vangam|cash\s+on\s+delivery|\bcod\b|online\s+payment|delivery\s+charge|free\s+delivery)\b|എടുക്കാം|ഓർഡർ\s*ചെയ്യ|വാങ്ങ/i
+  /\b(how\s+(do\s+i|to|can\s+i)\s+(order|buy|pay)|i(?:'| a)?ll?\s+take\s+(it|this)|i\s+want\s+(it|this)|book\s+(it|this)|place\s+(the\s+)?order|order\s+cheyy?(am|aam|an|anam|umo|ano)|cheyyahnam|cheyyanam|cheyyam|order\s+cheyyan\s+pattum(o)?|edukk?(am|aam|ano|umo)|vaangan|vangam|cash\s+on\s+delivery|\bcod\b|online\s+payment|delivery\s+charge|free\s+delivery)\b|എടുക്കാം|ഓർഡർ\s*ചെയ്യ|വാങ്ങ/i
 
 const LANGUAGE_META_PATTERN =
   /\b(do\s+you\s+know|can\s+you\s+speak|do\s+you\s+speak|know\s+malayalam|know\s+tamil|know\s+hindi|മലയാളം\s*അറിയാമോ|അറിയാമോ|നിങ്ങൾക്ക്\s*മലയാളം|നിനക്ക്\s*മലയാളം)\b/i
 
 /** Ask to continue in another language — not “do you know Malayalam?” */
 const LANGUAGE_SWITCH_PATTERN =
-  /\b(malayalathil\s+paray|malayalathil|in\s+malayalam|in\s+hindi|in\s+english|hindi\s+il|english\s+il|tamil\s+il|speak\s+(?:in\s+)?(?:malayalam|hindi|english|tamil)|reply\s+in\s+\w+|മലയാളത്തിൽ)\b/i
+  /\b(malayalathil\s+paray|malayalathil|englishil|hindiil|tamilil|in\s+malayalam|in\s+hindi|in\s+english|hindi\s+il|english\s+il|tamil\s+il|speak\s+(?:in\s+)?(?:malayalam|hindi|english|tamil)|tell\s+me\s+in\s+\w+|reply\s+in\s+\w+|മലയാളത്തിൽ)\b/i
 
 const REFUSE_PATTERN =
   /\b(onnum\s*venda|onnum\s*venam\s*illa|enickonnum\s*venda|enik(?:ku)?onnum\s*venda|no\s+thanks|not\s+interested|don'?t\s+want\s+(anything|it)|nothing\s+(needed|thanks)|illa\s+enickonnum\s*venda|vendam\s+okay|onnum\s+venda\s+okay)\b|ഒന്നും\s*വേണ്ട/i
@@ -328,14 +331,16 @@ const MALAYALAM_COLOR_MAP: Record<string, string> = {
 }
 
 const CATEGORY_WORDS = [
-  't-shirt', 'tshirt', 'shirts', 'shirt',
+  't-shirt', 'tshirt', 'tee-shirt', 'tees', 'tee',
+  'shirts', 'shirt',
   'trousers', 'trouser', 'pants', 'pant', 'jeans',
   'dresses', 'dress', 'kurta', 'saree', 'sari', 'tops', 'top',
   'jackets', 'jacket', 'shoes', 'shoe', 'beanie', 'benny', 'innerwear',
 ]
 
 const CATEGORY_GROUPS: Record<string, string[]> = {
-  shirts: ['t-shirt', 'tshirt', 'shirts', 'shirt'],
+  tshirts: ['t-shirt', 'tshirt', 'tee-shirt', 'tees', 'tee'],
+  shirts: ['shirts', 'shirt'],
   pants: ['trousers', 'trouser', 'pants', 'pant', 'jeans'],
   dresses: ['dresses', 'dress'],
   kurtas: ['kurta'],
@@ -350,6 +355,13 @@ const CATEGORY_GROUPS: Record<string, string[]> = {
 const BUY_SIGNAL_PATTERN =
   /\b(need|want|send|show|photo|image|picture|pic|pair|looking\s+for|undo|undu|vendath|vendam|koodi|ayackavo|ayakkavo|ayakku)\b|pantsinte|pair\s*cheyy|ഉണ്ടോ/i
 
+const PRODUCT_CORRECTION_PATTERN =
+  /\b(ith(u)?\s+\S+\s+alle|alle\s+enick|not\s+(this|that|it)|this\s+is\s+not|i\s+asked\s+for|vendath\s+ith|aahn\s+vendath)\b/i
+
+export function isProductCorrectionMessage(text: string): boolean {
+  return PRODUCT_CORRECTION_PATTERN.test(text.trim())
+}
+
 const OWNERSHIP_PATTERN =
   /\b(have|already\s+own|own|kayyil|ente\s+kayyil|kayyil\s+oru|ond|undu)\b/i
 
@@ -358,6 +370,7 @@ type CategoryHit = {
   canonical: string
   index: number
   end: number
+  fromStore?: boolean
 }
 
 function detectLanguageFromText(text: string): string {
@@ -535,10 +548,38 @@ export function isShopInfoMessage(text: string, sessionTopic: SessionTopic): boo
 function languageFromSwitchRequest(text: string): string | null {
   const lower = text.toLowerCase()
   if (/malayalam|malayalathil|മലയാള/.test(lower)) return 'Malayalam'
-  if (/\bhindi\b|हिंदी/.test(lower)) return 'Hindi'
-  if (/\btamil\b|தமிழ்/.test(lower)) return 'Tamil'
-  if (/\benglish\b/.test(lower)) return 'English'
+  if (/\bhindi\b|hindiil|हिंदी/.test(lower)) return 'Hindi'
+  if (/\btamil\b|tamilil|தமிழ்/.test(lower)) return 'Tamil'
+  if (/englishil|\benglish\b/.test(lower)) return 'English'
   return null
+}
+
+function lastRequestedReplyLanguage(
+  lines?: ConversationHistoryLine[]
+): string | null {
+  if (!lines?.length) return null
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i]
+    if (line.role !== 'customer') continue
+    if (!isLanguageSwitchMessage(line.text)) continue
+    return languageFromSwitchRequest(line.text)
+  }
+  return null
+}
+
+function resolveReplyLanguage(input: {
+  trimmed: string
+  detected: string
+  recentMessages?: ConversationHistoryLine[]
+  switchLanguage?: string | null
+}): string {
+  if (input.switchLanguage) return input.switchLanguage
+  const shortAck = /^(ok(ay)?|thanks|thank you|sheri|ശരി)[\s!.,]*$/i.test(input.trimmed)
+  if (shortAck || isAcknowledgement(input.trimmed)) {
+    const stuck = lastRequestedReplyLanguage(input.recentMessages)
+    if (stuck) return stuck
+  }
+  return input.detected
 }
 
 function isOffTopicMessage(text: string): boolean {
@@ -586,14 +627,23 @@ function extractColor(text: string): string | null {
   return null
 }
 
+function isTshirtTerm(term: string): boolean {
+  return /\bt[- ]?shirts?\b|\btshirts?\b|\btee[- ]?shirts?\b|\btees?\b/i.test(term)
+}
+
 function canonicalCategory(term: string): string | null {
   const lower = term.toLowerCase().trim()
   if (!lower) return null
+  if (isTshirtTerm(lower)) return 'tshirts'
   for (const [canonical, words] of Object.entries(CATEGORY_GROUPS)) {
-    if (words.some((w) => lower === w || lower.includes(w))) {
-      return canonical
-    }
+    if (canonical === 'tshirts') continue
+    if (words.some((w) => lower === w)) return canonical
   }
+  for (const [canonical, words] of Object.entries(CATEGORY_GROUPS)) {
+    if (canonical === 'tshirts' || canonical === 'shirts') continue
+    if (words.some((w) => lower.includes(w))) return canonical
+  }
+  if (/\bshirts?\b/i.test(lower) && !isTshirtTerm(lower)) return 'shirts'
   return null
 }
 
@@ -604,6 +654,28 @@ function categoryWordPattern(cat: string): RegExp {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function storeCategoryStem(name: string): string {
+  return name.replace(/s$/i, '').toLowerCase()
+}
+
+function tokenMatchesStoreCategory(token: string, categoryName: string): boolean {
+  const stem = storeCategoryStem(categoryName)
+  const t = token.toLowerCase()
+  if (!t || t.length < 3) return false
+  if (t === stem || t === `${stem}s` || t === categoryName.toLowerCase()) return true
+  if (t.length >= 4 && stem.length >= 4 && t.slice(0, 4) === stem.slice(0, 4)) return true
+  if (
+    t.length >= 4 &&
+    stem.length >= 4 &&
+    Math.abs(t.length - stem.length) <= 2 &&
+    t.slice(0, 3) === stem.slice(0, 3)
+  ) {
+    return true
+  }
+  if (stem.startsWith(t) || t.startsWith(stem)) return true
+  return false
 }
 
 function findStoreCategoryHits(text: string, storeCategories: string[]): CategoryHit[] {
@@ -622,6 +694,27 @@ function findStoreCategoryHits(text: string, storeCategories: string[]): Categor
         canonical: name,
         index: match.index,
         end: match.index + match[0].length,
+        fromStore: true,
+      })
+    }
+  }
+  const tokenRe = /[\p{L}\p{N}]+/gu
+  let tokenMatch: RegExpExecArray | null
+  while ((tokenMatch = tokenRe.exec(lower)) !== null) {
+    const token = tokenMatch[0]
+    const tokenIndex = tokenMatch.index
+    for (const name of names) {
+      if (!tokenMatchesStoreCategory(token, name)) continue
+      const already = hits.some(
+        (hit) => hit.fromStore && hit.canonical === name && hit.index === tokenIndex
+      )
+      if (already) continue
+      hits.push({
+        word: name,
+        canonical: name,
+        index: tokenIndex,
+        end: tokenIndex + token.length,
+        fromStore: true,
       })
     }
   }
@@ -646,11 +739,17 @@ function findCategoryHits(text: string, storeCategories: string[] = []): Categor
     }
   }
   hits.push(...findStoreCategoryHits(text, storeCategories))
-  hits.sort((a, b) => a.index - b.index || b.word.length - a.word.length)
+  hits.sort((a, b) => a.index - b.index || Number(b.fromStore) - Number(a.fromStore) || b.word.length - a.word.length)
   const deduped: CategoryHit[] = []
   for (const hit of hits) {
-    const overlaps = deduped.some((d) => hit.index < d.end && hit.end > d.index)
-    if (!overlaps) deduped.push(hit)
+    const overlapAt = deduped.findIndex((d) => hit.index < d.end && hit.end > d.index)
+    if (overlapAt < 0) {
+      deduped.push(hit)
+      continue
+    }
+    if (hit.fromStore && !deduped[overlapAt]?.fromStore) {
+      deduped[overlapAt] = hit
+    }
   }
   return deduped
 }
@@ -683,10 +782,12 @@ export function extractRequestedCategory(
   if (hits.length === 1) return hits[0].canonical
 
   const either = /\bor\b|അല്ലെങ്കിൽ/i.test(text)
+  const scoreHit = (hit: CategoryHit) =>
+    windowScore(text, hit.index, hit.end) + (hit.fromStore ? 2 : 0)
   let best = hits[0]
-  let bestScore = windowScore(text, best.index, best.end)
+  let bestScore = scoreHit(best)
   for (const hit of hits.slice(1)) {
-    const score = windowScore(text, hit.index, hit.end)
+    const score = scoreHit(hit)
     const tie = score === bestScore
     const preferThis =
       score > bestScore ||
@@ -727,6 +828,7 @@ export function extractAlternativeCategories(
 }
 
 export function categorySearchTerm(canonical: string): string {
+  if (canonical === 'tshirts') return 't-shirt'
   const words = CATEGORY_GROUPS[canonical]
   if (!words?.length) return canonical
   return [...words].sort((a, b) => a.length - b.length)[0]
@@ -813,6 +915,7 @@ function colorFollowUpIntent(
   recentMessages?: ConversationHistoryLine[],
   storeCategories: string[] = []
 ): ParsedCustomerIntent | null {
+  if (isProductCorrectionMessage(trimmed)) return null
   if (!isColorOnlyFollowUp(trimmed, storeCategories)) return null
   const categoryName = categoryFromSession(recentMessages, trimmed, storeCategories)
   if (!categoryName) return null
@@ -1002,6 +1105,7 @@ function finalizeIntent(
     | 'orderAsk'
     | 'sessionTopic'
     | 'missingWhy'
+    | 'rejectsLastShown'
   > & {
     requestedItem?: string | null
     orderNumberHint?: string | null
@@ -1010,9 +1114,11 @@ function finalizeIntent(
     orderAsk?: OrderAsk | null
     sessionTopic?: SessionTopic
     missingWhy?: MissingWhy | null
+    rejectsLastShown?: boolean
   },
   trimmed: string,
-  storeCategories: string[] = []
+  storeCategories: string[] = [],
+  recentMessages?: ConversationHistoryLine[]
 ): ParsedCustomerIntent {
   const hasCatalogSignals = Boolean(
     partial.searchQuery.trim() ||
@@ -1047,10 +1153,15 @@ function finalizeIntent(
           (partial.searchQuery.trim() || null)
 
   const detected = detectLanguageAndScript(trimmed)
-  const customerLanguage =
-    partial.customerLanguage?.trim() && partial.customerLanguage !== 'Unknown'
-      ? partial.customerLanguage.trim()
-      : detected.language
+  const customerLanguage = resolveReplyLanguage({
+    trimmed,
+    detected:
+      partial.customerLanguage?.trim() && partial.customerLanguage !== 'Unknown'
+        ? partial.customerLanguage.trim()
+        : detected.language,
+    recentMessages,
+    switchLanguage: intent === 'language_switch' ? languageFromSwitchRequest(trimmed) : null,
+  })
 
   return {
     ...partial,
@@ -1071,6 +1182,7 @@ function finalizeIntent(
     typedPhone: partial.typedPhone?.trim() || null,
     sessionTopic: partial.sessionTopic ?? null,
     missingWhy: partial.missingWhy ?? null,
+    rejectsLastShown: isNonCatalog ? false : isProductCorrectionMessage(trimmed),
     alternativeCategories: isNonCatalog
       ? []
       : extractAlternativeCategories(trimmed, storeCategories),
@@ -1126,6 +1238,9 @@ export function fromLlmResult(
   if (intent === 'off_topic' && isLanguageSwitchMessage(trimmed)) intent = 'language_switch'
   if (isShopInfoMessage(trimmed, sessionTopic) && !mentionsProduct) {
     intent = WHAT_WE_SELL_PATTERN.test(trimmed) ? 'greeting' : 'shop_info'
+  }
+  if (isProductCorrectionMessage(trimmed) && mentionsProduct) {
+    intent = 'product_search'
   }
 
   const llmConflicts =
@@ -1193,7 +1308,8 @@ export function fromLlmResult(
       sessionTopic,
     },
     trimmed,
-    storeCategories
+    storeCategories,
+    recentMessages
   )
 }
 
@@ -1247,7 +1363,8 @@ function regexFallback(
         sessionTopic,
       },
       trimmed,
-      storeCategories
+      storeCategories,
+      recentMessages
     )
   }
 
@@ -1273,7 +1390,8 @@ function regexFallback(
         sessionTopic,
       },
       trimmed,
-      storeCategories
+      storeCategories,
+      recentMessages
     )
   }
 
@@ -1297,7 +1415,8 @@ function regexFallback(
         offTopicReason: 'language_meta',
       },
       trimmed,
-      storeCategories
+      storeCategories,
+      recentMessages
     )
   }
 
@@ -1321,7 +1440,8 @@ function regexFallback(
         offTopicReason: 'general',
       },
       trimmed,
-      storeCategories
+      storeCategories,
+      recentMessages
     )
   }
 
@@ -1344,7 +1464,8 @@ function regexFallback(
         sessionTopic,
       },
       trimmed,
-      storeCategories
+      storeCategories,
+      recentMessages
     )
   }
 
@@ -1367,7 +1488,8 @@ function regexFallback(
         sessionTopic,
       },
       trimmed,
-      storeCategories
+      storeCategories,
+      recentMessages
     )
   }
 
@@ -1393,7 +1515,8 @@ function regexFallback(
         sessionTopic,
       },
       trimmed,
-      storeCategories
+      storeCategories,
+      recentMessages
     )
   }
 
@@ -1425,7 +1548,8 @@ function regexFallback(
         sessionTopic,
       },
       trimmed,
-      storeCategories
+      storeCategories,
+      recentMessages
     )
   }
 
@@ -1451,7 +1575,8 @@ function regexFallback(
         sessionTopic,
       },
       trimmed,
-      storeCategories
+      storeCategories,
+      recentMessages
     )
   }
 
@@ -1474,7 +1599,8 @@ function regexFallback(
         sessionTopic,
       },
       trimmed,
-      storeCategories
+      storeCategories,
+      recentMessages
     )
   }
 
@@ -1500,7 +1626,9 @@ function regexFallback(
           typedPhone: null,
           sessionTopic,
         },
-        trimmed
+        trimmed,
+        storeCategories,
+        recentMessages
       )
     }
   }
@@ -1528,7 +1656,8 @@ function regexFallback(
         missingWhy: 'not_sold',
       },
       trimmed,
-      storeCategories
+      storeCategories,
+      recentMessages
     )
   }
 
@@ -1552,7 +1681,8 @@ function regexFallback(
         sessionTopic,
       },
       trimmed,
-      storeCategories
+      storeCategories,
+      recentMessages
     )
   }
 
@@ -1580,7 +1710,8 @@ function regexFallback(
         sessionTopic: sessionTopic ?? 'product',
       },
       trimmed,
-      storeCategories
+      storeCategories,
+      recentMessages
     )
   }
 
@@ -1606,7 +1737,8 @@ function regexFallback(
       sessionTopic,
     },
     trimmed,
-    storeCategories
+    storeCategories,
+    recentMessages
   )
 }
 
@@ -1654,7 +1786,8 @@ export async function parseCustomerIntent(
         offTopicReason: 'general',
       },
       trimmed,
-      storeCategories
+      storeCategories,
+      options?.recentMessages
     )
   }
 

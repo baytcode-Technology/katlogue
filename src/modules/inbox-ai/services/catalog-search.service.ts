@@ -33,9 +33,11 @@ const CATALOG_SUMMARY_LIMIT = 12
 const CATEGORY_MATCH_BOOST = 60
 const CATEGORY_CONFLICT_PENALTY = 80
 
-const CATEGORY_SYNONYMS: Record<string, string[]> = {
+/** Same-item expansions only. Shirt and t-shirt stay different. */
+const SAME_ITEM_SYNONYMS: Record<string, string[]> = {
   pants: ['pant', 'pants', 'trouser', 'trousers', 'jeans'],
-  shirts: ['t-shirt', 'tshirt', 'shirt', 'shirts'],
+  tshirts: ['t-shirt', 'tshirt', 'tee-shirt', 'tee', 'tees'],
+  shirts: ['shirt', 'shirts'],
   dresses: ['dress', 'dresses'],
   kurtas: ['kurta', 'kurtas'],
   sarees: ['saree', 'sari', 'sarees'],
@@ -46,36 +48,95 @@ const CATEGORY_SYNONYMS: Record<string, string[]> = {
   innerwear: ['innerwear'],
 }
 
+function isTshirtCatalogTerm(term: string): boolean {
+  return /\bt[- ]?shirts?\b|\btshirts?\b|\btee[- ]?shirts?\b|\btees?\b/i.test(term)
+}
+
 function canonicalCatalogCategory(term: string | null | undefined): string | null {
   const lower = term?.toLowerCase().trim()
   if (!lower) return null
-  for (const [canonical, words] of Object.entries(CATEGORY_SYNONYMS)) {
-    if (canonical === lower || words.some((w) => lower === w || lower.includes(w))) {
+  if (lower === 'tshirts' || isTshirtCatalogTerm(lower)) return 'tshirts'
+  if (lower === 'shirts') return 'shirts'
+  for (const [canonical, words] of Object.entries(SAME_ITEM_SYNONYMS)) {
+    if (canonical === 'tshirts' || canonical === 'shirts') continue
+    if (canonical === lower || words.some((w) => lower === w)) {
       return canonical
     }
   }
+  if (/\bshirts?\b/i.test(lower) && !isTshirtCatalogTerm(lower)) return 'shirts'
   return null
 }
 
 function synonymsFor(categoryName: string | null | undefined): string[] {
   const canonical = canonicalCatalogCategory(categoryName)
   if (!canonical) return []
-  return CATEGORY_SYNONYMS[canonical] ?? []
+  return SAME_ITEM_SYNONYMS[canonical] ?? []
 }
 
 function textHasCategoryWord(text: string, words: string[]): boolean {
   const lower = text.toLowerCase()
-  return words.some((w) => lower.includes(w))
+  return words.some((w) => {
+    const base = w.replace('-', '[- ]?')
+    return new RegExp(`\\b${base}s?\\b`, 'i').test(lower)
+  })
+}
+
+function namesFuzzyMatch(ask: string, name: string): boolean {
+  const a = ask.trim().toLowerCase()
+  const n = name.trim().toLowerCase()
+  if (!a || !n) return false
+  if (a === n || n.includes(a) || a.includes(n)) return true
+  const astem = a.replace(/s$/i, '')
+  const nstem = n.replace(/s$/i, '')
+  if (astem.length >= 4 && nstem.length >= 4 && astem.slice(0, 4) === nstem.slice(0, 4)) {
+    return true
+  }
+  if (
+    astem.length >= 4 &&
+    nstem.length >= 4 &&
+    Math.abs(astem.length - nstem.length) <= 2 &&
+    astem.slice(0, 3) === nstem.slice(0, 3)
+  ) {
+    return true
+  }
+  const ac = canonicalCatalogCategory(a)
+  const nc = canonicalCatalogCategory(n)
+  return Boolean(ac && nc && ac === nc)
+}
+
+function queryTokens(query: string): string[] {
+  const q = query
+    .toLowerCase()
+    .replace(/\bt\s+shirts?\b/g, 't-shirt')
+    .replace(/\btshirts?\b/g, 't-shirt')
+  return q.split(/\s+/).filter((t) => t.length > 1)
 }
 
 export function productMatchesRequestedCategory(
-  product: Pick<Product, 'name' | 'description'>,
-  categoryName: string | null | undefined
+  product: Pick<Product, 'name' | 'description'> & { category_id?: number | null },
+  categoryName: string | null | undefined,
+  productCategoryName?: string | null
 ): boolean {
   if (!categoryName) return true
-  const words = synonymsFor(categoryName)
-  if (words.length === 0) return true
+  if (productCategoryName && namesFuzzyMatch(categoryName, productCategoryName)) {
+    const canonical = canonicalCatalogCategory(categoryName)
+    if (canonical === 'tshirts') {
+      return isTshirtCatalogTerm(`${product.name} ${product.description ?? ''}`) ||
+        canonicalCatalogCategory(productCategoryName) === 'tshirts'
+    }
+    if (canonical === 'shirts' && canonicalCatalogCategory(productCategoryName) === 'tshirts') {
+      return false
+    }
+    return true
+  }
+  const canonical = canonicalCatalogCategory(categoryName)
   const haystack = `${product.name} ${product.description ?? ''}`.toLowerCase()
+  if (canonical === 'tshirts') return isTshirtCatalogTerm(haystack)
+  if (canonical === 'shirts') return /\bshirts?\b/i.test(haystack) && !isTshirtCatalogTerm(haystack)
+  const words = synonymsFor(categoryName)
+  if (words.length === 0) {
+    return namesFuzzyMatch(categoryName, haystack)
+  }
   return textHasCategoryWord(haystack, words)
 }
 
@@ -87,23 +148,42 @@ export function resolveEffectiveSearchQuery(
   const canonicalCategory = canonicalCatalogCategory(categoryName)
   const canonicalQuery = canonicalCatalogCategory(trimmed)
   if (canonicalCategory && canonicalQuery && canonicalCategory !== canonicalQuery) {
+    if (canonicalQuery === 'tshirts' || canonicalCategory === 'tshirts') return 't-shirt'
     return canonicalCategory
+  }
+  if (canonicalQuery === 'tshirts') {
+    return trimmed.toLowerCase().includes('t-shirt') || /\bt\s+shirt/i.test(trimmed)
+      ? trimmed.replace(/\bt\s+shirts?\b/i, 't-shirt')
+      : 't-shirt'
   }
   return trimmed || categoryName?.trim() || ''
 }
 
 function categoryAffinityScore(
   product: Pick<Product, 'name' | 'description'>,
-  categoryName?: string | null
+  categoryName?: string | null,
+  productCategoryName?: string | null
 ): number {
   if (!categoryName) return 0
-  const canonical = canonicalCatalogCategory(categoryName)
-  if (!canonical) return 0
-  const haystack = `${product.name} ${product.description ?? ''}`.toLowerCase()
-  if (textHasCategoryWord(haystack, CATEGORY_SYNONYMS[canonical] ?? [])) {
+  if (productCategoryName && namesFuzzyMatch(categoryName, productCategoryName)) {
     return CATEGORY_MATCH_BOOST
   }
-  for (const [key, words] of Object.entries(CATEGORY_SYNONYMS)) {
+  if (productCategoryName) {
+    const want = canonicalCatalogCategory(categoryName)
+    const got = canonicalCatalogCategory(productCategoryName)
+    if (want && got && want !== got) return -CATEGORY_CONFLICT_PENALTY
+  }
+  const canonical = canonicalCatalogCategory(categoryName)
+  if (!canonical) {
+    return namesFuzzyMatch(categoryName, `${product.name} ${product.description ?? ''}`)
+      ? CATEGORY_MATCH_BOOST
+      : 0
+  }
+  const haystack = `${product.name} ${product.description ?? ''}`.toLowerCase()
+  if (textHasCategoryWord(haystack, SAME_ITEM_SYNONYMS[canonical] ?? [])) {
+    return CATEGORY_MATCH_BOOST
+  }
+  for (const [key, words] of Object.entries(SAME_ITEM_SYNONYMS)) {
     if (key === canonical) continue
     if (textHasCategoryWord(haystack, words)) return -CATEGORY_CONFLICT_PENALTY
   }
@@ -111,9 +191,10 @@ function categoryAffinityScore(
 }
 
 export function scoreProduct(
-  product: Pick<Product, 'name' | 'description'>,
+  product: Pick<Product, 'name' | 'description'> & { category_id?: number | null },
   query: string,
-  categoryName?: string | null
+  categoryName?: string | null,
+  productCategoryName?: string | null
 ): number {
   const q = resolveEffectiveSearchQuery(query, categoryName).toLowerCase()
   const name = product.name.toLowerCase()
@@ -123,18 +204,24 @@ export function scoreProduct(
     score = 10
   } else if (name === q) {
     score = 100
+  } else if (isTshirtCatalogTerm(q) && !isTshirtCatalogTerm(`${name} ${desc}`)) {
+    score = 0
   } else if (name.includes(q)) {
     score = 80
   } else if (desc.includes(q)) {
     score = 40
   } else {
-    const tokens = q.split(/\s+/).filter(Boolean)
+    const tokens = queryTokens(q)
     for (const t of tokens) {
+      if (t === 't-shirt') {
+        if (isTshirtCatalogTerm(name) || isTshirtCatalogTerm(desc)) score += 40
+        continue
+      }
       if (name.includes(t)) score += 20
       if (desc.includes(t)) score += 5
     }
   }
-  return score + categoryAffinityScore(product, categoryName)
+  return score + categoryAffinityScore(product, categoryName, productCategoryName)
 }
 
 export type StoreCatalogSummary = {
@@ -148,11 +235,20 @@ export function filterMatchesByScore(matches: CatalogMatch[]): CatalogMatch[] {
 
 export function pickPrimaryCatalogMatch(
   matches: CatalogMatch[],
-  categoryName?: string | null
+  categoryName?: string | null,
+  categoryNamesById?: Map<number, string>
 ): CatalogMatch | null {
   if (matches.length === 0) return null
   if (!categoryName) return matches[0]
-  return matches.find((m) => productMatchesRequestedCategory(m.product, categoryName)) ?? null
+  return (
+    matches.find((m) =>
+      productMatchesRequestedCategory(
+        m.product,
+        categoryName,
+        m.product.category_id != null ? categoryNamesById?.get(m.product.category_id) : null,
+      ),
+    ) ?? null
+  )
 }
 
 export async function getStoreCatalogSummary(storeId: number): Promise<StoreCatalogSummary> {
@@ -328,7 +424,8 @@ function searchProducts(
   products: Product[],
   variantMap: Map<number, ProductVariant[]>,
   storeSlug: string,
-  filters: CatalogSearchFilters
+  filters: CatalogSearchFilters,
+  categoryNamesById?: Map<number, string>
 ): CatalogMatch[] {
   const scored = products
     .map((product) => {
@@ -336,7 +433,14 @@ function searchProducts(
       if (filters.color && !productMatchesColor(product, variants, filters.color)) {
         return null
       }
-      const productScore = scoreProduct(product, filters.query, filters.categoryName)
+      const productCategoryName =
+        product.category_id != null ? categoryNamesById?.get(product.category_id) ?? null : null
+      const productScore = scoreProduct(
+        product,
+        filters.query,
+        filters.categoryName,
+        productCategoryName,
+      )
       const variant = pickBestVariant(variants, filters)
       if (filters.color && !variant) return null
       const variantScore = variant ? scoreVariant(variant, filters) : 0
@@ -366,8 +470,12 @@ export async function searchCatalog(
   normalized.query = trimmed
   if (!trimmed && !normalized.color && !normalized.size && !normalized.categoryName) return []
 
-  const products = await findActiveProductsByStoreId(storeId)
+  const [products, categories] = await Promise.all([
+    findActiveProductsByStoreId(storeId),
+    categoryRepository.findCategoriesByStoreId(storeId),
+  ])
   const variantMap = await findVariantsByProductIds(products.map((p) => p.id))
+  const categoryNamesById = new Map(categories.map((c) => [c.id, c.name]))
 
   if (!trimmed && (normalized.color || normalized.size)) {
     const all = products
@@ -391,7 +499,7 @@ export async function searchCatalog(
       .map(({ product, variant, total }) => toMatch(storeSlug, product, variant, total))
   }
 
-  return searchProducts(products, variantMap, storeSlug, normalized)
+  return searchProducts(products, variantMap, storeSlug, normalized, categoryNamesById)
 }
 
 export async function searchCatalogFromIntent(
@@ -448,7 +556,9 @@ export async function findByCategoryName(
   if (!name) return []
 
   const categories = await categoryRepository.findCategoriesByStoreId(storeId)
-  const category = categories.find((c) => c.name.toLowerCase().includes(name) && c.is_active)
+  const category = categories.find(
+    (c) => c.is_active && namesFuzzyMatch(name, c.name)
+  )
   if (!category) return []
 
   const products = await findActiveProductsByStoreId(storeId)

@@ -8,6 +8,7 @@ import {
   extractRequestedCategory,
   extractRequestedColor,
   fromLlmResult,
+  isProductCorrectionMessage,
   parseCustomerIntentOffline,
   resolveOrderAsk,
 } from '../services/parse-customer-intent.service.js'
@@ -555,6 +556,70 @@ test('one month wait plus refund is this order, not shop policy', () => {
   )
   assert.equal(parsed.intent, 'order_status')
   assert.equal(parsed.orderAsk, 'delay')
+})
+
+test('t-shirt is not the same category as a collared shirt', () => {
+  assert.equal(extractRequestedCategory('I need t shirt'), 'tshirts')
+  assert.equal(extractRequestedCategory('blue shirt undo'), 'shirts')
+  const shirt = { name: 'METRONAUT Men Regular Fit Striped Spread Collar Casual Shirt', description: 'casual shirt' }
+  const tee = { name: 'Cotton Crew Neck T-Shirt', description: 'plain tee' }
+  assert.equal(productMatchesRequestedCategory(shirt, 'tshirts'), false)
+  assert.equal(productMatchesRequestedCategory(tee, 'tshirts'), true)
+  assert.equal(productMatchesRequestedCategory(shirt, 'shirts'), true)
+  const shirtScore = scoreProduct(shirt, 't-shirt', 'tshirts')
+  const teeScore = scoreProduct(tee, 't-shirt', 'tshirts')
+  assert.ok(teeScore > shirtScore, `expected tee (${teeScore}) > shirt (${shirtScore})`)
+  const primary = pickPrimaryCatalogMatch(
+    [
+      { product: shirt as Product, variant: null, price: 399, url: 'https://x/shirt', score: 80 },
+      { product: tee as Product, variant: null, price: 299, url: 'https://x/tee', score: 40 },
+    ] as CatalogMatch[],
+    'tshirts',
+  )
+  assert.equal(primary?.product.name, tee.name)
+})
+
+test('correction drops the last shirt and searches t-shirt', () => {
+  const text = 'Ith shirt alle enick t shirt aahn vendath'
+  assert.equal(isProductCorrectionMessage(text), true)
+  const parsed = parseCustomerIntentOffline(text, {
+    recentMessages: [
+      { role: 'store', text: 'https://shrox.aishopy.io/product/metronaut-casual-shirt-18' },
+    ],
+  })
+  assert.equal(parsed.intent, 'product_search')
+  assert.equal(parsed.rejectsLastShown, true)
+  assert.equal(parsed.categoryName, 'tshirts')
+})
+
+test('mixie maps to this shop Mixers department, not shirts', () => {
+  const category = extractRequestedCategory('mixie undo', ['Mixers', 'Men'])
+  assert.equal(category, 'Mixers')
+  const parsed = parseCustomerIntentOffline('mixie undo', {
+    storeCategories: ['Mixers', 'Men'],
+  })
+  assert.equal(parsed.intent, 'product_search')
+  assert.equal(parsed.categoryName, 'Mixers')
+})
+
+test('cheyyahnam is buy, not another product search', () => {
+  const parsed = parseCustomerIntentOffline('Cheyyahnam', {
+    recentMessages: [
+      { role: 'store', text: 'https://shrox.aishopy.io/product/casual-shirt-18' },
+    ],
+  })
+  assert.equal(parsed.intent, 'buy_intent')
+})
+
+test('englishil paray is a language switch and okay stays English', () => {
+  const switchAsk = parseCustomerIntentOffline('Okay ithonn englishil paray')
+  assert.equal(switchAsk.intent, 'language_switch')
+  assert.equal(switchAsk.customerLanguage, 'English')
+  const after = parseCustomerIntentOffline('Okay', {
+    recentMessages: [{ role: 'customer', text: 'tell me in english' }],
+  })
+  assert.equal(after.intent, 'acknowledgement')
+  assert.equal(after.customerLanguage, 'English')
 })
 
 if (failed > 0) {

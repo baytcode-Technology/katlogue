@@ -314,6 +314,9 @@ function buildFallback(
 ): string {
   switch (template) {
     case 'greeting': {
+      if (facts.sessionTopic === 'order' || facts.sessionTopic === 'product') {
+        return p.welcome(facts.storeName)
+      }
       const sells = facts.shopSells?.filter(Boolean) ?? []
       const ask = sells.length > 0 ? `${p.weSell(sells.join(', '))} ${p.wantAny}` : p.whatLooking
       return `${p.welcome(facts.storeName)}\n\n${p.ourStore}: ${facts.homeUrl}\n\n${ask}`
@@ -404,6 +407,14 @@ function buildFallback(
           ? `Yes ${p.honorific}, that is your last order ${number}.`
           : p.orderStaffCheck
       }
+      if (
+        facts.orderAsk === 'eta' ||
+        facts.orderAsk === 'urgency' ||
+        facts.orderAsk === 'delay' ||
+        facts.orderAsk === 'why'
+      ) {
+        return p.orderEtaUnknown
+      }
       return p.orderStaffCheck
     }
 
@@ -467,7 +478,11 @@ export function isHonestShopInfoTalk(
   return true
 }
 
-export function isHonestOrderTalk(reply: string, template: LocalizedReplyTemplate): boolean {
+export function isHonestOrderTalk(
+  reply: string,
+  template: LocalizedReplyTemplate,
+  orderFacts?: string | null
+): boolean {
   if (
     template !== 'order_assistant' &&
     template !== 'order_wrap' &&
@@ -479,7 +494,26 @@ export function isHonestOrderTalk(reply: string, template: LocalizedReplyTemplat
   if (ORDER_STOCK_MISS_PATTERN.test(reply)) return false
   if (ORDER_COPIED_FACTS_PATTERN.test(reply)) return false
   if (ORDER_FORCED_QUESTION_PATTERN.test(reply)) return false
+  const facts = orderFacts ?? ''
+  const promised = /Promised by:\s*(?!not set)/i.test(facts) && !/Promised by:\s*not set/i.test(facts)
+  const usual = facts.match(/Usual shop delivery days:\s*(\d+)/i)?.[1]
+  const inventedRange = /\b\d+\s*[-–to]+\s*\d+\s*(day|days|divas|divasam)\b/i.test(reply)
+  const inventedDays = /\b\d+\s*(day|days|divas|divasam)\b/i.test(reply)
+  const inventedSoon = /\b(nale|naale|tomorrow)\b/i.test(reply)
+  if (inventedRange) return false
+  if ((inventedDays || inventedSoon) && !promised && !usual) return false
+  if (inventedDays && usual && !new RegExp(`\\b${usual}\\b`).test(reply) && !promised) {
+    return false
+  }
   return true
+}
+
+const SHIPPED_CLAIM_PATTERN =
+  /\b(sent out|get that sent|thank you for choosing|already (?:placed|booked)|shipped it)\b/i
+
+export function isHonestProductClosing(text: string | null | undefined): boolean {
+  if (!text?.trim()) return true
+  return !SHIPPED_CLAIM_PATTERN.test(text)
 }
 
 /**
@@ -509,6 +543,14 @@ export function isReplyScriptValid(
   }
   if (lang === 'hindi' && scriptStyle !== 'latin') {
     return hasDevanagariScript(text) && !hasMalayalamScript(text)
+  }
+  if (lang === 'english') {
+    if (hasMalayalamScript(text) || hasTamilScript(text) || hasDevanagariScript(text)) {
+      return false
+    }
+    if (/\b(ningalude|ithonn|divasam|paranjal|kittiyathayi|cheyyum saar)\b/i.test(text)) {
+      return false
+    }
   }
 
   return true
@@ -649,7 +691,7 @@ export async function buildLocalizedReply(input: LocalizedReplyInput): Promise<s
         console.warn('[inbox-ai] reply rejected: claimed stock on %s', input.template)
         continue
       }
-      if (!isHonestOrderTalk(trimmed, input.template)) {
+      if (!isHonestOrderTalk(trimmed, input.template, input.facts.orderFacts)) {
         console.warn('[inbox-ai] reply rejected: stock talk on order %s', input.template)
         continue
       }
@@ -717,7 +759,9 @@ export async function buildProductReplyLines(
   return {
     intro,
     closing:
-      closing && isReplyScriptValid(closing, lang, input.scriptStyle)
+      closing &&
+      isReplyScriptValid(closing, lang, input.scriptStyle) &&
+      isHonestProductClosing(closing)
         ? closing
         : fallback.closing,
     alsoFoundHeader: input.facts.hasOtherOptions

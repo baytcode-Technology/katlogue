@@ -580,7 +580,7 @@ export async function buildProductReply(input: {
         customerMessage: customerText,
         ctx,
         template: 'greeting',
-        extraFacts: { shopSells },
+        extraFacts: { shopSells, sessionTopic: intent.sessionTopic },
       }),
     }
   }

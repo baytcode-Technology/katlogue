@@ -17,6 +17,7 @@ import {
 import {
   buildCannedLocalizedReply,
   isHonestOrderTalk,
+  isHonestProductClosing,
   isHonestStockTalk,
   isReplyScriptValid,
   shouldSkipModelForMalayalamScript,
@@ -352,6 +353,43 @@ test('rejects ippo illa on an order reply', () => {
     isHonestOrderTalk('Time kittiyilla. Enthelum chodyangal undengil parayu saar!', 'order_followup'),
     false
   )
+  assert.equal(
+    isHonestOrderTalk(
+      'Ithu 2-3 divasam karyam aakum saar.',
+      'order_followup',
+      'Promised by: not set — do not invent a date\nUsual shop delivery days: not set — do not invent a number',
+    ),
+    false
+  )
+})
+
+test('product closing cannot claim the order already went out', () => {
+  assert.equal(isHonestProductClosing("I'll get that sent out for you. Thank you for choosing Shrox!"), false)
+  assert.equal(isHonestProductClosing('Order cheyyano saar?'), true)
+})
+
+test('English replies reject leftover Manglish', () => {
+  assert.equal(
+    isReplyScriptValid('Ningalude order kittiyathayi thirichu paranjal, njan update cheyyum saar.', 'English'),
+    false
+  )
+  assert.equal(isReplyScriptValid('Your order has no delivery date yet. I will update you when it ships.', 'English'), true)
+})
+
+test('hi during an open product visit is a short hello', () => {
+  const reply = buildCannedLocalizedReply({
+    customerLanguage: 'English',
+    template: 'greeting',
+    facts: {
+      storeName: 'Shrox',
+      homeUrl: 'https://shrox.aishopy.io',
+      shopSells: ['shirts', 'pants'],
+      sessionTopic: 'product',
+    },
+  })
+  assert.match(reply, /Shrox/i)
+  assert.doesNotMatch(reply, /shirts, pants/i)
+  assert.doesNotMatch(reply, /aishopy\.io/i)
 })
 
 test('cancel canned does not say cancelled', () => {

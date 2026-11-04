@@ -46,6 +46,40 @@ function extensionFromMime(mime: string): string {
   }
 }
 
+const MAX_LONG_EDGE_PX = 1600
+
+/**
+ * Auto-rotates from EXIF and caps the long edge. Never crops: aspect ratio is
+ * preserved so storefronts can show the full photo. Falls back to the original
+ * bytes if processing fails or the format is animated/unsupported.
+ */
+async function normalizeProductImage(file: {
+  buffer: Buffer
+  mimetype: string
+}): Promise<{ buffer: Buffer; mimetype: string }> {
+  if (file.mimetype === 'image/gif') return file
+
+  try {
+    const { default: sharp } = await import('sharp')
+    const pipeline = sharp(file.buffer).rotate().resize({
+      width: MAX_LONG_EDGE_PX,
+      height: MAX_LONG_EDGE_PX,
+      fit: 'inside',
+      withoutEnlargement: true,
+    })
+
+    if (file.mimetype === 'image/png') {
+      return { buffer: await pipeline.png().toBuffer(), mimetype: 'image/png' }
+    }
+    if (file.mimetype === 'image/webp') {
+      return { buffer: await pipeline.webp({ quality: 88 }).toBuffer(), mimetype: 'image/webp' }
+    }
+    return { buffer: await pipeline.jpeg({ quality: 88 }).toBuffer(), mimetype: 'image/jpeg' }
+  } catch {
+    return file
+  }
+}
+
 export async function uploadProductImages(
   ownerId: string,
   storeId: number,
@@ -62,7 +96,8 @@ export async function uploadProductImages(
 
   const urls: string[] = []
 
-  for (const file of files) {
+  for (const original of files) {
+    const file = await normalizeProductImage(original)
     const ext = extensionFromMime(file.mimetype)
     const path = `${storeId}/${randomUUID()}.${ext}`
 

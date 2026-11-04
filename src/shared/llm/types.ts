@@ -5,6 +5,14 @@ export type LlmChatMessage = {
   content: string
 }
 
+export type LlmCompleteOptions = {
+  json?: boolean
+}
+
 export interface LlmProvider {
-  complete(systemPrompt: string, history: LlmChatMessage[]): Promise<string>
+  complete(
+    systemPrompt: string,
+    history: LlmChatMessage[],
+    options?: LlmCompleteOptions
+  ): Promise<string>
 }

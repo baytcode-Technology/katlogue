@@ -1225,7 +1225,7 @@ export function fromLlmResult(
   const orderProductHintFromText = extractOrderProductHint(trimmed)
 
   const llmCategory = parsed.categoryName?.trim() || null
-  const categoryName = requestedCategory || llmCategory || categoryFromText
+  let categoryName = requestedCategory || llmCategory || categoryFromText
 
   const size = parsed.size?.trim()?.toUpperCase() || sizeFromText
   const orderNumber = parsed.orderNumber?.trim()?.toUpperCase() || orderNumberFromText
@@ -1264,12 +1264,26 @@ export function fromLlmResult(
 
   // Code owns what an answer to our own offer means: yes is a buy ask for that
   // product (checkout link), no is a polite stop. Neither places an order.
-  const replyToLastQuestion = extractOpenOffer(recentMessages ?? [])
+  // The model often returns product_search + a stale searchQuery and leaves
+  // replyToLastQuestion null — that re-sent the product card after "yes".
+  const openOffer = extractOpenOffer(recentMessages ?? [])
+  let replyToLastQuestion = openOffer
     ? normalizeLastQuestionAnswer(parsed.replyToLastQuestion)
     : null
-  if (!mentionsProduct && !looksLikeOrderQuestion) {
-    if (replyToLastQuestion === 'yes') intent = 'buy_intent'
-    if (replyToLastQuestion === 'no') intent = 'refuse'
+  if (
+    openOffer &&
+    !mentionsProduct &&
+    !looksLikeOrderQuestion &&
+    !isLanguageSwitchMessage(trimmed) &&
+    !isShopInfoMessage(trimmed, sessionTopic)
+  ) {
+    if (replyToLastQuestion === 'no' || isRefuseMessage(trimmed)) {
+      intent = 'refuse'
+      replyToLastQuestion = 'no'
+    } else if (replyToLastQuestion === 'yes' || isShortReplyToOffer(trimmed)) {
+      intent = 'buy_intent'
+      replyToLastQuestion = 'yes'
+    }
   }
 
   const llmConflicts =
@@ -1277,9 +1291,14 @@ export function fromLlmResult(
     (categoriesConflict(parsed.searchQuery, requestedCategory) ||
       categoriesConflict(llmCategory, requestedCategory))
 
-  const color = llmConflicts
+  let color = llmConflicts
     ? colorFromText
     : parsed.color?.trim() || colorFromText
+
+  if (intent === 'buy_intent' && !mentionsProduct) {
+    categoryName = null
+    color = colorFromText
+  }
 
   const searchQuery = NON_CATALOG_INTENTS.has(intent)
     ? ''
@@ -1325,7 +1344,7 @@ export function fromLlmResult(
       searchQuery,
       color,
       size,
-      sku: parsed.sku?.trim() || skuFromText,
+      sku: intent === 'buy_intent' && !mentionsProduct ? null : parsed.sku?.trim() || skuFromText,
       categoryName,
       wantsImage: parsed.wantsImage === true || wantsImageFromText(trimmed),
       orderNumber,

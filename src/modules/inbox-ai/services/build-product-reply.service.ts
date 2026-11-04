@@ -627,7 +627,15 @@ export async function buildProductReply(input: {
             : 'acknowledgement',
         extraFacts: {
           sessionTopic: intent.sessionTopic,
-          paymentFacts: intent.intent === 'buy_intent' ? shopPaymentFacts(store).llm : null,
+          ...(intent.intent === 'buy_intent'
+            ? (() => {
+                const payments = shopPaymentFacts(store)
+                return {
+                  paymentFacts: payments.llm,
+                  paymentCustomerFacts: payments.customer,
+                }
+              })()
+            : {}),
         },
       }),
     }

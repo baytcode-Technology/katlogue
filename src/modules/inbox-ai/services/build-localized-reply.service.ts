@@ -76,6 +76,7 @@ type PhraseSet = {
   askWhatElse: string
   buyConfirm: string
   buyTapLink: string
+  buySteps: string
   notFoundLead: (item: string) => string
   weHave: (items: string) => string
   weSell: (items: string) => string
@@ -112,6 +113,7 @@ const EN: PhraseSet = {
   askWhatElse: 'What else would you like to see?',
   buyConfirm: 'Sure sir, we can arrange that.',
   buyTapLink: 'Tap the link to place the order',
+  buySteps: 'Open this link, confirm quantity on the page, then pay and place the order there.',
   notFoundLead: (item) => `We don't keep ${item} sir.`,
   weHave: (items) => `We have ${items}.`,
   weSell: (items) => `This shop has ${items}.`,
@@ -154,6 +156,7 @@ const ML: PhraseSet = {
   askWhatElse: 'വേറെ എന്താണ് നോക്കേണ്ടത്?',
   buyConfirm: 'ശരി സാർ, ക്രമീകരിക്കാം.',
   buyTapLink: 'ഓർഡർ ചെയ്യാൻ ലിങ്ക് ഇതാ',
+  buySteps: 'ഈ ലിങ്ക് തുറക്കൂ, പേജിൽ അളവ് ഉറപ്പാക്കൂ, പിന്നെ അവിടെ പണമടച്ച് ഓർഡർ ചെയ്യൂ.',
   notFoundLead: (item) => `${item} ഇപ്പോൾ ഇല്ല സാർ.`,
   weHave: (items) => `${items} ഉണ്ട്.`,
   weSell: (items) => `ഈ ഷോപ്പ് ${items} ആണ്.`,
@@ -195,6 +198,7 @@ const ML_LATIN: PhraseSet = {
   askWhatElse: 'Vere enthaanu nokkendath?',
   buyConfirm: 'Sheri saar, kramikkarikkam.',
   buyTapLink: 'Order cheyyan link ithaa',
+  buySteps: 'Ee link open cheyyu, page il quantity confirm cheyyu, pinne avide pay cheythu order cheyyu.',
   notFoundLead: (item) => `${item} ippo illa saar.`,
   weHave: (items) => `${items} ind.`,
   weSell: (items) => `Ee shop ${items} aanu.`,
@@ -237,6 +241,7 @@ const HI: PhraseSet = {
   askWhatElse: 'और क्या दिखाऊं सर?',
   buyConfirm: 'जी सर, हो जाएगा।',
   buyTapLink: 'ऑर्डर करने के लिए इस लिंक पर जाएं',
+  buySteps: 'यह लिंक खोलें, पेज पर मात्रा ठीक करें, फिर वहीं पेमेंट करके ऑर्डर करें।',
   notFoundLead: (item) => `${item} अभी नहीं है सर।`,
   weHave: (items) => `हमारे पास ${items} है।`,
   weSell: (items) => `यह दुकान ${items} की है।`,
@@ -275,6 +280,7 @@ const TA: PhraseSet = {
   askWhatElse: 'வேறு என்ன காட்டவா சார்?',
   buyConfirm: 'கண்டிப்பாக சார், ஏற்பாடு செய்கிறோம்.',
   buyTapLink: 'ஆர்டர் செய்ய இந்த லிங்கை அழுத்துங்கள்',
+  buySteps: 'இந்த லிங்கைத் திறந்து, பக்கத்தில் அளவை உறுதி செய்து, அங்கேயே பேमेंट செய்து ஆர்டர் செய்யுங்கள்.',
   notFoundLead: (item) => `${item} இப்போது இல்லை சார்.`,
   weHave: (items) => `எங்களிடம் ${items} உள்ளது.`,
   weSell: (items) => `இந்த கடை ${items}.`,
@@ -373,7 +379,9 @@ function buildFallback(
 
     case 'buy_assist': {
       const link = facts.lastShownProduct?.url ?? facts.homeUrl
-      return `${p.buyConfirm} ${p.closingAskSize}\n\n${p.buyTapLink}: ${link}`
+      const pay = facts.paymentCustomerFacts?.trim()
+      const steps = pay ? `${p.buySteps}\n${pay}` : p.buySteps
+      return `${p.buyConfirm} ${steps}\n\n${p.buyTapLink}: ${link}`
     }
 
     case 'not_found': {

@@ -44,13 +44,13 @@ export function isMalayalam(language: string): boolean {
 
 const TEMPLATE_TASKS: Record<ShopOwnerTemplateTask, string> = {
   greeting:
-    'You work in THIS shop only. Welcome them like staff on WhatsApp. Use the honorific once. Share the store link. Ask what they want using ONLY the department/category names in the facts (clothing, appliances, grocery, art — whatever is listed). Do not assume the shop is fashion. Do not ask colour or size until they pick something this shop sells. Do not open with "Ind saar", "ഉണ്ട് സാർ", or "stock und". Two short lines plus the link.',
+    'You work in THIS shop only. If facts say last shop topic is product or order, reply with a short hello only — do not dump the store link or the catalogue. If this is a fresh chat, welcome them, share the store link, and ask what they want using ONLY the department names in the facts. Do not assume the shop is fashion. Do not ask colour or size until they pick something this shop sells. Do not open with "Ind saar", "ഉണ്ട് സാർ", or "stock und".',
 
   acknowledgement:
     'The customer only reacted ("ok", "thanks", a thumbs up). They are NOT asking for a new product, so do NOT list products, do NOT say anything is unavailable, and do NOT apologise. If facts say last topic is an existing order, say we will update them when it ships — no size, colour, trousers, or "proceed with the order". If last topic is a product they still want, ask ONE next step for THAT product. If they just refused, one short close and stop.',
 
   buy_assist:
-    'The customer wants to buy. Sound pleased and make ordering easy. Confirm you can arrange it, ask for the ONE detail still missing (size or quantity), and tell them to tap the product link to place the order. Use only the product name and link from the facts. Never invent prices, delivery dates, or payment methods.',
+    'The customer wants to buy. Make ordering easy. Tell them to tap the product link from the facts to place the order. Ask size or quantity only if it is still missing. Do NOT say the order is already placed, sent out, or shipped. Never invent prices, delivery dates, or payment methods.',
 
   not_found:
     'They asked for something missing. If facts say why=not_sold, this shop does not sell that item. If why=sold_out, the shop sells it but it is out of stock. Answer that why first. If why=sold_out and a restock note is in the facts, you may mention that note — never invent a restock date. Then name ONLY the departments in the facts. Ask if they want any of those. Share the store link. Do NOT list product titles, prices, SKUs, or links. Do NOT open with "Ind saar", "ഉണ്ട് സാർ", or "stock und". Do NOT offer a random other department as if it were the same item.',
@@ -77,7 +77,7 @@ const TEMPLATE_TASKS: Record<ShopOwnerTemplateTask, string> = {
     `The facts say we ARE sending a matching product. Write the human lines around those details. Return JSON only:
 {
   "intro": "one short warm line confirming we have it. Do NOT mention product name, price, colour, size, SKU or link. You may say a natural yes (including 'Ind saar' / 'ഉണ്ട് സാർ') only because the facts confirm a match.",
-  "closing": "one short line AFTER the product details — one useful next step for THIS product (order, quantity, or a detail it actually has). Do NOT always ask size or colour. Do NOT repeat the price or link.",
+  "closing": "one short line AFTER the product details — ask if they want to order, or one missing size/qty. Do NOT say you will send it out, that it is shipped, or thank them for choosing the shop. Do NOT always ask size or colour. Do NOT repeat the price or link.",
   "alsoFoundHeader": "one short line introducing a list of other options, or null when the facts say there are no other options. Do NOT list the products yourself."
 }
 Keep every line natural shop talk, not marketing copy. No markdown.`,
@@ -89,7 +89,7 @@ Keep every line natural shop talk, not marketing copy. No markdown.`,
     'First time they asked for order details. 1–2 spoken lines that you found the order. Do not copy number, items, prices, address, bullets, or markdown. Code pastes the facts after you. No closing question.',
 
   order_followup:
-    'They already saw the order. Answer THIS message only, using the short fact card. Hint in facts (why / eta / delay / urgency / payment / items / confirm_last) is the kind of ask, not a script — write a new sentence. Do not paste the order. No "any questions?". If the same kind of ask was just answered, say it shorter, do not clone the last store line.',
+    'They already saw the order. Answer THIS message only, using the short fact card. If promised-by / usual shop days is not set, say there is no date yet and you will update when it ships — never invent 2-3 days, tomorrow, or nale. Do not paste the order. No "any questions?". If the same kind of ask was just answered, say it shorter, do not clone the last store line.',
 
   order_help:
     'They want to cancel, change address, refund this order, or say this is not their order. Do NOT invent a cancel, refund, or a new address. One honest line: we cannot change it in this chat; our customer helpline will contact them. If they waited a long time, say what is on the fact card (unfulfilled / no promised date) then that the helpline will contact them. No fake "refunded" or "cancelled". Never say "staff nokkum" / "staff will check".',
@@ -115,7 +115,7 @@ const SALES_PLAYBOOK = `HOW A GOOD SHOP PERSON REPLIES (follow every point):
 const ORDER_COUNTER_BEHAVIOUR = `ORDER COUNTER BEHAVIOUR (not a script — unexpected questions still use this):
 - Answer THIS customer line in a new sentence. Never copy the last store message.
 - Use ONLY the fact card: statuses, payment, fulfillment, tracking or none, placed date, "delivery date: not on this order".
-- If they asked something not on the card (why no date, waiting a month, tracking, who packs, call me): say what IS on the order, then that our customer helpline will contact them. Never invent a date, cancel, tracking number, or "tomorrow". Never say "staff nokkum".
+- If they asked when it will arrive and there is no promised date: say there is no date on this order yet, and you will update when it ships. You may use "Usual shop delivery days" from the facts if that number is set. Never invent 2-3 days, tomorrow, or nale. Never say "staff nokkum".
 - Stop when they refuse, ok, sheri, venda, or clearly want to end. No size, trousers, "proceed with the order", "any questions?".
 - Never say ippo illa / out of stock about an order they already placed. Missing date is not a missing product.
 - Do not sell products in an order thread.`

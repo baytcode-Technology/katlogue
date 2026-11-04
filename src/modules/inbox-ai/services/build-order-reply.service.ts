@@ -10,6 +10,7 @@ import {
 import type { OrderItem } from '../../orders/types/order.types.js'
 import type { Store } from '../../stores/types/store.types.js'
 import { formatMoney } from '../../../shared/utils/storefront.js'
+import { parseShopPolicies } from '../../../shared/lib/shop-policies.js'
 import { phoneLookupVariants, phoneTail } from '../../../shared/utils/phone.js'
 import { allowTypedPhoneLookup } from '../typed-phone-limit.js'
 import { buildLocalizedReply } from './build-localized-reply.service.js'
@@ -425,9 +426,14 @@ export async function buildOrderReply(input: {
   const template = orderTemplateForAsk(orderAsk, orders.length > 0)
   const attachBlock = template === 'order_wrap' && orders.length > 0 && orderAsk === 'full'
   const first = orders[0] ?? null
+  const usualDays = parseShopPolicies(store.shop_policies).default_delivery_business_days
+  const usualLine =
+    usualDays != null
+      ? `Usual shop delivery days: ${usualDays}`
+      : 'Usual shop delivery days: not set — do not invent a number'
   const modelFacts = first
-    ? `${hints ? `Lookup hints: ${hints}\n` : ''}Ask hint: ${orderAsk}\n${formatOrderFactCard(first, store.currency)}`
-    : `${hints ? `Lookup hints: ${hints}\n\n` : ''}${formatOrdersFactsForScope(orders, store.currency, scope)}`
+    ? `${hints ? `Lookup hints: ${hints}\n` : ''}Ask hint: ${orderAsk}\n${formatOrderFactCard(first, store.currency)}\n${usualLine}`
+    : `${hints ? `Lookup hints: ${hints}\n\n` : ''}${formatOrdersFactsForScope(orders, store.currency, scope)}\n${usualLine}`
 
   const spoken = await buildLocalizedReply({
     customerLanguage: intent.customerLanguage,

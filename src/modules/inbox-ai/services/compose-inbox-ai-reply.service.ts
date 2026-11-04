@@ -74,7 +74,9 @@ export async function composeInboxAiReply(
     storeCategories: shopSells,
   })
   const lastShownProduct =
-    intent.intent === 'greeting' ? null : extractLastShownProduct(recentMessages)
+    intent.intent === 'greeting' || intent.rejectsLastShown
+      ? null
+      : extractLastShownProduct(recentMessages)
 
   const staffHandoff = await resolveStaffHandoff({
     store: input.store,

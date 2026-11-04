@@ -45,6 +45,8 @@ export type LocalizedReplyFacts = {
   lastShownProduct?: LastShownProduct | null
   /** Product being sent right now, used by the product_lines task. */
   productTitle?: string | null
+  /** The size/colour they asked for is out; the product being sent is another option of it. */
+  soldOutOption?: string | null
   hasOtherOptions?: boolean
   /** The other item they agreed to, when the first one is not in the shop. */
   offeredItem?: string | null
@@ -89,6 +91,7 @@ type PhraseSet = {
   closeOk: string
   closeAfterOrder: string
   soldOutLead: (item: string) => string
+  optionOutLead: (option: string) => string
   notSoldLead: (item: string) => string
   priceAsk: string
   orderEtaUnknown: string
@@ -127,6 +130,7 @@ const EN: PhraseSet = {
   closeOk: 'Alright sir.',
   closeAfterOrder: 'Alright sir, I will message you when it ships.',
   soldOutLead: (item) => `${item} is out of stock sir.`,
+  optionOutLead: (option) => `${option} is out of stock sir. This one is available:`,
   notSoldLead: (item) => `We don't keep ${item} in this shop sir.`,
   priceAsk: 'Which item from this shop should I price for you sir?',
   orderEtaUnknown: 'No delivery date on this order yet sir. Still unfulfilled. I will update you when it ships.',
@@ -167,6 +171,7 @@ const ML: PhraseSet = {
   closeOk: 'ശരി സാർ.',
   closeAfterOrder: 'ശരി സാർ, ഷിപ്പ് ആയാൽ പറയാം.',
   soldOutLead: (item) => `${item} സ്റ്റോക്ക് ഇല്ല സാർ.`,
+  optionOutLead: (option) => `${option} സ്റ്റോക്ക് ഇല്ല സാർ. ഇത് ഉണ്ട്:`,
   notSoldLead: (item) => `${item} ഈ ഷോപ്പിൽ ഇല്ല സാർ.`,
   priceAsk: 'ഏത് സാധനത്തിന്റെ വില വേണം സാർ?',
   orderEtaUnknown: 'ഈ ഓർഡറിൽ ഡെലിവറി തീയതി ഇല്ല സാർ. ഇപ്പോൾ unfulfilled ആണ്. ഷിപ്പ് ആയാൽ പറയാം.',
@@ -207,6 +212,7 @@ const ML_LATIN: PhraseSet = {
   closeOk: 'Sheri saar.',
   closeAfterOrder: 'Sheri saar, ship aayal parayam.',
   soldOutLead: (item) => `${item} stock illa saar.`,
+  optionOutLead: (option) => `${option} stock illa saar. Ithu ind:`,
   notSoldLead: (item) => `${item} ee shopil illa saar.`,
   priceAsk: 'Ethu iteminte vila venam saar?',
   orderEtaUnknown:
@@ -248,6 +254,7 @@ const HI: PhraseSet = {
   closeOk: 'ठीक है सर।',
   closeAfterOrder: 'ठीक है सर, शिप होते ही बताऊँगा।',
   soldOutLead: (item) => `${item} स्टॉक में नहीं है सर।`,
+  optionOutLead: (option) => `${option} स्टॉक में नहीं है सर। यह उपलब्ध है:`,
   notSoldLead: (item) => `${item} इस दुकान में नहीं रखते सर।`,
   priceAsk: 'किस चीज़ की कीमत बताऊँ सर?',
   orderEtaUnknown: 'इस ऑर्डर पर डिलीवरी तारीख नहीं है सर। अभी unfulfilled है। शिप होते ही बताऊँगा।',
@@ -285,6 +292,7 @@ const TA: PhraseSet = {
   closeOk: 'சரி சார்.',
   closeAfterOrder: 'சரி சார், ஷிப் ஆனால் சொல்கிறேன்.',
   soldOutLead: (item) => `${item} ஸ்டாக் இல்லை சார்.`,
+  optionOutLead: (option) => `${option} ஸ்டாக் இல்லை சார். இது உள்ளது:`,
   notSoldLead: (item) => `${item} இந்த கடையில் இல்லை சார்.`,
   priceAsk: 'எந்த பொருளின் விலை வேண்டும் சார்?',
   orderEtaUnknown: 'இந்த ஆர்டரில் டெலிவரி தேதி இல்லை சார். இப்போது unfulfilled. ஷிப் ஆனால் சொல்கிறேன்.',
@@ -606,6 +614,11 @@ function buildFactsBlock(template: LocalizedReplyTemplate, facts: LocalizedReply
       `Product being sent now (details are added by us — do NOT write the name, price or link yourself): ${facts.productTitle}`
     )
   }
+  if (facts.soldOutOption) {
+    lines.push(
+      `The option they asked for is out of stock: ${facts.soldOutOption}. Say that first in one short line, then say this other option is available. Do NOT say the whole product is sold out.`
+    )
+  }
   if (template === 'product_lines') {
     lines.push(`Other options also being sent: ${facts.hasOtherOptions ? 'yes' : 'no'}`)
   }
@@ -728,8 +741,9 @@ export async function buildProductReplyLines(
 ): Promise<ProductReplyLines> {
   const lang = resolveLanguage(input)
   const phrases = resolvePhrases(lang, input.scriptStyle)
+  const soldOutOption = input.facts.soldOutOption?.trim()
   const fallback: ProductReplyLines = {
-    intro: phrases.hereItIs,
+    intro: soldOutOption ? phrases.optionOutLead(soldOutOption) : phrases.hereItIs,
     closing: phrases.closingAskSize,
     alsoFoundHeader: input.facts.hasOtherOptions ? phrases.moreOptions : null,
   }

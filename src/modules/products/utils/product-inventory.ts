@@ -114,3 +114,43 @@ export function effectiveVariantStockQty(product: Product, variant: ProductVaria
 
 }
 
+
+
+/** Same rule checkout uses: inactive or marked sold never sells; untracked or non-inventory always does. */
+
+export function isVariantSellable(product: Product, variant: ProductVariant): boolean {
+
+  if (!variant.is_active) return false
+
+  if (isMarkedSoldVariant(product, variant, true)) return false
+
+  if (!shouldValidateVariantStock(product, variant)) return true
+
+  return effectiveVariantStockQty(product, variant) > 0
+
+}
+
+
+
+export function isSimpleProductSellable(product: Product): boolean {
+
+  if (isMarkedSoldProduct(product, false)) return false
+
+  if (!shouldValidateProductStock(product)) return true
+
+  return effectiveProductStockQty(product) > 0
+
+}
+
+
+
+/** A product with variants sells when any active variant sells; its own stock number is ignored. */
+
+export function isProductSellable(product: Product, variants: ProductVariant[]): boolean {
+
+  if (variants.length > 0) return variants.some((variant) => isVariantSellable(product, variant))
+
+  return isSimpleProductSellable(product)
+
+}
+

@@ -15,10 +15,6 @@ import {
   type ParsedCustomerIntent,
 } from './parse-customer-intent.service.js'
 import {
-  isMarkedSoldProduct,
-  isMarkedSoldVariant,
-} from '../../products/utils/product-inventory.js'
-import {
   type CatalogMatch,
   filterMatchesByScore,
   findByCategoryName,
@@ -33,6 +29,7 @@ import {
   productMatchesRequestedCategory,
   resolveEffectiveSearchQuery,
   searchCatalogFromIntent,
+  withSellableVariant,
 } from './catalog-search.service.js'
 import {
   parseShopPolicies,
@@ -123,7 +120,7 @@ async function searchSlice(store: Store, slice: CatalogSlice): Promise<CatalogMa
 
   if (slice.categoryName) {
     matches = matches.filter((match) =>
-      productMatchesRequestedCategory(match.product, slice.categoryName)
+      productMatchesRequestedCategory(match.product, slice.categoryName, match.categoryName)
     )
   }
 
@@ -188,6 +185,7 @@ export async function buildProductReplyFromMatches(input: {
   channel?: InboxAiChannel | null
   conversationId?: number | null
   offer?: Pick<CatalogOffer, 'missingItem' | 'offeredCategory'> | null
+  soldOutOption?: string | null
 }): Promise<ProductReplyResult> {
   const { store, intent, customerMessage } = input
   const ctx = input.ctx ?? {}
@@ -278,6 +276,7 @@ export async function buildProductReplyFromMatches(input: {
       storeName: store.name,
       homeUrl,
       productTitle: primary.product.name,
+      soldOutOption: input.soldOutOption ?? null,
       hasOtherOptions: rest.length > 0,
     },
   })
@@ -409,17 +408,34 @@ async function buildNotFoundReply(
   })
 }
 
-function catalogMatchSoldOut(match: CatalogMatch): boolean {
-  if (match.variant) {
-    return (
-      isMarkedSoldVariant(match.product, match.variant) ||
-      (match.product.track_inventory && match.variant.stock_qty <= 0)
-    )
+export type SellableOffer = {
+  matches: CatalogMatch[]
+  /** Size/colour they asked for that is out, when another option of the product sells. */
+  soldOutOption: string | null
+}
+
+/**
+ * Keep only what can be bought now. Sold out is said only when nothing sells;
+ * a missing size or colour swaps to an option that does sell.
+ */
+export function resolveSellableOffer(
+  storeSlug: string,
+  matches: CatalogMatch[],
+  want: Pick<ParsedCustomerIntent, 'size' | 'color'>
+): SellableOffer {
+  const inStock = matches.filter((match) => match.inStock !== false)
+  if (inStock.length > 0) return { matches: inStock, soldOutOption: null }
+
+  const otherOption = matches.filter((match) => match.sellableVariant)
+  if (otherOption.length === 0) return { matches: [], soldOutOption: null }
+
+  const asked = [want.size ? `Size ${want.size}` : null, want.color]
+    .filter(Boolean)
+    .join(' ')
+  return {
+    matches: otherOption.map((match) => withSellableVariant(storeSlug, match)),
+    soldOutOption: asked || null,
   }
-  return (
-    isMarkedSoldProduct(match.product) ||
-    (match.product.track_inventory && match.product.stock_qty <= 0)
-  )
 }
 
 async function buildRefusalReply(
@@ -686,8 +702,11 @@ export async function buildProductReply(input: {
 
   let offer = await resolveCatalogOffer(store, intent)
 
+  let soldOutOption: string | null = null
   if (offer.matches.length > 0) {
-    const available = offer.matches.filter((match) => !catalogMatchSoldOut(match))
+    const sellable = resolveSellableOffer(store.slug, offer.matches, intent)
+    const available = sellable.matches
+    soldOutOption = sellable.soldOutOption
     if (available.length === 0) {
       return {
         ...empty,
@@ -714,6 +733,7 @@ export async function buildProductReply(input: {
       channel: input.channel,
       conversationId: input.conversationId,
       offer,
+      soldOutOption,
     })
     if (reply.primaryMatch) return reply
   }

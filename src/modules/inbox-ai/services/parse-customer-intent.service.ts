@@ -649,7 +649,7 @@ function canonicalCategory(term: string): string | null {
 
 function categoryWordPattern(cat: string): RegExp {
   const base = cat.replace('-', '[- ]?')
-  return new RegExp(`\\b${base}(?:inte|nte|um)?\\b`, 'gi')
+  return new RegExp(`\\b${base}s?(?:inte|nte|um)?\\b`, 'gi')
 }
 
 function escapeRegExp(value: string): string {
@@ -685,7 +685,7 @@ function findStoreCategoryHits(text: string, storeCategories: string[]): Categor
   const lower = text.toLowerCase()
   for (const name of names) {
     const stem = name.replace(/s$/i, '')
-    const token = escapeRegExp(stem.length >= 2 ? stem : name)
+    const token = escapeRegExp(stem.length >= 2 ? stem : name).replace(/[-\s]+/g, '[- ]?')
     const re = new RegExp(`\\b${token}s?\\b`, 'gi')
     let match: RegExpExecArray | null
     while ((match = re.exec(lower)) !== null) {
@@ -747,7 +747,10 @@ function findCategoryHits(text: string, storeCategories: string[] = []): Categor
       deduped.push(hit)
       continue
     }
-    if (hit.fromStore && !deduped[overlapAt]?.fromStore) {
+    const kept = deduped[overlapAt]
+    const hitSpan = hit.end - hit.index
+    const keptSpan = kept.end - kept.index
+    if (hitSpan > keptSpan || (hitSpan === keptSpan && hit.fromStore && !kept.fromStore)) {
       deduped[overlapAt] = hit
     }
   }

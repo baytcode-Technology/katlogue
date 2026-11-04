@@ -16,6 +16,7 @@ import {
 } from '../../support/lib/wrap-malayalam-support-reply.js'
 import {
   buildCannedLocalizedReply,
+  isHonestNoOrderTalk,
   isHonestOrderTalk,
   isHonestProductClosing,
   isHonestStockTalk,
@@ -409,6 +410,65 @@ test('support prompt matches Manglish', () => {
     { merchantLanguage: 'Malayalam', scriptStyle: 'latin' }
   )
   assert.match(prompt, /Manglish/)
+})
+
+console.log('\n=== Yes to our offer is not an order ===')
+
+const OFFER_URL =
+  'https://shrox.aishopy.io/product/force-men-printed-round-neck-cotton-blend-black-t-shirt-21?variant=117&src=wa_1009'
+
+test('canned buy reply sends the variant link and never thanks for an order', () => {
+  for (const [lang, style] of [
+    ['English', undefined],
+    ['Malayalam', 'latin'],
+    ['Malayalam', 'malayalam_script'],
+  ] as const) {
+    const reply = buildCannedLocalizedReply({
+      customerLanguage: lang,
+      scriptStyle: style,
+      template: 'buy_assist',
+      facts: {
+        ...facts,
+        sessionTopic: 'product',
+        lastShownProduct: { title: 'Force Men Printed Round Neck Cotton Blend Black T Shirt', url: OFFER_URL },
+      },
+    })
+    assert.ok(reply.includes(OFFER_URL), `${lang} ${style}: ${reply}`)
+    assert.equal(isHonestNoOrderTalk(reply, 'buy_assist', { sessionTopic: 'product' }), true, reply)
+  }
+})
+
+test('a fake order confirmation is rejected unless an order exists', () => {
+  const fake =
+    "Great, sir! I'll get the Force Men Printed Round Neck Cotton Blend Black T-Shirt ready for you. We will update you when it ships. Thank you for your order!"
+  for (const template of ['acknowledgement', 'buy_assist', 'close', 'product_lines'] as const) {
+    assert.equal(isHonestNoOrderTalk(fake, template, { sessionTopic: 'product' }), false, template)
+  }
+  assert.equal(isHonestNoOrderTalk('Order aayi saar, ship aayal parayam.', 'acknowledgement', {}), false)
+  assert.equal(
+    isHonestNoOrderTalk('Alright sir, I will message you when it ships.', 'close', { sessionTopic: 'order' }),
+    true
+  )
+  assert.equal(
+    isHonestNoOrderTalk('We will update you when it ships.', 'acknowledgement', {
+      orderFacts: 'Order number: JAN26-3',
+    }),
+    true
+  )
+  assert.equal(
+    isHonestNoOrderTalk('Great sir! Tap the link to place the order.', 'buy_assist', { sessionTopic: 'product' }),
+    true
+  )
+  assert.equal(isHonestProductClosing('Thank you for your order!'), false)
+})
+
+test('an English reply never opens with Ind saar', () => {
+  assert.equal(
+    isReplyScriptValid('Ind saar, we have the black T-shirt in size S available for you.', 'English'),
+    false
+  )
+  assert.equal(isReplyScriptValid('Yes sir, we have it in size S.', 'English'), true)
+  assert.equal(isReplyScriptValid('Ind saar, size S und.', 'Malayalam', 'latin'), true)
 })
 
 if (failed > 0) {

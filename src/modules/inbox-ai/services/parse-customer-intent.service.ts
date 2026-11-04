@@ -3,6 +3,7 @@ import {
   type ScriptStyle,
 } from '../../../shared/lib/detect-language-script.js'
 import { completeJson } from '../../../shared/llm/index.js'
+import { extractOpenOffer } from './conversation-history.service.js'
 
 export type { ScriptStyle }
 export { detectLanguageAndScript }
@@ -44,6 +45,8 @@ export type MissingWhy = 'not_sold' | 'sold_out'
 
 export type SessionTopic = 'order' | 'product' | 'missing' | null
 
+export type LastQuestionAnswer = 'yes' | 'no' | null
+
 /** Intents that carry no product to look up in the catalog. */
 const NON_CATALOG_INTENTS: ReadonlySet<CustomerIntent> = new Set<CustomerIntent>([
   'acknowledgement',
@@ -77,6 +80,8 @@ export type ParsedCustomerIntent = {
   alternativeCategories: string[]
   /** They rejected the last sent product and named a different item. */
   rejectsLastShown: boolean
+  /** Their answer to the question we asked about the product we just offered. */
+  replyToLastQuestion: LastQuestionAnswer
   /** Set when message is off-topic due to language-capability questions */
   offTopicReason?: 'language_meta' | 'general' | null
 }
@@ -110,6 +115,7 @@ export type LlmIntentResult = {
   orderScope?: OrderScope
   orderAsk?: OrderAsk | null
   typedPhone?: string | null
+  replyToLastQuestion?: LastQuestionAnswer | string
 }
 
 const INTENT_SCHEMA = `You classify customer messages for a store WhatsApp/Instagram inbox.
@@ -155,8 +161,15 @@ Return JSON only:
   "orderNumberHint": "bare digits after order e.g. 88 from 'order 88', or null",
   "orderProductHint": "product name in an order question e.g. shirt, or null",
   "orderScope": "latest" | "all" | "specific" | "product" | null,
-  "typedPhone": "a 10-15 digit phone the customer typed, or null"
+  "typedPhone": "a 10-15 digit phone the customer typed, or null",
+  "replyToLastQuestion": "yes" | "no" | null
 }
+
+Our last question:
+- When the input shows "Our last question to the customer", decide if the latest message answers it. Any language, slang, or emoji counts: agreeing or wanting it → "yes"; declining → "no".
+- If the message asks something new, names a different product, or does not answer that question → null.
+- When there is no last question shown, always null.
+- Saying yes to "would you like to order?" does NOT place an order. Orders are placed only on the checkout link.
 
 Rules:
 - shop_info: shop location, hours, catalogue, what you sell, delivery charge/days (no existing order), payment methods, return/refund policy, offers. searchQuery: "". Not product_search. If they talk about an order they already placed (1 month wait, refund for that order, eppo deliver that product), use order_status, not shop_info.
@@ -214,7 +227,7 @@ const LANGUAGE_SWITCH_PATTERN =
   /\b(malayalathil\s+paray|malayalathil|englishil|hindiil|tamilil|in\s+malayalam|in\s+hindi|in\s+english|hindi\s+il|english\s+il|tamil\s+il|speak\s+(?:in\s+)?(?:malayalam|hindi|english|tamil)|tell\s+me\s+in\s+\w+|reply\s+in\s+\w+|മലയാളത്തിൽ)\b/i
 
 const REFUSE_PATTERN =
-  /\b(onnum\s*venda|onnum\s*venam\s*illa|enickonnum\s*venda|enik(?:ku)?onnum\s*venda|no\s+thanks|not\s+interested|don'?t\s+want\s+(anything|it)|nothing\s+(needed|thanks)|illa\s+enickonnum\s*venda|vendam\s+okay|onnum\s+venda\s+okay)\b|ഒന്നും\s*വേണ്ട/i
+  /\b(onnum\s*venda|onnum\s*venam\s*illa|enickonnum\s*venda|enik(?:ku)?onnum\s*venda|no\s+thanks|not\s+interested|don'?t\s+want\s+(anything|it)|nothing\s+(needed|thanks)|illa\s+enickonnum\s*venda|vendam\s+okay|onnum\s+venda\s+okay)\b|ഒന്നും\s*വേണ്ട|^(?:no|nope|nah|not\s+now|venda|vendam|veanda|nahi|nahin|வேண்டாம்|വേണ്ട|नहीं)(?:\s+(?:sir|saar|thanks|bro))?[\s.!👎]*$/i
 
 const BARE_PRICE_PATTERN =
   /^(?:price|vila|ethra|cost|how\s+much|rate)[\s?!.]*$/i
@@ -1109,6 +1122,7 @@ function finalizeIntent(
     | 'sessionTopic'
     | 'missingWhy'
     | 'rejectsLastShown'
+    | 'replyToLastQuestion'
   > & {
     requestedItem?: string | null
     orderNumberHint?: string | null
@@ -1118,6 +1132,7 @@ function finalizeIntent(
     sessionTopic?: SessionTopic
     missingWhy?: MissingWhy | null
     rejectsLastShown?: boolean
+    replyToLastQuestion?: LastQuestionAnswer
   },
   trimmed: string,
   storeCategories: string[] = [],
@@ -1186,6 +1201,7 @@ function finalizeIntent(
     sessionTopic: partial.sessionTopic ?? null,
     missingWhy: partial.missingWhy ?? null,
     rejectsLastShown: isNonCatalog ? false : isProductCorrectionMessage(trimmed),
+    replyToLastQuestion: partial.replyToLastQuestion ?? null,
     alternativeCategories: isNonCatalog
       ? []
       : extractAlternativeCategories(trimmed, storeCategories),
@@ -1244,6 +1260,16 @@ export function fromLlmResult(
   }
   if (isProductCorrectionMessage(trimmed) && mentionsProduct) {
     intent = 'product_search'
+  }
+
+  // Code owns what an answer to our own offer means: yes is a buy ask for that
+  // product (checkout link), no is a polite stop. Neither places an order.
+  const replyToLastQuestion = extractOpenOffer(recentMessages ?? [])
+    ? normalizeLastQuestionAnswer(parsed.replyToLastQuestion)
+    : null
+  if (!mentionsProduct && !looksLikeOrderQuestion) {
+    if (replyToLastQuestion === 'yes') intent = 'buy_intent'
+    if (replyToLastQuestion === 'no') intent = 'refuse'
   }
 
   const llmConflicts =
@@ -1309,11 +1335,24 @@ export function fromLlmResult(
       orderAsk,
       typedPhone,
       sessionTopic,
+      replyToLastQuestion,
     },
     trimmed,
     storeCategories,
     recentMessages
   )
+}
+
+function normalizeLastQuestionAnswer(value: unknown): LastQuestionAnswer {
+  const answer = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (answer === 'yes') return 'yes'
+  if (answer === 'no') return 'no'
+  return null
+}
+
+/** Short reply with no new product, e.g. a one-word answer to our offer. */
+function isShortReplyToOffer(trimmed: string): boolean {
+  return trimmed.split(/\s+/).filter(Boolean).length <= 3
 }
 
 /**
@@ -1607,6 +1646,41 @@ function regexFallback(
     )
   }
 
+  // Without the model we cannot read yes vs no, but a short reply to our open
+  // offer is never a product search; the buy reply only points to the checkout link.
+  if (
+    extractOpenOffer(recentMessages ?? []) &&
+    sessionTopic !== 'order' &&
+    !categoryFromText &&
+    !colorFromText &&
+    isShortReplyToOffer(trimmed) &&
+    !isBarePriceAsk(trimmed) &&
+    !isDeliveryAskWithoutOrder(trimmed, sessionTopic) &&
+    !isOrderStatusMessage(trimmed)
+  ) {
+    return finalizeIntent(
+      {
+        intent: 'buy_intent',
+        customerLanguage: detectedLang,
+        searchQuery: '',
+        color: null,
+        size: sizeFromText,
+        sku: null,
+        categoryName: null,
+        wantsImage: false,
+        orderNumber: null,
+        orderNumberHint: null,
+        orderProductHint: null,
+        orderScope: null,
+        typedPhone: null,
+        sessionTopic,
+      },
+      trimmed,
+      storeCategories,
+      recentMessages
+    )
+  }
+
   // Reactions ("ok", "thanks") and buy asks ("order cheyyam") name no product.
   // Without this they fell through to product_search below with searchQuery "ok",
   // matched nothing, and produced a "we don't have ok" reply.
@@ -1757,11 +1831,15 @@ function buildIntentPrompt(
   if (!recentMessages?.length) {
     return `${shopLine}Latest customer message:\n${text}`.trim()
   }
+  const offer = extractOpenOffer(recentMessages)
+  const offerLine = offer
+    ? `Our last question to the customer (about ${offer.title}): ${offer.question}\n\n`
+    : ''
   const customerOnly = recentMessages.filter((m) => m.role === 'customer')
   const history = (customerOnly.length > 0 ? customerOnly : recentMessages)
     .map((m) => `${m.role === 'customer' ? 'Customer' : 'Store'}: ${m.text}`)
     .join('\n')
-  return `${shopLine}Recent conversation (customer messages only — for follow-ups like color-only replies). Latest message product type overrides earlier products:\n${history}\n\nLatest customer message:\n${text}`
+  return `${shopLine}Recent conversation (customer messages only — for follow-ups like color-only replies). Latest message product type overrides earlier products:\n${history}\n\n${offerLine}Latest customer message:\n${text}`
 }
 
 export async function parseCustomerIntent(
@@ -1811,8 +1889,10 @@ export async function parseCustomerIntent(
   }
 
   // A bare reaction needs no classification, and skipping the LLM stops it from
-  // carrying the previous product over from history.
+  // carrying the previous product over from history. After our own offer the
+  // model must read it, because "ok" may be the answer to that question.
   if (
+    !extractOpenOffer(options?.recentMessages ?? []) &&
     isAcknowledgement(trimmed) &&
     !extractRequestedCategory(trimmed, storeCategories) &&
     !extractColor(trimmed) &&

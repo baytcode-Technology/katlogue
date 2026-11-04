@@ -5,6 +5,7 @@ import {
 } from './build-product-reply.service.js'
 import {
   extractLastShownProduct,
+  extractOpenOffer,
   filterSessionHistory,
   formatConversationHistory,
   type InboxAiChannel,
@@ -73,10 +74,13 @@ export async function composeInboxAiReply(
     recentMessages,
     storeCategories: shopSells,
   })
+  const openOffer = intent.intent === 'buy_intent' ? extractOpenOffer(recentMessages) : null
   const lastShownProduct =
     intent.intent === 'greeting' || intent.rejectsLastShown
       ? null
-      : extractLastShownProduct(recentMessages)
+      : openOffer
+        ? { title: openOffer.title, url: openOffer.url }
+        : extractLastShownProduct(recentMessages)
 
   const staffHandoff = await resolveStaffHandoff({
     store: input.store,

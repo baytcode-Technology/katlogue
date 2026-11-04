@@ -8,8 +8,9 @@ import type { Store } from '../../stores/types/store.types.js'
 import type { OrderWithDetails } from '../../orders/repositories/order.repository.js'
 import type { CatalogMatch } from '../services/catalog-search.service.js'
 import type { Product } from '../../products/types/product.types.js'
-import { replyUsesOnlyToolFacts } from '../agent/agent-guard.js'
+import { replyUsesOnlyToolFacts, sanitizeAgentSpoken } from '../agent/agent-guard.js'
 import { buildInboxAgentSystemPrompt } from '../agent/inbox-agent-prompt.js'
+import { cleanSearchQuery } from '../agent/inbox-agent-tools.js'
 import { runInboxAgent } from '../agent/run-inbox-agent.js'
 
 let failed = 0
@@ -197,6 +198,84 @@ async function main(): Promise<void> {
     assert.equal(result?.reply.primaryMatch, null)
   })
 
+  await test('markdown links are stripped; English helpdesk is rejected for Manglish', async () => {
+    assert.equal(
+      sanitizeAgentSpoken(
+        'We have a Check Shirt [here](https://shrox.aishopy.io/product/check-shirt-9).',
+        { stripUrls: true }
+      ),
+      'We have a Check Shirt .'
+    )
+    const manglish = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'hi njan oru check shirt undo',
+      recentMessages: [],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Shirt'],
+      deps: { searchCatalog: async () => [checkShirt] },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'check shirt' } })
+        await runTool({ name: 'show_product', args: { productId: 9 } })
+        return 'Yes sir, ithu nokku. [here](https://shrox.aishopy.io/product/check-shirt-9)'
+      }) as Completer,
+    })
+    assert.match(manglish?.reply.primaryText ?? '', /Yes sir, ithu nokku/)
+    assert.doesNotMatch(manglish?.reply.primaryText ?? '', /\[here\]\(/)
+    assert.match(manglish?.reply.primaryText ?? '', /check-shirt-9/)
+
+    const helpdesk = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'hi njan oru check shirt undo',
+      recentMessages: [],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Shirt'],
+      deps: { searchCatalog: async () => [checkShirt] },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'check shirt' } })
+        await runTool({ name: 'show_product', args: { productId: 9 } })
+        return 'How can I assist you today at Shrox?'
+      }) as Completer,
+    })
+    assert.equal(helpdesk, null)
+  })
+
+  await test('other colour shirts searches shirt and shows a different card', async () => {
+    let query = ''
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'vere ethelum colour shirts undo',
+      recentMessages: [
+        {
+          role: 'store',
+          text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/check-shirt-9`,
+        },
+      ],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Shirt'],
+      deps: {
+        searchCatalog: async (_storeId, _slug, _currency, filters) => {
+          query = typeof filters === 'string' ? filters : filters.query
+          return [checkShirt, linenShirt]
+        },
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'colour shirts' } })
+        return 'Vere colour shirt um und sir.'
+      }) as Completer,
+    })
+    assert.equal(cleanSearchQuery('colour shirts'), 'shirts')
+    assert.equal(query, 'shirts')
+    assert.equal(result?.reply.primaryMatch?.product.name, 'Linen Shirt')
+    assert.match(result?.reply.primaryText ?? '', /Vere colour shirt um und/)
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /\[here\]\(/)
+  })
+
   await test('salesman prompt uses this shop and refuses weather or code help', () => {
     const prompt = buildInboxAgentSystemPrompt({
       storeName: 'Shrox',
@@ -214,6 +293,9 @@ async function main(): Promise<void> {
     assert.match(prompt, /Weather, news, homework/)
     assert.match(prompt, /fix this code/)
     assert.match(prompt, /Do not answer them/)
+    assert.match(prompt, /How can I assist you/)
+    assert.match(prompt, /other colour/)
+    assert.match(prompt, /No markdown, no \[here\]\(url\)/)
   })
 
   await test('cancel calls connect_helpline', async () => {

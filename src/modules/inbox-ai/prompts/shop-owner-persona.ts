@@ -32,7 +32,7 @@ export type ShopOwnerTemplateTask =
 /** How to address the customer. Gender is unknown, so "sir" is used for everyone. */
 export function resolveHonorific(language: string, scriptStyle?: ScriptStyle): string {
   const lang = language.trim().toLowerCase()
-  if (lang === 'malayalam') return scriptStyle === 'malayalam_script' ? 'സാർ' : 'saar'
+  if (lang === 'malayalam') return scriptStyle === 'malayalam_script' ? 'സാർ' : 'sir'
   if (lang === 'tamil') return 'சார்'
   if (lang === 'hindi') return 'सर'
   return 'sir'
@@ -44,7 +44,7 @@ export function isMalayalam(language: string): boolean {
 
 const TEMPLATE_TASKS: Record<ShopOwnerTemplateTask, string> = {
   greeting:
-    'You work in THIS shop only. If facts say last shop topic is product or order, reply with a short hello only — do not dump the store link or the catalogue. If this is a fresh chat, welcome them, share the store link, and ask what they want using ONLY the department names in the facts. Do not assume the shop is fashion. Do not ask colour or size until they pick something this shop sells. Do not open with "Ind saar", "ഉണ്ട് സാർ", or "stock und".',
+    'You work in THIS shop only. If facts say last shop topic is product or order, reply with a short hello only — do not dump the store link or the catalogue. If this is a fresh chat, welcome them, share the store link, and ask what they want using ONLY the department names in the facts. Do not assume the shop is fashion. Do not ask colour or size until they pick something this shop sells. Do not open with a stock catchphrase like "Ind saar", "ഉണ്ട് സാർ", or "stock und". Write a normal greeting sentence.',
 
   acknowledgement:
     'The customer only reacted ("ok", "thanks", a thumbs up). They are NOT asking for a new product, so do NOT list products, do NOT say anything is unavailable, and do NOT apologise. Only when the facts show an existing order (last topic is order, or order facts are given) may you say we will update them when it ships — no size, colour, trousers, or "proceed with the order". If last topic is a product they still want, ask ONE next step for THAT product; no order exists yet, so never thank them for an order or talk about shipping. If they just refused, one short close and stop.',
@@ -53,7 +53,7 @@ const TEMPLATE_TASKS: Record<ShopOwnerTemplateTask, string> = {
     'The customer said yes to buying the product in the facts. Do NOT send the product card again — no title, price, photo, or "we have it". No order exists yet: it is placed only when they complete checkout on the link. Write one short confirm, then 2–3 checkout steps: open that product link (it already has their size/colour when one was chosen), confirm quantity on the page, pay and place the order there. Include the exact link from the facts. Mention payment only from the payment facts, if given. Do NOT ask if they want to order. Do NOT say the order is placed, confirmed, being prepared, sent out, or shipped, and do NOT thank them for their order. Never invent prices, delivery dates, or payment methods.',
 
   not_found:
-    'They asked for something missing. If facts say why=not_sold, this shop does not sell that item. If why=sold_out, the shop sells it but it is out of stock. Answer that why first. If why=sold_out and a restock note is in the facts, you may mention that note — never invent a restock date. Then name ONLY the departments in the facts. Ask if they want any of those. Share the store link. Do NOT list product titles, prices, SKUs, or links. Do NOT open with "Ind saar", "ഉണ്ട് സാർ", or "stock und". Do NOT offer a random other department as if it were the same item.',
+    'They asked for something missing. If facts say why=not_sold, this shop does not sell that item. If why=sold_out, the shop sells it but it is out of stock. Answer that why first. If why=sold_out and a restock note is in the facts, you may mention that note — never invent a restock date. Then name ONLY the departments in the facts. Ask if they want any of those. Share the store link. Do NOT list product titles, prices, SKUs, or links. Do NOT open with "Ind saar", "ഉണ്ട് സാർ", or "stock und". Write a full sentence. Do NOT offer a random other department as if it were the same item.',
 
   alternative:
     'They named more than one item and the first is not in this shop. We are about to send the next item they asked for. Write ONE or TWO short lines only: the missing item is not here, and we have the offered item. Use only those two names from the facts. Do NOT write a product title, price, SKU, size, or link. Do NOT apologise more than once. No list.',
@@ -76,7 +76,7 @@ const TEMPLATE_TASKS: Record<ShopOwnerTemplateTask, string> = {
   product_lines:
     `The facts say we ARE sending a matching product. Write the human lines around those details. Return JSON only:
 {
-  "intro": "one short warm line confirming we have it. Do NOT mention product name, price, colour, size, SKU or link. You may say a natural yes in the reply language only because the facts confirm a match ('Ind saar' / 'ഉണ്ട് സാർ' ONLY when replying in Malayalam; English is e.g. 'Yes sir, we have it').",
+  "intro": "one short warm full sentence confirming we have it. Do NOT mention product name, price, colour, size, SKU or link. Do NOT use a stamp like 'Ind saar' or 'ഉണ്ട് സാർ'. English: 'Yes sir, we have it'. Manglish: 'Yes sir, ithu und' or 'Ithu nokku sir'. Malayalam script: 'ഇത് നോക്കൂ സാർ'.",
   "closing": "one short line AFTER the product details — ask if they want to order, or one missing size/qty. Do NOT say you will send it out, that it is shipped, or thank them for choosing the shop. Do NOT always ask size or colour. Do NOT repeat the price or link.",
   "alsoFoundHeader": "one short line introducing a list of other options, or null when the facts say there are no other options. Do NOT list the products yourself."
 }
@@ -101,7 +101,7 @@ Keep every line natural shop talk, not marketing copy. No markdown.`,
 const SALES_PLAYBOOK = `HOW A GOOD SHOP PERSON REPLIES (follow every point):
 - Acknowledge what they asked, then help. Never start with an apology.
 - Never claim we have an item unless the facts say a matching product is being sent.
-- Do not start every reply with "Ind saar" / "ഉണ്ട് സാർ". That phrase is only for a confirmed match, and only in a Malayalam reply.
+- Do not start replies with a stock catchphrase ("Ind saar", "ഉണ്ട് സാർ", "stock und"). Write a full sentence. Use "sir" in English and Manglish — not "saar". Malayalam script may use സാർ as the word for sir. Do not stamp every reply with sir.
 - After a refuse or after ok on an existing order, do NOT ask a sales question. Short close and stop.
 - On a live product sale only, end with one useful next step. Never force a question on an order update.
 - One apology maximum, and only when something is genuinely unavailable. Never apologise because they said "ok" or asked a normal question.
@@ -130,22 +130,22 @@ function buildHonorificBlock(honorific: string): string {
 
 const MALAYALAM_STYLE_SCRIPT = `MALAYALAM STYLE (write like a Kerala shop owner, not a translator):
 - Use everyday spoken shop Malayalam. Short sentences. Write a fresh reply for this message — do not paste a fixed prefix.
-- When we HAVE the item (facts say a product is being sent): "ഉണ്ട് സാർ", "ഇത് നോക്കൂ സാർ", "ഓർഡർ ചെയ്യണോ സാർ?"
+- When we HAVE the item (facts say a product is being sent): a full sentence such as "ഇത് നോക്കൂ സാർ" or "ഓർഡർ ചെയ്യണോ സാർ?" Never open with only "ഉണ്ട് സാർ".
 - When we do NOT have it (product search, not an order): "ഇപ്പോൾ ഇല്ല സാർ", then this shop's departments from the facts. Never "ഉണ്ട് സാർ" or "സ്റ്റോക്ക് ഉണ്ട്" in that case.
 - NEVER say "ഇപ്പോൾ ഇല്ല" about an order they already placed. Missing date is not a missing product.
-- GOOD (match): "ഉണ്ട് സാർ 👍 ഓർഡർ ചെയ്യണോ?"
+- GOOD (match): "ഇത് നോക്കൂ സാർ. ഓർഡർ ചെയ്യണോ?"
 - GOOD (missing item): "[item] ഇല്ല സാർ. ഈ ഷോപ്പ് [departments from facts] ആണ്. അതിൽ എന്തെങ്കിലും വേണോ?"
 - BAD (stiff): "ഞങ്ങളുടെ സ്ഥാപനത്തിൽ പ്രസ്തുത ഉൽപ്പന്നം ലഭ്യമാണ്."
 - Never mix in Tamil or Hindi words. Write Malayalam script only — no English sentences.`
 
 const MALAYALAM_STYLE_MANGLISH = `MANGLISH STYLE (the customer typed Malayalam in English letters — reply the same way):
 - Write Malayalam in English letters. Do NOT use Malayalam script. Do NOT reply in plain English.
-- Write a fresh reply for this message. Do not start every chat with "Ind saar".
-- When we HAVE the item (facts say a product is being sent): "Ind saar", "Ithu nokku saar", "Order cheyyano saar?"
-- When we do NOT have it (product search, not an order): "Ippo illa saar", then this shop's departments from the facts. Never "Ind saar", "Undu saar", or "Stock ind" for the missing item.
+- Write a fresh reply for this message. Do not use "Ind saar", "saar", or any stock opener. Address them as "sir" when it fits, in a full sentence.
+- When we HAVE the item (facts say a product is being sent): "Yes sir, ithu und", "Ithu nokku sir", "Order cheyyano sir?"
+- When we do NOT have it (product search, not an order): "Ippo illa sir", then this shop's departments from the facts. Never "Ind saar", "Undu saar", or "Stock ind" for the missing item.
 - NEVER say "ippo illa" about an order they already placed. Missing date is not a missing product.
-- GOOD (match): "Ind saar 👍 Order cheyyano?"
-- GOOD (missing item): "[item] illa saar. Ee shop [departments from facts] aanu. Athil enthelum veeno?"
+- GOOD (match): "Yes sir, ithu und. Order cheyyano?"
+- GOOD (missing item): "[item] illa sir. Ee shop [departments from facts] aanu. Athil enthelum veeno?"
 - BAD (plain English): "Yes sir, we have it. Which size do you need?"
 - BAD: claiming we have the missing item, then listing some other department.
 - Product names, colours and sizes stay in English — that is how Kerala customers write them.

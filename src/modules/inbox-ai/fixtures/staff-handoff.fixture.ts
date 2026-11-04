@@ -101,7 +101,7 @@ async function main() {
     const text = 'chumma staff nokkum enn paranja pore enick product eppo kittum enn ariyahanm'
     const parsed = parseCustomerIntentOffline(text, {
       recentMessages: [
-        { role: 'store', text: 'Customer helpline ningale contact cheyyum saar. Ee chatil wait cheyyu.' },
+        { role: 'store', text: 'Customer helpline ningale contact cheyyum sir. Ee chatil wait cheyyu.' },
       ],
     })
     const decision = await resolveStaffHandoff({
@@ -132,7 +132,8 @@ async function main() {
   })
 
   await test('helpline connect line is salesman-style, not staff nokkum', () => {
-    assert.match(staffConnectLine('Malayalam', 'latin'), /Customer helpline ningale contact/)
+    assert.match(staffConnectLine('Malayalam', 'latin'), /Customer helpline ningale contact cheyyum sir/)
+    assert.doesNotMatch(staffConnectLine('Malayalam', 'latin'), /saar/i)
     assert.doesNotMatch(staffConnectLine('Malayalam', 'latin'), /staff nokkum/i)
     assert.match(staffConnectLine('English'), /customer helpline will contact you/i)
     assert.doesNotMatch(staffConnectLine('English'), /staff will check/i)

@@ -131,7 +131,7 @@ test('canned greeting asks from shop categories, not size or colour', () => {
     template: 'greeting',
     facts: { ...facts, shopSells: ['Men', 'shirts', 'pants'] },
   })
-  assert.match(reply, /Hai saar/)
+  assert.match(reply, /Hai sir/)
   assert.match(reply, /Men/)
   assert.match(reply, /shirts/)
   assert.equal(/ethu size/i.test(reply), false)
@@ -172,14 +172,22 @@ test('canned not-found for a bag does not say Ind saar or list shirts as stock',
   assert.equal(reply.includes('/product/'), false)
 })
 
-test('canned product wrapper after a match may say ഉണ്ട് സാർ', () => {
+test('canned product wrapper after a match is a full sentence, not ഉണ്ട് സാർ', () => {
   const reply = buildCannedLocalizedReply({
     customerLanguage: 'Malayalam',
     scriptStyle: 'malayalam_script',
     template: 'product_lines',
     facts: { ...facts, productTitle: 'Linen Shirt' },
   })
-  assert.equal(reply, 'ഉണ്ട് സാർ')
+  assert.equal(reply, 'ഇത് നോക്കൂ സാർ.')
+  const latin = buildCannedLocalizedReply({
+    customerLanguage: 'Malayalam',
+    scriptStyle: 'latin',
+    template: 'product_lines',
+    facts: { ...facts, productTitle: 'Linen Shirt' },
+  })
+  assert.equal(latin, 'Yes sir, ithu nokku.')
+  assert.equal(/^Ind saar/i.test(latin.trim()), false)
 })
 
 test('canned alternative names what is missing and what we have', () => {
@@ -248,7 +256,7 @@ test('refuse close has no size or order push', () => {
     template: 'close',
     facts: { ...facts, sessionTopic: 'missing' },
   })
-  assert.match(reply, /Sheri saar/)
+  assert.match(reply, /Sheri sir/)
   assert.equal(/size/i.test(reply), false)
   assert.equal(/order cheyy/i.test(reply), false)
   assert.equal(/trousers/i.test(reply), false)
@@ -307,7 +315,7 @@ test('language switch canned stays on the missing item', () => {
     },
   })
   assert.match(reply, /shoes/i)
-  assert.equal(/^Hai saar/i.test(reply.trim()), false)
+  assert.equal(/^Hai sir/i.test(reply.trim()), false)
 })
 
 test('order follow-up canned answers courier from the card, not the date', () => {

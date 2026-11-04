@@ -213,13 +213,20 @@ function sortOrdersNewestFirst(orders: OrderWithDetails[]): OrderWithDetails[] {
   )
 }
 
+const GENERIC_ORDER_ITEM_TOKEN =
+  /^(shirts?|pants?|trousers?|jeans|t-?shirts?|tees?|dresses?|kurtas?|sarees?|saris?|tops?|jackets?|shoes?|beanies?|innerwear)$/i
+
 function orderMatchesProductHint(order: OrderWithDetails, hint: string): boolean {
   const needle = hint.trim().toLowerCase()
   if (!needle) return false
+  const tokens = needle.split(/\s+/).filter((token) => token.length > 2)
+  const specific = tokens.filter((token) => !GENERIC_ORDER_ITEM_TOKEN.test(token))
   return order.items.some((item) => {
     const { productName, variantName } = parseOrderItemSnapshot(item)
     const hay = `${productName} ${variantName ?? ''}`.toLowerCase()
-    return hay.includes(needle) || needle.split(/\s+/).some((token) => token.length > 2 && hay.includes(token))
+    if (hay.includes(needle)) return true
+    if (specific.length > 0) return specific.every((token) => hay.includes(token))
+    return tokens.some((token) => hay.includes(token))
   })
 }
 

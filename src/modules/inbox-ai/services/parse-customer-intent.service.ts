@@ -136,6 +136,7 @@ CRITICAL — Extract product only:
 - A greeting by itself ("hi", "hello") is greeting with searchQuery "". "Hi, I need a blue shirt" is product_search.
 - "വെള്ള shirt ഉണ്ടോ?" → product_search, searchQuery: "shirt", color: "white", customerLanguage: "Malayalam"
 - "blue shirt undo?" → product_search, searchQuery: "shirt", color: "blue", requestedItem: "blue shirt"
+- Keep style, fabric, fit, brand, and model words in searchQuery. "check shirt" / "linen shirt" / "mixie" stay those words — never shrink to a bare department like "shirt". Color and size stay in their own fields.
 - Pairing / owned-item context: "I have a green shirt, need pants to pair / send pant images" → searchQuery: "pants", categoryName: "pants", color: null. Do NOT search for the item they already own.
 - "ente kayyil oru green shirt ond … pantsinte images ayackavo" → searchQuery: "pants", categoryName: "pants", color: null.
 - Latest message product type ALWAYS overrides prior conversation. If they talked about shirts and now ask for pants, searchQuery is "pants" — never keep "shirt".
@@ -150,8 +151,8 @@ Return JSON only:
   "intent": "greeting" | "acknowledgement" | "buy_intent" | "product_search" | "sku_lookup" | "category_search" | "image_request" | "order_status" | "language_switch" | "refuse" | "shop_info" | "off_topic" | "explicit",
   "orderAsk": "full" | "confirm_last" | "eta" | "why" | "delay" | "urgency" | "payment" | "items" | "cancel" | "address" | "not_mine" | "refund" | null,
   "customerLanguage": "exact language name e.g. English, Hindi, Malayalam, Tamil, Punjabi, Arabic",
-  "requestedItem": "product they want in English e.g. white shirt, or null",
-  "searchQuery": "English product terms without color/size e.g. shirt",
+  "requestedItem": "product they want in English e.g. white check shirt, or null",
+  "searchQuery": "English product identity without color/size e.g. check shirt, linen shirt, mixie — not a bare department like shirt unless they named only that",
   "color": "English color e.g. white, black, or null",
   "size": "S, M, L, XL, or null",
   "sku": "SKU if mentioned or null",
@@ -159,7 +160,7 @@ Return JSON only:
   "wantsImage": true if they ask for photo/image,
   "orderNumber": "full order number e.g. JAN26-3 if mentioned, or null",
   "orderNumberHint": "bare digits after order e.g. 88 from 'order 88', or null",
-  "orderProductHint": "product name in an order question e.g. shirt, or null",
+  "orderProductHint": "product identity in an order question e.g. check shirt, not a bare shirt unless they only said shirt, or null",
   "orderScope": "latest" | "all" | "specific" | "product" | null,
   "typedPhone": "a 10-15 digit phone the customer typed, or null",
   "replyToLastQuestion": "yes" | "no" | null
@@ -180,11 +181,13 @@ Rules:
   "ok" → intent: "acknowledgement", searchQuery: "". NEVER product_search.
   After we already sent an order status, "ok" is still acknowledgement — do not start a sale.
   But "ok blue shirt undo?" mentions a NEW product → product_search, searchQuery: "shirt", color: "blue".
+  "aa check shirt aahn vendath" → product_search, searchQuery: "check shirt", not "shirt".
 - buy_intent: the customer wants to buy or order what was already discussed, without naming a new product. "I'll take it", "ok I want this", "how to order", "order cheyyam", "order cheyyan pattumo", "book it", "edukkam", "എടുക്കാം", "വേണം" alone, "how to pay", "cash on delivery undo".
   For buy_intent ALSO return searchQuery: "", categoryName: null. Keep size/color if they stated one (e.g. "L edukkam" → size: "L").
 - Any product availability, price, or shopping question = product_search (NOT off_topic), even with personal context.
 - order_status for: my/last/recent order, all/total orders, order status, tracking, shipped, delivery, payment status, where is my order, "order evide", "kittiyilla", "ordered today" — NOT product_search or off_topic.
 - "where is my shirt order" → order_status, orderScope: "product", orderProductHint: "shirt", searchQuery: "".
+- "where is my check shirt order" → order_status, orderScope: "product", orderProductHint: "check shirt", searchQuery: "".
 - "status of order JAN26-5" → order_status, orderScope: "specific", orderNumber: "JAN26-5".
 - "order 88" / "order 10" → order_status, orderNumberHint: "88" or "10", orderScope: "specific".
 - "my last order" / "last order status" / "ente last order" → order_status, orderScope: "latest".
@@ -865,6 +868,95 @@ function primarySearchTerm(
   return [...words].sort((a, b) => a.length - b.length)[0]
 }
 
+const IDENTITY_FILLER = new Set([
+  'hi', 'hello', 'hey', 'helo', 'please', 'sir', 'saar', 'sar', 'thanks', 'thank', 'you',
+  'ok', 'okay', 'aah', 'aa', 'ee', 'mm', 'the', 'a', 'an', 'my', 'me', 'i', 'we', 'this', 'that',
+  'oru', 'njan', 'enick', 'enikku', 'ente', 'ithu', 'athu', 'athinte', 'athin', 'ithin',
+  'vendath', 'vendam', 'vehnam', 'aahn', 'aanu', 'undo', 'undu', 'ond', 'illa', 'alle',
+  'details', 'detail', 'photo', 'image', 'images', 'picture', 'pic', 'video', 'message',
+  'kanditt', 'cheyyavahn', 'ayakku', 'ayackava', 'ayakkavo', 'send', 'show', 'need', 'want',
+  'looking', 'for', 'have', 'do', 'with', 'from', 'and', 'or', 'also', 'only', 'just',
+  'pair', 'koodi', 'olla', 'cheyyan', 'pattiya', 'kayyil', 'inte', 'okke', 'order', 'status',
+  'where', 'is', 'last', 'recent', 'the', 'any', 'some', 'one', 'so', 'because',
+  'marriage', 'wedding', 'party', 'tomorrow', 'today', 'tonight', 'birthday', 'gift',
+  'function', 'engagement', 'reception',
+])
+
+function isIdentityFiller(token: string, color: string | null): boolean {
+  const t = token.toLowerCase()
+  if (IDENTITY_FILLER.has(t)) return true
+  if (color && t === color.toLowerCase()) return true
+  if (COLOR_WORDS.includes(t)) return true
+  if (t.length <= 5 && SIZE_PATTERN.test(t)) return true
+  return false
+}
+
+function richerProductPhrase(
+  a: string | null | undefined,
+  b: string | null | undefined
+): string | null {
+  const left = a?.trim() ?? ''
+  const right = b?.trim() ?? ''
+  if (!left) return right || null
+  if (!right) return left
+  const ln = left.split(/\s+/).length
+  const rn = right.split(/\s+/).length
+  if (ln !== rn) return ln > rn ? left : right
+  return left.length >= right.length ? left : right
+}
+
+function coreSearchWord(hit: CategoryHit, matched: string): string {
+  const slice = matched.replace(/(inte|nte|um)$/i, '').toLowerCase()
+  if (hit.fromStore) return slice || hit.word.toLowerCase()
+  if (hit.canonical === 'tshirts' || isTshirtTerm(slice)) return 't-shirt'
+  return slice || categorySearchTerm(hit.canonical)
+}
+
+function hitMatchesCategory(hit: CategoryHit, category: string): boolean {
+  if (hit.canonical === category || hit.word.toLowerCase() === category.toLowerCase()) return true
+  const want = canonicalCategory(category)
+  return Boolean(want && (hit.canonical === want || canonicalCategory(hit.canonical) === want))
+}
+
+/** Style/brand words next to the product type, e.g. "check shirt" not "shirt". */
+export function productIdentityQuery(
+  text: string,
+  category: string | null,
+  storeCategories: string[] = []
+): string {
+  const color = extractColor(text)
+  const hits = findCategoryHits(text, storeCategories)
+  const hit = category
+    ? hits.find((row) => hitMatchesCategory(row, category)) ?? hits[0]
+    : hits[0]
+  const tokens = [...text.matchAll(/[A-Za-z][A-Za-z0-9-]*/g)].map((m) => ({
+    token: m[0],
+    index: m.index ?? 0,
+  }))
+
+  if (!hit) {
+    return tokens
+      .map((row) => row.token.toLowerCase())
+      .filter((tok) => tok.length >= 3 && !isIdentityFiller(tok, color))
+      .slice(0, 4)
+      .join(' ')
+  }
+
+  const matched = text.slice(hit.index, hit.end)
+  const core = coreSearchWord(hit, matched)
+  const before = tokens.filter((row) => row.index + row.token.length <= hit.index)
+  const modifiers: string[] = []
+  for (let i = before.length - 1; i >= 0 && modifiers.length < 2; i -= 1) {
+    const tok = before[i].token
+    if (isIdentityFiller(tok, color) || tok.length < 3) {
+      if (modifiers.length > 0) break
+      continue
+    }
+    modifiers.unshift(tok.toLowerCase())
+  }
+  return [...modifiers, core].join(' ').trim()
+}
+
 function mentionsOccasion(text: string): boolean {
   return OCCASION_PATTERN.test(text)
 }
@@ -882,17 +974,17 @@ function preferTextSearchQuery(
     )
     .replace(/\s+/g, ' ')
     .trim()
-  if (!category) return cleaned
-  const term = primarySearchTerm(text, category, storeCategories)
-  if (
-    !cleaned ||
-    mentionsOccasion(query) ||
-    cleaned.split(/\s+/).length > 3 ||
-    categoriesConflict(cleaned, category)
-  ) {
-    return term
+  const identity = productIdentityQuery(text, category, storeCategories)
+  if (category && categoriesConflict(cleaned, category)) {
+    return identity || primarySearchTerm(text, category, storeCategories)
   }
-  return cleaned
+  const usableLlm = cleaned && cleaned.split(/\s+/).length <= 6 ? cleaned : ''
+  return (
+    richerProductPhrase(identity, usableLlm) ||
+    identity ||
+    usableLlm ||
+    (category ? primarySearchTerm(text, category, storeCategories) : '')
+  )
 }
 
 function isColorOnlyFollowUp(text: string, storeCategories: string[] = []): boolean {
@@ -1056,11 +1148,12 @@ export function extractOrderProductHint(text: string): string | null {
     .trim()
 
   const category = extractCategory(stripped)
-  if (category) return category.replace(/s$/, '') || category
+  const identity = productIdentityQuery(text, category, [])
+  if (identity) return identity
 
   const words = stripped
     .split(/\s+/)
-    .filter((w) => w.length > 2 && !/^\d+$/.test(w))
+    .filter((w) => w.length > 2 && !/^\d+$/.test(w) && !IDENTITY_FILLER.has(w.toLowerCase()))
   return words.length > 0 ? words.join(' ') : null
 }
 
@@ -1234,7 +1327,10 @@ export function fromLlmResult(
   const orderNumber = parsed.orderNumber?.trim()?.toUpperCase() || orderNumberFromText
   const orderNumberHint = parsed.orderNumberHint?.trim() || orderNumberHintFromText
   const typedPhone = parsed.typedPhone?.trim() || typedPhoneFromText
-  const orderProductHint = parsed.orderProductHint?.trim() || orderProductHintFromText
+  const orderProductHint = richerProductPhrase(
+    orderProductHintFromText,
+    parsed.orderProductHint?.trim() || null
+  )
 
   // The message itself is the authority on whether a product was named. When the
   // customer only reacted ("ok"), the LLM sometimes carries the previous product
@@ -1820,9 +1916,13 @@ function regexFallback(
     )
   }
 
-  const searchQuery = categoryFromText
-    ? primarySearchTerm(trimmed, categoryFromText, storeCategories)
-    : stripExtractedTerms(trimmed, colorFromText, sizeFromText)
+  const searchQuery = preferTextSearchQuery(
+    trimmed,
+    stripExtractedTerms(trimmed, colorFromText, sizeFromText) ||
+      (categoryFromText ? primarySearchTerm(trimmed, categoryFromText, storeCategories) : ''),
+    categoryFromText,
+    storeCategories
+  )
 
   return finalizeIntent(
     {

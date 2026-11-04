@@ -111,6 +111,47 @@ export function extractLastShownProduct(
   return null
 }
 
+export type OpenOffer = {
+  title: string
+  url: string
+  /** The question we asked about that product, word for word. */
+  question: string
+}
+
+function questionAfter(text: string, fromIndex: number): string | null {
+  const lines = text
+    .slice(fromIndex)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.includes('?'))
+  return lines[lines.length - 1] ?? null
+}
+
+/**
+ * The product we offered in our latest turn, when we ended it with a question
+ * ("Would you like to order it?"). A newer store turn without that offer closes it.
+ */
+export function extractOpenOffer(lines: ConversationHistoryLine[]): OpenOffer | null {
+  let i = lines.length - 1
+  while (i >= 0 && lines[i].role === 'customer') i -= 1
+  const lastTurn: ConversationHistoryLine[] = []
+  while (i >= 0 && lines[i].role === 'store') {
+    lastTurn.unshift(lines[i])
+    i -= 1
+  }
+
+  for (const line of lastTurn) {
+    const matches = [...line.text.matchAll(PRODUCT_URL_PATTERN)]
+    if (matches.length !== 1) continue
+    const [match] = matches
+    const title = titleFromProductSlug(match[1])
+    const question = questionAfter(line.text, (match.index ?? 0) + match[0].length)
+    if (!title || !question) continue
+    return { title, url: match[0], question }
+  }
+  return null
+}
+
 export type SessionTopic = 'order' | 'product' | 'missing' | null
 
 /** What the shop last talked about in this visit, so "ok" does not start a new sale. */

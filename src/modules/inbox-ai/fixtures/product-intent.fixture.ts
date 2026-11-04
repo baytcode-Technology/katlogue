@@ -12,7 +12,11 @@ import {
   parseCustomerIntentOffline,
   resolveOrderAsk,
 } from '../services/parse-customer-intent.service.js'
-import { extractLastShownProduct, filterSessionHistory } from '../services/conversation-history.service.js'
+import {
+  extractLastShownProduct,
+  extractOpenOffer,
+  filterSessionHistory,
+} from '../services/conversation-history.service.js'
 import {
   pickPrimaryCatalogMatch,
   productMatchesRequestedCategory,
@@ -759,6 +763,93 @@ test('simple product: untracked or non-inventory sells, tracked at 0 does not', 
   assert.equal(isProductSellable(stockProduct(), []), false)
   assert.equal(isProductSellable(stockProduct({ stock_qty: 2 }), []), true)
   assert.equal(isProductSellable(stockProduct({ stock_qty: 2, mark_as_sold: true }), []), false)
+})
+
+console.log('\n=== Answer to our order offer ===')
+
+const OFFER_URL =
+  'https://shrox.aishopy.io/product/force-men-printed-round-neck-cotton-blend-black-t-shirt-21?variant=117&src=wa_1009'
+const OFFER_THREAD = [
+  { role: 'customer' as const, text: 'i need black colour with size s' },
+  {
+    role: 'store' as const,
+    text: `Ind saar, we have the black T-shirt in size S available for you.\n\nForce Men Printed Round Neck Cotton Blend Black T-Shirt — S / Black\n₹368\nColor: Black | Size: S\n\n${OFFER_URL}\n\nWould you like to place an order for it?`,
+  },
+]
+
+test('open offer keeps the S / Black variant link and our question', () => {
+  const offer = extractOpenOffer(OFFER_THREAD)
+  assert.equal(offer?.url, OFFER_URL)
+  assert.equal(offer?.question, 'Would you like to place an order for it?')
+  assert.equal(extractOpenOffer([...OFFER_THREAD, { role: 'customer', text: 'yes' }])?.url, OFFER_URL)
+})
+
+test('a newer store turn or a link without a question is no open offer', () => {
+  assert.equal(
+    extractOpenOffer([...OFFER_THREAD, { role: 'customer', text: 'ok' }, { role: 'store', text: 'Alright sir.' }]),
+    null
+  )
+  assert.equal(
+    extractOpenOffer([{ role: 'store', text: `Here it is sir.\n\n${OFFER_URL}` }]),
+    null
+  )
+})
+
+test('model yes to the offer is buy, no is refuse, null keeps its intent', () => {
+  const yes = fromLlmResult(
+    { intent: 'acknowledgement', customerLanguage: 'English', searchQuery: '', replyToLastQuestion: 'yes' },
+    'yes',
+    [],
+    OFFER_THREAD
+  )
+  assert.equal(yes.intent, 'buy_intent')
+  assert.equal(yes.replyToLastQuestion, 'yes')
+  const haa = fromLlmResult(
+    { intent: 'product_search', customerLanguage: 'Malayalam', searchQuery: 'haa', replyToLastQuestion: 'yes' },
+    'haa venam',
+    [],
+    OFFER_THREAD
+  )
+  assert.equal(haa.intent, 'buy_intent')
+  assert.equal(haa.searchQuery, '')
+  const no = fromLlmResult(
+    { intent: 'acknowledgement', customerLanguage: 'English', searchQuery: '', replyToLastQuestion: 'no' },
+    'not now',
+    [],
+    OFFER_THREAD
+  )
+  assert.equal(no.intent, 'refuse')
+  const other = fromLlmResult(
+    { intent: 'product_search', customerLanguage: 'English', searchQuery: 'pants', categoryName: 'pants', replyToLastQuestion: null },
+    'do you have pants',
+    [],
+    OFFER_THREAD
+  )
+  assert.equal(other.intent, 'product_search')
+})
+
+test('a yes with no open offer is ignored', () => {
+  const parsed = fromLlmResult(
+    { intent: 'acknowledgement', customerLanguage: 'English', searchQuery: '', replyToLastQuestion: 'yes' },
+    'yes',
+    [],
+    [{ role: 'store', text: 'Hello sir, welcome to Shrox.' }]
+  )
+  assert.equal(parsed.intent, 'acknowledgement')
+  assert.equal(parsed.replyToLastQuestion, null)
+})
+
+test('offline: a short answer to the offer is buy, never a product search', () => {
+  for (const text of ['yes', 'Yes please', 'haa', 'ha ji']) {
+    const parsed = parseCustomerIntentOffline(text, { recentMessages: OFFER_THREAD })
+    assert.equal(parsed.intent, 'buy_intent', text)
+    assert.equal(parsed.searchQuery, '', text)
+  }
+  assert.equal(parseCustomerIntentOffline('venda', { recentMessages: OFFER_THREAD }).intent, 'refuse')
+  assert.equal(
+    parseCustomerIntentOffline('pants undo?', { recentMessages: OFFER_THREAD }).intent,
+    'product_search'
+  )
 })
 
 if (failed > 0) {

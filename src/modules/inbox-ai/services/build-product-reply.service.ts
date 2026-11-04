@@ -520,7 +520,9 @@ export async function buildProductReply(input: {
         customerMessage: customerText,
         ctx,
         template: 'close',
-        extraFacts: { sessionTopic: intent.sessionTopic },
+        extraFacts: {
+          sessionTopic: intent.replyToLastQuestion === 'no' ? null : intent.sessionTopic,
+        },
       }),
     }
   }
@@ -623,7 +625,10 @@ export async function buildProductReply(input: {
           : intent.intent === 'buy_intent'
             ? 'buy_assist'
             : 'acknowledgement',
-        extraFacts: { sessionTopic: intent.sessionTopic },
+        extraFacts: {
+          sessionTopic: intent.sessionTopic,
+          paymentFacts: intent.intent === 'buy_intent' ? shopPaymentFacts(store).llm : null,
+        },
       }),
     }
   }

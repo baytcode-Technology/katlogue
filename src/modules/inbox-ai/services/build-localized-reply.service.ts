@@ -519,9 +519,35 @@ export function isHonestOrderTalk(
 const SHIPPED_CLAIM_PATTERN =
   /\b(sent out|get that sent|thank you for choosing|already (?:placed|booked)|shipped it)\b/i
 
+/** Replies that talk about a product, not an order the customer already placed. */
+const NO_ORDER_TEMPLATES: ReadonlySet<LocalizedReplyTemplate> = new Set<LocalizedReplyTemplate>([
+  'acknowledgement',
+  'buy_assist',
+  'close',
+  'product_lines',
+])
+
+/** Claims that an order exists: placed, confirmed, being prepared, or shipping. */
+const ORDER_EXISTS_CLAIM_PATTERN =
+  /\b(thank(?:s| you) for (?:your|the) (?:order|purchase)|order (?:is |has been )?(?:placed|confirmed|booked)|(?:i(?:'ll| will)|we(?:'ll| will)) get (?:it|that|the [\w\s-]{1,60}?) ready|getting (?:it|that) ready|update you when it ships|(?:let you know|message you|inform you) when it ships|will be shipped|order (?:aayi|ayi|cheythu|confirm aayi)|ship aayal parayam)\b|ഓർഡർ\s*(?:ആയി|ചെയ്തു)|ഷിപ്പ്\s*ആയാൽ/i
+
+function hasExistingOrder(facts: Pick<LocalizedReplyFacts, 'sessionTopic' | 'orderFacts'>): boolean {
+  return facts.sessionTopic === 'order' || Boolean(facts.orderFacts?.trim())
+}
+
 export function isHonestProductClosing(text: string | null | undefined): boolean {
   if (!text?.trim()) return true
-  return !SHIPPED_CLAIM_PATTERN.test(text)
+  return !SHIPPED_CLAIM_PATTERN.test(text) && !ORDER_EXISTS_CLAIM_PATTERN.test(text)
+}
+
+/** With no order in this chat, a reply must never say one was placed, prepared, or will ship. */
+export function isHonestNoOrderTalk(
+  reply: string,
+  template: LocalizedReplyTemplate,
+  facts: Pick<LocalizedReplyFacts, 'sessionTopic' | 'orderFacts'>
+): boolean {
+  if (!NO_ORDER_TEMPLATES.has(template) || hasExistingOrder(facts)) return true
+  return !SHIPPED_CLAIM_PATTERN.test(reply) && !ORDER_EXISTS_CLAIM_PATTERN.test(reply)
 }
 
 /**
@@ -557,6 +583,9 @@ export function isReplyScriptValid(
       return false
     }
     if (/\b(ningalude|ithonn|divasam|paranjal|kittiyathayi|cheyyum saar)\b/i.test(text)) {
+      return false
+    }
+    if (/\b(saar|undu|illa|aanu|aahn|cheyyano|vendath|venam|vehnam|nokku)\b/i.test(text)) {
       return false
     }
   }
@@ -599,6 +628,11 @@ function buildFactsBlock(template: LocalizedReplyTemplate, facts: LocalizedReply
   }
   if (facts.orderAsk) lines.push(`Order ask: ${facts.orderAsk}`)
   if (facts.orderFacts?.trim()) lines.push(`Order facts:\n${facts.orderFacts.trim()}`)
+  if (NO_ORDER_TEMPLATES.has(template) && !hasExistingOrder(facts)) {
+    lines.push(
+      'Order placed in this chat: no. Orders are placed only when the customer completes checkout from the product link. Never thank them for an order or say it is ready or shipping.'
+    )
+  }
 
   if (facts.lastShownProduct?.title) {
     lines.push(`Product we already sent them: ${facts.lastShownProduct.title}`)
@@ -708,6 +742,10 @@ export async function buildLocalizedReply(input: LocalizedReplyInput): Promise<s
         console.warn('[inbox-ai] reply rejected: stock talk on order %s', input.template)
         continue
       }
+      if (!isHonestNoOrderTalk(trimmed, input.template, input.facts)) {
+        console.warn('[inbox-ai] reply rejected: claimed an order on %s', input.template)
+        continue
+      }
       if (!isHonestShopInfoTalk(trimmed, input.template, input.facts.shopInfoAsk)) {
         console.warn('[inbox-ai] reply rejected: shop_info dump on %s', input.facts.shopInfoAsk)
         continue
@@ -765,7 +803,13 @@ export async function buildProductReplyLines(
   )
 
   const intro = parsed?.intro?.trim()
-  if (!intro || !isReplyScriptValid(intro, lang, input.scriptStyle)) return fallback
+  if (
+    !intro ||
+    !isReplyScriptValid(intro, lang, input.scriptStyle) ||
+    !isHonestNoOrderTalk(intro, 'product_lines', input.facts)
+  ) {
+    return fallback
+  }
 
   const closing = parsed?.closing?.trim()
   const alsoFoundHeader = parsed?.alsoFoundHeader?.trim()

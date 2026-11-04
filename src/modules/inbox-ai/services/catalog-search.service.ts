@@ -10,6 +10,11 @@ import { findActiveProductsByStoreId } from '../../products/repositories/product
 import { findVariantsByProductIds } from '../../products/repositories/product-variant.repository.js'
 import type { Product } from '../../products/types/product.types.js'
 import type { ProductVariant } from '../../products/types/product-variant.types.js'
+import {
+  isProductSellable,
+  isSimpleProductSellable,
+  isVariantSellable,
+} from '../../products/utils/product-inventory.js'
 import type { ParsedCustomerIntent } from './parse-customer-intent.service.js'
 
 export type CatalogMatch = {
@@ -18,6 +23,12 @@ export type CatalogMatch = {
   price: number
   url: string
   score: number
+  /** The chosen variant (or simple product) can be bought now. */
+  inStock?: boolean
+  /** Some other active variant of this product can be bought now. */
+  sellableVariant?: ProductVariant | null
+  /** This shop's department for the product. */
+  categoryName?: string | null
 }
 
 export type CatalogSearchFilters = {
@@ -85,6 +96,9 @@ function namesFuzzyMatch(ask: string, name: string): boolean {
   const a = ask.trim().toLowerCase()
   const n = name.trim().toLowerCase()
   if (!a || !n) return false
+  const ac = canonicalCatalogCategory(a)
+  const nc = canonicalCatalogCategory(n)
+  if (ac && nc) return ac === nc
   if (a === n || n.includes(a) || a.includes(n)) return true
   const astem = a.replace(/s$/i, '')
   const nstem = n.replace(/s$/i, '')
@@ -99,9 +113,7 @@ function namesFuzzyMatch(ask: string, name: string): boolean {
   ) {
     return true
   }
-  const ac = canonicalCatalogCategory(a)
-  const nc = canonicalCatalogCategory(n)
-  return Boolean(ac && nc && ac === nc)
+  return false
 }
 
 function queryTokens(query: string): string[] {
@@ -245,7 +257,8 @@ export function pickPrimaryCatalogMatch(
       productMatchesRequestedCategory(
         m.product,
         categoryName,
-        m.product.category_id != null ? categoryNamesById?.get(m.product.category_id) : null,
+        m.categoryName ??
+          (m.product.category_id != null ? categoryNamesById?.get(m.product.category_id) : null),
       ),
     ) ?? null
   )
@@ -363,8 +376,8 @@ function scoreVariant(
   if (filters.size) {
     const want = filters.size.toUpperCase()
     const variantSize = size?.toUpperCase() ?? ''
-    const name = variant.name.toUpperCase()
-    if (variantSize === want || name.includes(want)) {
+    const nameTokens = variant.name.toUpperCase().split(/[^A-Z0-9]+/)
+    if (variantSize === want || nameTokens.includes(want)) {
       score += 40
     } else {
       score -= 20
@@ -381,7 +394,8 @@ function scoreVariant(
   return score
 }
 
-function pickBestVariant(
+export function pickBestVariant(
+  product: Product,
   variants: ProductVariant[],
   filters: CatalogSearchFilters
 ): ProductVariant | null {
@@ -397,26 +411,55 @@ function pickBestVariant(
   const pool = eligible.length > 0 ? eligible : active
 
   const scored = pool
-    .map((variant) => ({ variant, score: scoreVariant(variant, filters) }))
-    .sort((a, b) => b.score - a.score)
+    .map((variant) => ({
+      variant,
+      score: scoreVariant(variant, filters),
+      sellable: isVariantSellable(product, variant),
+    }))
+    .sort((a, b) => b.score - a.score || Number(b.sellable) - Number(a.sellable))
 
-  if (scored[0] && scored[0].score > 0) return scored[0].variant
-  if (filters.color) return eligible[0] ?? null
-  return pool[0] ?? null
+  return scored[0]?.variant ?? null
 }
 
-function toMatch(
+export function toMatch(
   storeSlug: string,
   product: Product,
   variant: ProductVariant | null,
-  score: number
+  score: number,
+  variants: ProductVariant[] = [],
+  categoryName: string | null = null
 ): CatalogMatch {
+  const inStock = variant
+    ? isVariantSellable(product, variant)
+    : variants.length > 0
+      ? isProductSellable(product, variants)
+      : isSimpleProductSellable(product)
+  const sellableVariant = inStock
+    ? null
+    : variants.find((v) => v !== variant && isVariantSellable(product, v)) ?? null
   return {
     product,
     variant,
     price: unitPrice(product, variant),
     url: buildUrl(storeSlug, product, variant?.id ?? null),
     score,
+    inStock,
+    sellableVariant,
+    categoryName,
+  }
+}
+
+/** Swap a sold-out variant for one that sells, keeping score and link honest. */
+export function withSellableVariant(storeSlug: string, match: CatalogMatch): CatalogMatch {
+  if (match.inStock !== false || !match.sellableVariant) return match
+  const variant = match.sellableVariant
+  return {
+    ...match,
+    variant,
+    price: unitPrice(match.product, variant),
+    url: buildUrl(storeSlug, match.product, variant.id),
+    inStock: true,
+    sellableVariant: null,
   }
 }
 
@@ -441,7 +484,7 @@ function searchProducts(
         filters.categoryName,
         productCategoryName,
       )
-      const variant = pickBestVariant(variants, filters)
+      const variant = pickBestVariant(product, variants, filters)
       if (filters.color && !variant) return null
       const variantScore = variant ? scoreVariant(variant, filters) : 0
       const total = productScore + variantScore
@@ -454,7 +497,14 @@ function searchProducts(
     .slice(0, MAX_RESULTS)
 
   return scored.map(({ product, variant, total }) =>
-    toMatch(storeSlug, product, variant, total)
+    toMatch(
+      storeSlug,
+      product,
+      variant,
+      total,
+      variantMap.get(product.id) ?? [],
+      product.category_id != null ? categoryNamesById?.get(product.category_id) ?? null : null
+    )
   )
 }
 
@@ -484,7 +534,7 @@ export async function searchCatalog(
         if (normalized.color && !productMatchesColor(product, variants, normalized.color)) {
           return null
         }
-        const variant = pickBestVariant(variants, normalized)
+        const variant = pickBestVariant(product, variants, normalized)
         if (normalized.color && !variant) return null
         const variantScore = variant ? scoreVariant(variant, normalized) : 0
         return variantScore > 0 ? { product, variant, total: variantScore } : null
@@ -496,7 +546,16 @@ export async function searchCatalog(
       .filter((row) => row.total > 0)
       .sort((a, b) => b.total - a.total)
       .slice(0, MAX_RESULTS)
-      .map(({ product, variant, total }) => toMatch(storeSlug, product, variant, total))
+      .map(({ product, variant, total }) =>
+        toMatch(
+          storeSlug,
+          product,
+          variant,
+          total,
+          variantMap.get(product.id) ?? [],
+          product.category_id != null ? categoryNamesById.get(product.category_id) ?? null : null
+        )
+      )
   }
 
   return searchProducts(products, variantMap, storeSlug, normalized, categoryNamesById)
@@ -529,17 +588,16 @@ export async function findBySku(
   const variantMap = await findVariantsByProductIds(products.map((p) => p.id))
 
   for (const product of products) {
-    if (product.sku?.trim().toLowerCase() === normalized) {
-      const variants = variantMap.get(product.id) ?? []
-      const variant = variants.find((v) => v.is_active) ?? null
-      return toMatch(storeSlug, product, variant, 100)
-    }
     const variants = variantMap.get(product.id) ?? []
+    if (product.sku?.trim().toLowerCase() === normalized) {
+      const variant = pickBestVariant(product, variants, { query: '' })
+      return toMatch(storeSlug, product, variant, 100, variants)
+    }
     const variant = variants.find(
       (v) => v.is_active && v.sku?.trim().toLowerCase() === normalized
     )
     if (variant) {
-      return toMatch(storeSlug, product, variant, 100)
+      return toMatch(storeSlug, product, variant, 100, variants)
     }
   }
 
@@ -569,8 +627,8 @@ export async function findByCategoryName(
     .slice(0, MAX_RESULTS)
     .map((product, index) => {
       const variants = variantMap.get(product.id) ?? []
-      const variant = variants.find((v) => v.is_active) ?? null
-      return toMatch(storeSlug, product, variant, 50 - index)
+      const variant = pickBestVariant(product, variants, { query: '' })
+      return toMatch(storeSlug, product, variant, 50 - index, variants, category.name)
     })
 }
 

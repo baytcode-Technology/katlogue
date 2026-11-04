@@ -20,10 +20,19 @@ import {
   scoreProduct,
   formatProductCaption,
   formatShopCategories,
+  MIN_MATCH_SCORE,
+  pickBestVariant,
+  toMatch,
 } from '../services/catalog-search.service.js'
 import type { CatalogMatch } from '../services/catalog-search.service.js'
-import { composeCatalogStaffReply, selectCatalogOffer } from '../services/build-product-reply.service.js'
+import {
+  composeCatalogStaffReply,
+  resolveSellableOffer,
+  selectCatalogOffer,
+} from '../services/build-product-reply.service.js'
+import { isProductSellable } from '../../products/utils/product-inventory.js'
 import type { Product } from '../../products/types/product.types.js'
+import type { ProductVariant } from '../../products/types/product-variant.types.js'
 
 let failed = 0
 
@@ -620,6 +629,136 @@ test('englishil paray is a language switch and okay stays English', () => {
   })
   assert.equal(after.intent, 'acknowledgement')
   assert.equal(after.customerLanguage, 'English')
+})
+
+console.log('\n=== Stock and this shop departments ===')
+
+const SHOP_DEPARTMENTS = ['Men', 'Shirt', 'T Shirt', 'Pants']
+
+function stockProduct(overrides: Partial<Product> = {}): Product {
+  return {
+    id: 21,
+    name: 'Force Men Printed Round Neck Cotton Blend Black T-Shirt',
+    slug: 'force-tee',
+    description: null,
+    base_price: 368,
+    track_inventory: true,
+    stock_qty: 0,
+    mark_as_sold: false,
+    mark_as_non_inventory: false,
+    category_id: 5,
+    ...overrides,
+  } as unknown as Product
+}
+
+function stockVariant(
+  id: number,
+  name: string,
+  overrides: Partial<ProductVariant> = {}
+): ProductVariant {
+  const [size, colour] = name.split(' / ')
+  return {
+    id,
+    product_id: 21,
+    name,
+    options: { Size: size, Colour: colour },
+    price_delta: 0,
+    stock_qty: 0,
+    is_active: true,
+    mark_as_sold: false,
+    mark_as_non_inventory: false,
+    ...overrides,
+  } as unknown as ProductVariant
+}
+
+test('t shirts, t-shirts and tshirts all pick this shop T Shirt department', () => {
+  for (const text of ['i need t shirts', 'i need t-shirts', 'tshirts undo', 'i need t shirt']) {
+    const parsed = parseCustomerIntentOffline(text, { storeCategories: SHOP_DEPARTMENTS })
+    assert.equal(parsed.categoryName, 'T Shirt', text)
+  }
+  assert.equal(
+    parseCustomerIntentOffline('i need shirts', { storeCategories: SHOP_DEPARTMENTS }).categoryName,
+    'Shirt'
+  )
+  assert.equal(parseCustomerIntentOffline('i need t shirts').categoryName, 'tshirts')
+})
+
+test('T Shirt department is not the Shirt department', () => {
+  const tee = stockProduct()
+  const linen = stockProduct({ id: 8, name: 'Linen Shirt', category_id: 2 })
+  assert.equal(productMatchesRequestedCategory(tee, 'T Shirt', 'T Shirt'), true)
+  assert.equal(productMatchesRequestedCategory(linen, 'T Shirt', 'Shirt'), false)
+  assert.equal(productMatchesRequestedCategory(linen, 'Shirt', 'Shirt'), true)
+  assert.equal(productMatchesRequestedCategory(tee, 'Shirt', 'T Shirt'), false)
+  const teeScore = scoreProduct(tee, 'T Shirt', 'T Shirt', 'T Shirt')
+  const linenScore = scoreProduct(linen, 'T Shirt', 'T Shirt', 'Shirt')
+  assert.ok(teeScore >= MIN_MATCH_SCORE, `tee score ${teeScore}`)
+  assert.ok(linenScore < MIN_MATCH_SCORE, `linen score ${linenScore}`)
+})
+
+test('non-inventory variants with 0 stock are offered, not sold out', () => {
+  const product = stockProduct()
+  const variants = ['S / White', 'S / Black', 'M / Black'].map((name, i) =>
+    stockVariant(i + 1, name, { mark_as_non_inventory: true })
+  )
+  assert.equal(isProductSellable(product, variants), true)
+  const variant = pickBestVariant(product, variants, { query: 't-shirt' })
+  const match = toMatch('shrox', product, variant, 80, variants, 'T Shirt')
+  assert.equal(match.inStock, true)
+  const offer = resolveSellableOffer('shrox', [match], { size: null, color: null })
+  assert.equal(offer.matches.length, 1)
+  assert.equal(offer.soldOutOption, null)
+})
+
+test('product stock 0 is ignored when a variant has stock', () => {
+  const product = stockProduct({ stock_qty: 0 })
+  const variants = [
+    stockVariant(1, 'S / White', { stock_qty: 0 }),
+    stockVariant(2, 'M / Black', { stock_qty: 4 }),
+  ]
+  const variant = pickBestVariant(product, variants, { query: 't-shirt' })
+  assert.equal(variant?.id, 2, 'prefers the variant that can be sold')
+  const match = toMatch('shrox', product, variant, 80, variants)
+  assert.equal(match.inStock, true)
+})
+
+test('asked size is out but another sells: offer it and name the missing size', () => {
+  const product = stockProduct()
+  const variants = [
+    stockVariant(1, 'L / White', { stock_qty: 0 }),
+    stockVariant(2, 'M / Black', { stock_qty: 3 }),
+  ]
+  const variant = pickBestVariant(product, variants, { query: 't-shirt', size: 'L' })
+  assert.equal(variant?.id, 1)
+  const match = toMatch('shrox', product, variant, 80, variants)
+  assert.equal(match.inStock, false)
+  const offer = resolveSellableOffer('shrox', [match], { size: 'L', color: null })
+  assert.equal(offer.matches.length, 1)
+  assert.equal(offer.matches[0].variant?.id, 2)
+  assert.equal(offer.matches[0].inStock, true)
+  assert.match(offer.matches[0].url, /2/)
+  assert.equal(offer.soldOutOption, 'Size L')
+})
+
+test('every tracked variant at 0 is still honestly sold out', () => {
+  const product = stockProduct()
+  const variants = [
+    stockVariant(1, 'S / White', { stock_qty: 0 }),
+    stockVariant(2, 'M / Black', { stock_qty: 0 }),
+    stockVariant(3, 'L / Black', { stock_qty: 9, mark_as_sold: true }),
+  ]
+  assert.equal(isProductSellable(product, variants), false)
+  const match = toMatch('shrox', product, pickBestVariant(product, variants, { query: '' }), 80, variants)
+  const offer = resolveSellableOffer('shrox', [match], { size: null, color: null })
+  assert.equal(offer.matches.length, 0)
+})
+
+test('simple product: untracked or non-inventory sells, tracked at 0 does not', () => {
+  assert.equal(isProductSellable(stockProduct({ track_inventory: false }), []), true)
+  assert.equal(isProductSellable(stockProduct({ mark_as_non_inventory: true }), []), true)
+  assert.equal(isProductSellable(stockProduct(), []), false)
+  assert.equal(isProductSellable(stockProduct({ stock_qty: 2 }), []), true)
+  assert.equal(isProductSellable(stockProduct({ stock_qty: 2, mark_as_sold: true }), []), false)
 })
 
 if (failed > 0) {

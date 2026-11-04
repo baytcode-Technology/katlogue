@@ -28,6 +28,7 @@ import type { LlmToolDefinition } from '../../../shared/llm/types.js'
 export type AgentTurnState = {
   shown: CatalogMatch | null
   also: CatalogMatch[]
+  found: CatalogMatch[]
   facts: string[]
   helpline: boolean
   lookedUpOrders: boolean
@@ -43,7 +44,7 @@ export const INBOX_AGENT_TOOLS: LlmToolDefinition[] = [
   {
     name: 'search_products',
     description:
-      'Search THIS shop catalog. Pass the customer words that identify the product (style, fabric, brand, model, and type). Do not shrink "check shirt" to "shirt".',
+      'Search THIS shop catalog. Pass identifying words (style, fabric, brand, model, type). Keep "check shirt". Never put colour, color, other, or vere in the query. For "other colour shirts" after a shirt card, query is shirt.',
     parameters: {
       type: 'object',
       properties: {
@@ -127,6 +128,34 @@ export const INBOX_AGENT_TOOLS: LlmToolDefinition[] = [
   },
 ]
 
+const SEARCH_QUERY_FILLER = new Set([
+  'colour',
+  'color',
+  'colours',
+  'colors',
+  'niram',
+  'nirangal',
+  'other',
+  'others',
+  'another',
+  'different',
+  'more',
+  'any',
+  'vere',
+  'ethelum',
+  'ethra',
+  'okke',
+  'ellaa',
+  'ella',
+])
+
+export function cleanSearchQuery(query: string): string {
+  const raw = query.trim()
+  if (!raw) return raw
+  const kept = raw.split(/\s+/).filter((token) => !SEARCH_QUERY_FILLER.has(token.toLowerCase()))
+  return kept.length > 0 ? kept.join(' ') : raw
+}
+
 function argString(args: Record<string, unknown>, key: string): string {
   const value = args[key]
   return typeof value === 'string' ? value.trim() : ''
@@ -209,9 +238,20 @@ export function createInboxAgentTools(input: {
   const state: AgentTurnState = {
     shown: null,
     also: [],
+    found: [],
     facts: [],
     helpline: false,
     lookedUpOrders: false,
+  }
+
+  function markShown(match: CatalogMatch): void {
+    state.shown = match
+    state.also = [...cache.values()].filter(
+      (row, index, all) =>
+        row.product.id !== match.product.id &&
+        all.findIndex((item) => item.product.id === row.product.id) === index
+    )
+    state.facts.push(`${match.product.name} ${formatMoney(match.price, input.store.currency)} ${match.url}`)
   }
 
   function remember(matches: CatalogMatch[]): void {
@@ -227,7 +267,7 @@ export function createInboxAgentTools(input: {
 
   async function runTool(name: string, args: Record<string, unknown>): Promise<unknown> {
     if (name === 'search_products') {
-      const query = argString(args, 'query')
+      const query = cleanSearchQuery(argString(args, 'query'))
       const matches = filterMatchesByScore(
         await search(input.store.id, input.store.slug, input.store.currency, {
           query,
@@ -237,6 +277,7 @@ export function createInboxAgentTools(input: {
         })
       )
       remember(matches)
+      state.found = matches
       const rows = matches.map((match) =>
         publicProduct(match, input.store.currency, input.channel, input.conversationId)
       )
@@ -269,13 +310,7 @@ export function createInboxAgentTools(input: {
           ? cache.get(`${productId}:${variantId ?? 0}`) ?? cache.get(`${productId}:0`)
           : null) ?? null
       if (!match) return { error: 'Unknown product. Search first and use a returned productId.' }
-      state.shown = match
-      state.also = [...cache.values()].filter(
-        (row, index, all) =>
-          row.product.id !== match.product.id &&
-          all.findIndex((item) => item.product.id === row.product.id) === index
-      )
-      state.facts.push(`${match.product.name} ${formatMoney(match.price, input.store.currency)} ${match.url}`)
+      markShown(match)
       return { shown: match.product.name, url: match.url }
     }
 
@@ -332,5 +367,13 @@ export function createInboxAgentTools(input: {
     return { error: `Unknown tool ${name}` }
   }
 
-  return { state, runTool }
+  function showBestSearchMatch(lastShownTitle?: string | null): void {
+    if (state.shown || state.found.length === 0) return
+    const last = lastShownTitle?.trim().toLowerCase() ?? ''
+    const pick =
+      state.found.find((row) => row.product.name.toLowerCase() !== last) ?? state.found[0]
+    markShown(pick)
+  }
+
+  return { state, runTool, showBestSearchMatch }
 }

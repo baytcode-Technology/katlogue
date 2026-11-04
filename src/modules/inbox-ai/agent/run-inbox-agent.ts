@@ -11,6 +11,7 @@ import {
   getStoreHomeUrl,
 } from '../services/catalog-search.service.js'
 import {
+  extractLastShownProduct,
   formatConversationHistory,
   type InboxAiChannel,
 } from '../services/conversation-history.service.js'
@@ -19,7 +20,7 @@ import type {
   ParsedCustomerIntent,
 } from '../services/parse-customer-intent.service.js'
 import type { StaffHandoffAction } from '../services/staff-handoff.service.js'
-import { isAgentReplyHonest } from './agent-guard.js'
+import { isAgentReplyHonest, sanitizeAgentSpoken } from './agent-guard.js'
 import { buildInboxAgentSystemPrompt } from './inbox-agent-prompt.js'
 import {
   createInboxAgentTools,
@@ -69,6 +70,21 @@ export function inboxAgentEnabled(): boolean {
   return process.env.INBOX_AI_AGENT === '1' && (provider === 'gemini' || provider === 'openai')
 }
 
+function detectCustomerLanguage(
+  text: string,
+  recent: ConversationHistoryLine[]
+): ReturnType<typeof detectLanguageAndScript> {
+  const latest = detectLanguageAndScript(text)
+  if (latest.language !== 'English') return latest
+  if (text.trim().split(/\s+/).filter(Boolean).length > 3) return latest
+  for (let i = recent.length - 1; i >= 0; i -= 1) {
+    if (recent[i].role !== 'customer') continue
+    const prior = detectLanguageAndScript(recent[i].text)
+    if (prior.language !== 'English') return prior
+  }
+  return latest
+}
+
 export async function runInboxAgent(input: {
   store: Store
   channel: InboxAiChannel
@@ -85,11 +101,22 @@ export async function runInboxAgent(input: {
     input.completeWithTools ?? provider?.completeWithTools?.bind(provider)
   if (!completeWithTools) return null
 
-  const detected = detectLanguageAndScript(input.customerText)
+  const detected = detectCustomerLanguage(input.customerText, input.recentMessages)
   const homeUrl = getStoreHomeUrl(input.store)
   const history = formatConversationHistory(input.recentMessages)
+  const lastShown = extractLastShownProduct(input.recentMessages)
+  const languageLine =
+    detected.language === 'Malayalam' && detected.scriptStyle === 'malayalam_script'
+      ? 'Reply in Malayalam script only.'
+      : detected.language === 'Malayalam'
+        ? 'Reply in Manglish only (Malayalam in English letters). Not English helpdesk.'
+        : 'Reply in English.'
   const userMessage = [
     history ? `Recent chat:\n${history}` : '',
+    lastShown
+      ? `Last product card we sent: ${lastShown.title}. Other colour/size means another item of this type, not a new search for the word colour.`
+      : '',
+    languageLine,
     `Latest customer message:\n${input.customerText}`,
   ]
     .filter(Boolean)
@@ -103,7 +130,7 @@ export async function runInboxAgent(input: {
     deps: input.deps,
   })
 
-  const spoken = (
+  const rawSpoken = (
     await completeWithTools(
       buildInboxAgentSystemPrompt({
         storeName: input.store.name,
@@ -122,6 +149,19 @@ export async function runInboxAgent(input: {
       }
     )
   ).trim()
+
+  tools.showBestSearchMatch(lastShown?.title)
+
+  let spoken = sanitizeAgentSpoken(rawSpoken, { stripUrls: Boolean(tools.state.shown) })
+
+  if (!spoken && tools.state.shown) {
+    spoken =
+      detected.language === 'Malayalam' && detected.scriptStyle === 'malayalam_script'
+        ? 'ഇത് നോക്കൂ സാർ.'
+        : detected.language === 'Malayalam'
+          ? 'Yes sir, ithu nokku.'
+          : 'Yes sir, here it is.'
+  }
 
   const allowed = [userMessage, homeUrl, ...tools.state.facts].join('\n')
   if (

@@ -65,10 +65,8 @@ function emptyIntent(
 }
 
 export function inboxAgentEnabled(): boolean {
-  return (
-    process.env.INBOX_AI_AGENT === '1' &&
-    (process.env.LLM_PROVIDER ?? '').toLowerCase() === 'gemini'
-  )
+  const provider = (process.env.LLM_PROVIDER ?? '').toLowerCase()
+  return process.env.INBOX_AI_AGENT === '1' && (provider === 'gemini' || provider === 'openai')
 }
 
 export async function runInboxAgent(input: {

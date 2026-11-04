@@ -101,6 +101,8 @@ type PhraseSet = {
   shipAfterOrder: string
   orderFoundLead: string
   orderStaffCheck: string
+  orderPromiseLead: (date: string) => string
+  courierUnknown: string
 }
 
 const EN: PhraseSet = {
@@ -144,6 +146,8 @@ const EN: PhraseSet = {
   orderFoundLead: 'I found your order sir.',
   orderStaffCheck:
     'No delivery date on this order yet. Still unfulfilled. Our customer helpline will contact you.',
+  orderPromiseLead: (date) => `Shop promise for this order is ${date} sir. It is not shipped yet.`,
+  courierUnknown: 'No delivery partner on this order yet sir. Not shipped.',
 }
 
 const ML: PhraseSet = {
@@ -186,6 +190,8 @@ const ML: PhraseSet = {
   orderFoundLead: 'ഓർഡർ കണ്ടു സാർ.',
   orderStaffCheck:
     'ഈ ഓർഡറിൽ ഡെലിവറി തീയതി ഇല്ല. ഇപ്പോൾ unfulfilled ആണ്. കസ്റ്റമർ ഹെൽപ്‌ലൈൻ താങ്കളെ ബന്ധപ്പെടും.',
+  orderPromiseLead: (date) => `ഈ ഓർഡറിന്റെ shop promise ${date} ആണ് സാർ. ഇപ്പോൾ ഷിപ്പ് ആയിട്ടില്ല.`,
+  courierUnknown: 'ഈ ഓർഡറിൽ ഡെലിവറി പാർട്ട്ണർ ഇല്ല സാർ. ഇപ്പോൾ ഷിപ്പ് ആയിട്ടില്ല.',
 }
 
 const ML_LATIN: PhraseSet = {
@@ -229,6 +235,8 @@ const ML_LATIN: PhraseSet = {
   orderFoundLead: 'Order kandi saar.',
   orderStaffCheck:
     'Ee orderil delivery date illa. Ippo unfulfilled aanu. Customer helpline ningale contact cheyyum.',
+  orderPromiseLead: (date) => `Ee orderinte shop promise ${date} aanu saar. Ippo ship aayittilla.`,
+  courierUnknown: 'Ee orderil delivery partner illa saar. Ippo ship aayittilla.',
 }
 
 const HI: PhraseSet = {
@@ -268,6 +276,8 @@ const HI: PhraseSet = {
   shipAfterOrder: 'ऑर्डर के बाद ही शिप होगा सर। उससे पहले डिलीवरी तारीख नहीं है।',
   orderFoundLead: 'ऑर्डर मिल गया सर।',
   orderStaffCheck: 'इस ऑर्डर पर डिलीवरी तारीख नहीं है। अभी unfulfilled है। कस्टमर हेल्पलाइन आपसे संपर्क करेगी।',
+  orderPromiseLead: (date) => `इस ऑर्डर का shop promise ${date} है सर। अभी शिप नहीं हुआ।`,
+  courierUnknown: 'इस ऑर्डर पर डिलीवरी पार्टनर नहीं है सर। अभी शिप नहीं हुआ।',
 }
 
 const TA: PhraseSet = {
@@ -307,6 +317,8 @@ const TA: PhraseSet = {
   shipAfterOrder: 'ஆர்டர் செய்த பிறகுதான் ஷிப் ஆகும் சார். அதற்கு முன் டெலிவரி தேதி இல்லை.',
   orderFoundLead: 'ஆர்டர் கிடைத்தது சார்.',
   orderStaffCheck: 'இந்த ஆர்டரில் டெலிவரி தேதி இல்லை. இப்போது unfulfilled. கஸ்டமர் ஹெல்ப்லைன் உங்களை தொடர்பு கொள்ளும்.',
+  orderPromiseLead: (date) => `இந்த ஆர்டரின் shop promise ${date} சார். இன்னும் ஷிப் ஆகவில்லை.`,
+  courierUnknown: 'இந்த ஆர்டரில் டெலிவரி பார்ட்னர் இல்லை சார். இன்னும் ஷிப் ஆகவில்லை.',
 }
 
 function resolvePhrases(language: string, scriptStyle?: ScriptStyle): PhraseSet {
@@ -417,8 +429,9 @@ function buildFallback(
 
     case 'order_followup': {
       if (facts.orderOutcome !== 'found') return p.orderNotFound
-      if (facts.orderAsk === 'confirm_last' && facts.orderFacts?.trim()) {
-        const number = facts.orderFacts.match(/Order number:\s*(\S+)/i)?.[1]
+      const card = facts.orderFacts ?? ''
+      if (facts.orderAsk === 'confirm_last') {
+        const number = card.match(/Order number:\s*(\S+)/i)?.[1]
         return number
           ? `Yes ${p.honorific}, that is your last order ${number}.`
           : p.orderStaffCheck
@@ -429,9 +442,19 @@ function buildFallback(
         facts.orderAsk === 'delay' ||
         facts.orderAsk === 'why'
       ) {
+        const promised = orderCardValue(card, 'Promised by')
+        if (promised && !orderCardIsEmpty(promised)) return p.orderPromiseLead(promised)
         return p.orderEtaUnknown
       }
-      return p.orderStaffCheck
+      const courier = orderCardValue(card, 'Courier')
+      const tracking = orderCardValue(card, 'Tracking')
+      if (courier && !orderCardIsEmpty(courier)) {
+        return `Courier: ${courier}`
+      }
+      if (tracking && !orderCardIsEmpty(tracking) && tracking.toLowerCase() !== 'none on this order') {
+        return `Tracking: ${tracking}`
+      }
+      return p.courierUnknown
     }
 
     case 'order_help':
@@ -470,6 +493,15 @@ export function isHonestStockTalk(
   const first = reply.trim().split(/[.!\n]/)[0]?.trim() ?? ''
   if (!STOCK_CLAIM_PATTERN.test(first)) return true
   return /\b(illa|ill|ഇല്ല)\b/i.test(first)
+}
+
+function orderCardValue(card: string, label: string): string | null {
+  const match = card.match(new RegExp(`^${label}:\\s*(.+)$`, 'im'))
+  return match?.[1]?.trim() || null
+}
+
+function orderCardIsEmpty(value: string): boolean {
+  return /^(none|not set|not on this order|none on this order)\b/i.test(value)
 }
 
 const ORDER_STOCK_MISS_PATTERN = /\b(ippo illa|ഇപ്പോൾ ഇല്ല|out of stock)\b/i

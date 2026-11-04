@@ -424,7 +424,7 @@ export async function buildOrderReply(input: {
 
   const orderAsk: OrderAsk = intent.orderAsk ?? 'full'
   const template = orderTemplateForAsk(orderAsk, orders.length > 0)
-  const attachBlock = template === 'order_wrap' && orders.length > 0 && orderAsk === 'full'
+  const attachBlock = shouldAttachOrderBlock(orderAsk, orders.length > 0, input.conversationHistory)
   const first = orders[0] ?? null
   const usualDays = parseShopPolicies(store.shop_policies).default_delivery_business_days
   const usualLine =
@@ -459,6 +459,16 @@ export async function buildOrderReply(input: {
   if (!attachBlock) return cleaned
   const plainBlock = first ? formatOrderFactsBlock(first, store.currency) : cleaned
   return cleaned ? `${cleaned}\n\n${plainBlock}` : plainBlock
+}
+
+export function shouldAttachOrderBlock(
+  orderAsk: OrderAsk,
+  found: boolean,
+  history?: string | null
+): boolean {
+  if (!found || orderAsk !== 'full') return false
+  if (history && /\bOrder number\s*:/i.test(history)) return false
+  return true
 }
 
 function orderTemplateForAsk(orderAsk: OrderAsk, found: boolean): LocalizedReplyTemplate {

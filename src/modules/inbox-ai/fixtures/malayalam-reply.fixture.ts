@@ -310,6 +310,39 @@ test('language switch canned stays on the missing item', () => {
   assert.equal(/^Hai saar/i.test(reply.trim()), false)
 })
 
+test('order follow-up canned answers courier from the card, not the date', () => {
+  const reply = buildCannedLocalizedReply({
+    customerLanguage: 'English',
+    template: 'order_followup',
+    facts: {
+      ...facts,
+      orderAsk: 'items',
+      orderOutcome: 'found',
+      orderFacts:
+        'Order number: NOV26-3\nFulfillment: Unfulfilled\nCourier: none on this order\nPromised by: 2026-11-10\nTracking: none on this order',
+    },
+  })
+  assert.match(reply, /delivery partner/i)
+  assert.doesNotMatch(reply, /2026-11-10/)
+  assert.doesNotMatch(reply, /Order number:/i)
+  assert.doesNotMatch(reply, /helpline/i)
+})
+
+test('order follow-up canned uses promised-by when they asked the date', () => {
+  const reply = buildCannedLocalizedReply({
+    customerLanguage: 'English',
+    template: 'order_followup',
+    facts: {
+      ...facts,
+      orderAsk: 'eta',
+      orderOutcome: 'found',
+      orderFacts: 'Order number: NOV26-3\nFulfillment: Unfulfilled\nPromised by: 2026-11-10',
+    },
+  })
+  assert.match(reply, /2026-11-10/)
+  assert.doesNotMatch(reply, /Order number:/i)
+})
+
 test('order follow-up canned has no ippo illa', () => {
   const reply = buildCannedLocalizedReply({
     customerLanguage: 'Malayalam',

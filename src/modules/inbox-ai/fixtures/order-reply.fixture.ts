@@ -27,8 +27,10 @@ import {
   parseOrderItemSnapshot,
   redactOrderHistory,
   selectOrdersForScope,
+  shouldAttachOrderBlock,
   stripCopiedOrderFacts,
 } from '../services/build-order-reply.service.js'
+import { detectSessionTopic } from '../services/parse-customer-intent.service.js'
 import type { OrderWithDetails } from '../../orders/repositories/order.repository.js'
 
 let failed = 0
@@ -428,6 +430,41 @@ test('why vs delay vs eta are different hints', () => {
   assert.equal(resolveOrderAsk('time kittiyillenna why', 'order', true), 'why')
   assert.equal(resolveOrderAsk('ipo 1 month kayinj eppo kittum', 'order', true), 'delay')
   assert.equal(resolveOrderAsk('ithu eppo deliver aavum', 'order', true), 'eta')
+})
+
+test('Got it order confirm is an order thread, not a new sale', () => {
+  assert.equal(
+    detectSessionTopic([
+      { role: 'store', text: 'Got it — order NOV26-3 for Force Men Printed Round Neck Cotton Blend Black T-Shirt (S / Black) is in. We\'ll update you once it ships.' },
+    ]),
+    'order'
+  )
+})
+
+test('when / who is partner after an order is follow-up, not a full dump', () => {
+  assert.equal(resolveOrderAsk('okay when this product will be deliver', 'order', false), 'eta')
+  assert.equal(resolveOrderAsk('which deliver partner you will use', 'order', false), 'items')
+  assert.equal(resolveOrderAsk('i need to know about who is delivery partner', 'order', false), 'items')
+  const placed = [
+    { role: 'store' as const, text: 'Got it — order NOV26-3 for a T-Shirt is in. We\'ll update you once it ships.' },
+  ]
+  const when = parseCustomerIntentOffline('okay when this product will be deliver', { recentMessages: placed })
+  assert.equal(when.intent, 'order_status')
+  assert.equal(when.orderAsk, 'eta')
+  const partner = parseCustomerIntentOffline('i need to know about who is delivery partner', {
+    recentMessages: placed,
+  })
+  assert.equal(partner.intent, 'order_status')
+  assert.notEqual(partner.orderAsk, 'full')
+  const pants = parseCustomerIntentOffline('pants undo?', { recentMessages: placed })
+  assert.equal(pants.intent, 'product_search')
+})
+
+test('order card is attached only on the first full ask', () => {
+  assert.equal(shouldAttachOrderBlock('full', true, null), true)
+  assert.equal(shouldAttachOrderBlock('full', true, 'Store: Order number: NOV26-3\nTotal: ₹368'), false)
+  assert.equal(shouldAttachOrderBlock('eta', true, null), false)
+  assert.equal(shouldAttachOrderBlock('items', true, null), false)
 })
 
 if (failed > 0) {

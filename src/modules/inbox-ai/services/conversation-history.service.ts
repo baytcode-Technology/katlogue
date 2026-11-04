@@ -160,7 +160,14 @@ export function detectSessionTopic(lines: ConversationHistoryLine[]): SessionTop
     const line = lines[i]
     if (line.role !== 'store') continue
     const text = line.text
-    if (/\bOrder number\s*:/i.test(text) || /\border status\b/i.test(text)) return 'order'
+    if (
+      /\bOrder number\s*:/i.test(text) ||
+      /\border status\b/i.test(text) ||
+      /\border\s+[A-Z]{3}\d{2}-\d+\b/i.test(text) ||
+      /\b[A-Z]{3}\d{2}-\d+\b/.test(text)
+    ) {
+      return 'order'
+    }
     if (/https?:\/\/\S*\/product\//i.test(text)) return 'product'
     if (/\b(illa|don't keep|do not (?:keep|sell)|not available)\b/i.test(text)) return 'missing'
   }

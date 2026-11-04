@@ -256,7 +256,7 @@ const ORDER_CONFIRM_LAST_PATTERN =
   /\b(is\s+this\s+(in\s+)?my\s+last\s+order|this\s+(is\s+)?my\s+last\s+order|ithu\s+(ente\s+)?last\s+order|last\s+order\s+(ano|alle)|confirm\s+(the\s+)?(last\s+)?order)\b/i
 
 const ORDER_ETA_PATTERN =
-  /\b(eppo\s+(?:\S+\s+){0,3}(deliver|kitt|var|aavum|ethum)|when\s+(will|is).*(deliver|come|arrive)|delivery\s+(date|time)|epp[o]?zhe\s+kitt|kitte?\s*(um|um\?)|arrive|correct\s+date)\b/i
+  /\b(eppo\s+(?:\S+\s+){0,3}(deliver|kitt|var|aavum|ethum)|when.{0,40}(deliver|come|arrive)|delivery\s+(date|time)|epp[o]?zhe\s+kitt|kitte?\s*(um|um\?)|arrive|correct\s+date)\b/i
 
 const ORDER_WHY_PATTERN =
   /\b(why|entha|enthina|enthinnu|kittiyillen+a\s+why|time\s+kittiyillen)\b/i
@@ -454,7 +454,9 @@ export function detectSessionTopic(lines?: ConversationHistoryLine[]): SessionTo
       /\bOrder number\s*:/i.test(line.text) ||
       /\border status\b/i.test(line.text) ||
       /\bee orderil\b/i.test(line.text) ||
-      /\bunfulfilled aanu\b/i.test(line.text)
+      /\bunfulfilled aanu\b/i.test(line.text) ||
+      /\border\s+[A-Z]{3}\d{2}-\d+\b/i.test(line.text) ||
+      /\b[A-Z]{3}\d{2}-\d+\b/.test(line.text)
     ) {
       return 'order'
     }
@@ -487,31 +489,32 @@ export function resolveOrderAsk(
   if (ORDER_PAYMENT_PATTERN.test(trimmed) && !isBuyIntent(trimmed)) return 'payment'
   if (ORDER_ITEMS_PATTERN.test(trimmed)) return 'items'
   if (ORDER_FULL_PATTERN.test(trimmed)) return sentFullBlock ? 'confirm_last' : 'full'
-  if (sentFullBlock && isOrderStatusMessage(trimmed)) return 'confirm_last'
-  if (sessionTopic === 'order' && (ORDER_ETA_PATTERN.test(trimmed) || ORDER_URGENCY_PATTERN.test(trimmed))) {
-    return ORDER_URGENCY_PATTERN.test(trimmed) ? 'urgency' : 'eta'
+  if (sessionTopic === 'order' || sentFullBlock) {
+    if (ORDER_ETA_PATTERN.test(trimmed) || ORDER_URGENCY_PATTERN.test(trimmed)) {
+      return ORDER_URGENCY_PATTERN.test(trimmed) ? 'urgency' : 'eta'
+    }
+    if (isOrderStatusMessage(trimmed)) return 'confirm_last'
+    return 'items'
   }
   if (isOrderStatusMessage(trimmed)) return 'full'
   return null
 }
 
-function isOrderFollowUpMessage(text: string, sessionTopic: SessionTopic): boolean {
+function isOrderFollowUpMessage(
+  text: string,
+  sessionTopic: SessionTopic,
+  namedAProduct = false
+): boolean {
+  if (namedAProduct) return false
   const trimmed = text.trim()
+  if (isAcknowledgement(trimmed) || isGreetingOnly(trimmed)) return false
   if (ORDER_CONFIRM_LAST_PATTERN.test(trimmed)) return true
   if (ORDER_CANCEL_PATTERN.test(trimmed) || ORDER_NOT_MINE_PATTERN.test(trimmed) || ORDER_ADDRESS_PATTERN.test(trimmed)) {
     return true
   }
   if (isPlacedOrderComplaint(trimmed)) return true
   if (sessionTopic !== 'order') return false
-  return (
-    ORDER_ETA_PATTERN.test(trimmed) ||
-    ORDER_WHY_PATTERN.test(trimmed) ||
-    ORDER_DELAY_PATTERN.test(trimmed) ||
-    ORDER_URGENCY_PATTERN.test(trimmed) ||
-    ORDER_PAYMENT_PATTERN.test(trimmed) ||
-    ORDER_ITEMS_PATTERN.test(trimmed) ||
-    ORDER_REFUND_PATTERN.test(trimmed)
-  )
+  return true
 }
 
 export type ShopInfoAsk =
@@ -1239,7 +1242,8 @@ export function fromLlmResult(
   const sessionTopic = detectSessionTopic(recentMessages)
   const mentionsProduct = Boolean(requestedCategory || colorFromText || skuFromText)
   const looksLikeOrderQuestion =
-    isOrderStatusMessage(trimmed) || isOrderFollowUpMessage(trimmed, sessionTopic)
+    isOrderStatusMessage(trimmed) ||
+    isOrderFollowUpMessage(trimmed, sessionTopic, mentionsProduct)
   const reactionOnly = !mentionsProduct && !looksLikeOrderQuestion && !isRefuseMessage(trimmed) && !isLanguageSwitchMessage(trimmed)
   let intent: CustomerIntent =
     isRefuseMessage(trimmed)
@@ -1614,7 +1618,12 @@ function regexFallback(
     )
   }
 
-  if (isOrderStatusMessage(trimmed) || isOrderFollowUpMessage(trimmed, sessionTopic)) {
+  if (
+    (isOrderStatusMessage(trimmed) ||
+      isOrderFollowUpMessage(trimmed, sessionTopic, Boolean(categoryFromText || skuFromText))) &&
+    !categoryFromText &&
+    !skuFromText
+  ) {
     const orderProductHint = extractOrderProductHint(trimmed)
     const orderScope = resolveOrderScope(trimmed, orderNumberFromText, orderProductHint)
     return finalizeIntent(
@@ -1899,7 +1908,11 @@ export async function parseCustomerIntent(
   if (
     isRefuseMessage(trimmed) ||
     isLanguageSwitchMessage(trimmed) ||
-    isOrderFollowUpMessage(trimmed, sessionTopic) ||
+    isOrderFollowUpMessage(
+      trimmed,
+      sessionTopic,
+      Boolean(extractRequestedCategory(trimmed, storeCategories) || extractSku(trimmed))
+    ) ||
     isDeliveryAskWithoutOrder(trimmed, sessionTopic) ||
     isBarePriceAsk(trimmed) ||
     isShopInfoMessage(trimmed, sessionTopic)

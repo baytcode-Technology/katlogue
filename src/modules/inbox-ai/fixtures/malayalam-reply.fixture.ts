@@ -434,6 +434,10 @@ test('canned buy reply sends the variant link and never thanks for an order', ()
       },
     })
     assert.ok(reply.includes(OFFER_URL), `${lang} ${style}: ${reply}`)
+    assert.doesNotMatch(reply, /Shall I help you order|Order cheyyano|ഓർഡർ ചെയ്യണോ/i)
+    assert.doesNotMatch(reply, /Yes sir, we have it/i)
+    assert.doesNotMatch(reply, /₹|Rs\.?\s*\d/)
+    assert.match(reply, /open this link|Ee link open|ലിങ്ക് തുറക്കൂ/i)
     assert.equal(isHonestNoOrderTalk(reply, 'buy_assist', { sessionTopic: 'product' }), true, reply)
   }
 })

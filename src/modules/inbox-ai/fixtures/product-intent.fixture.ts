@@ -795,7 +795,7 @@ test('a newer store turn or a link without a question is no open offer', () => {
   )
 })
 
-test('model yes to the offer is buy, no is refuse, null keeps its intent', () => {
+test('model yes to the offer is buy, no is refuse, a new item stays product search', () => {
   const yes = fromLlmResult(
     { intent: 'acknowledgement', customerLanguage: 'English', searchQuery: '', replyToLastQuestion: 'yes' },
     'yes',
@@ -804,6 +804,32 @@ test('model yes to the offer is buy, no is refuse, null keeps its intent', () =>
   )
   assert.equal(yes.intent, 'buy_intent')
   assert.equal(yes.replyToLastQuestion, 'yes')
+  const hole = fromLlmResult(
+    {
+      intent: 'product_search',
+      customerLanguage: 'English',
+      searchQuery: 't-shirt',
+      color: 'black',
+      categoryName: 'tshirts',
+      replyToLastQuestion: null,
+    },
+    'yes',
+    ['T Shirt'],
+    OFFER_THREAD
+  )
+  assert.equal(hole.intent, 'buy_intent')
+  assert.equal(hole.searchQuery, '')
+  assert.equal(hole.replyToLastQuestion, 'yes')
+  for (const text of ['haa', 'Yes please']) {
+    const parsed = fromLlmResult(
+      { intent: 'product_search', customerLanguage: 'English', searchQuery: 't-shirt', replyToLastQuestion: null },
+      text,
+      [],
+      OFFER_THREAD
+    )
+    assert.equal(parsed.intent, 'buy_intent', text)
+    assert.equal(parsed.searchQuery, '', text)
+  }
   const haa = fromLlmResult(
     { intent: 'product_search', customerLanguage: 'Malayalam', searchQuery: 'haa', replyToLastQuestion: 'yes' },
     'haa venam',

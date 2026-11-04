@@ -168,7 +168,7 @@ const ML: PhraseSet = {
   alternativeLead: (missing, offered) => `${missing} ഇപ്പോൾ ഇല്ല സാർ. ${offered} ഉണ്ട്.`,
   browseHere: 'ഇവിടെ നോക്കൂ',
   refusalRedirect: (storeName) => `${storeName}-ൽ നിന്ന് എന്താണ് വേണ്ടത്?`,
-  hereItIs: 'ഉണ്ട് സാർ',
+  hereItIs: 'ഇത് നോക്കൂ സാർ.',
   closingAskSize: 'ഓർഡർ ചെയ്യണോ സാർ?',
   moreOptions: 'ഇതുപോലെ വേറെയും ഉണ്ട്:',
   orderNotFound:
@@ -195,48 +195,48 @@ const ML: PhraseSet = {
 }
 
 const ML_LATIN: PhraseSet = {
-  honorific: 'saar',
-  welcome: (storeName) => `Hai saar, ${storeName} aanu.`,
+  honorific: 'sir',
+  welcome: (storeName) => `Hai sir, ${storeName} aanu.`,
   ourStore: 'Store',
   whatLooking: 'Enthaanu vendath?',
-  ackThanks: 'Sheri saar.',
+  ackThanks: 'Sheri sir.',
   askSizeOrColor: 'Ethu size, ethu color vendam?',
   askWhatElse: 'Vere enthaanu nokkendath?',
-  buyConfirm: 'Sheri saar, kramikkarikkam.',
+  buyConfirm: 'Sheri sir, kramikkarikkam.',
   buyTapLink: 'Order cheyyan link ithaa',
   buySteps: 'Ee link open cheyyu, page il quantity confirm cheyyu, pinne avide pay cheythu order cheyyu.',
-  notFoundLead: (item) => `${item} ippo illa saar.`,
+  notFoundLead: (item) => `${item} ippo illa sir.`,
   weHave: (items) => `${items} ind.`,
   weSell: (items) => `Ee shop ${items} aanu.`,
   wantAny: 'Athil enthelum veeno?',
-  alternativeLead: (missing, offered) => `${missing} ippo illa saar. ${offered} ind.`,
+  alternativeLead: (missing, offered) => `${missing} ippo illa sir. ${offered} ind.`,
   browseHere: 'Ivide nokku',
   refusalRedirect: (storeName) => `${storeName}-il ninnu enthaanu vendath?`,
-  hereItIs: 'Ind saar',
-  closingAskSize: 'Order cheyyano saar?',
+  hereItIs: 'Yes sir, ithu nokku.',
+  closingAskSize: 'Order cheyyano sir?',
   moreOptions: 'Ithupole vereyum ind:',
   orderNotFound:
-    'Aa order ee number il kaanunnilla saar. Eppozhaanu order cheythath, allengil ethu number upayogichu?',
+    'Aa order ee number il kaanunnilla sir. Eppozhaanu order cheythath, allengil ethu number upayogichu?',
   orderNeedsPhone:
-    'Order cheytha number il ninnu WhatsApp ayachal mathrame nokkan pattu saar.',
-  closeOk: 'Sheri saar.',
-  closeAfterOrder: 'Sheri saar, ship aayal parayam.',
-  soldOutLead: (item) => `${item} stock illa saar.`,
-  optionOutLead: (option) => `${option} stock illa saar. Ithu ind:`,
-  notSoldLead: (item) => `${item} ee shopil illa saar.`,
-  priceAsk: 'Ethu iteminte vila venam saar?',
+    'Order cheytha number il ninnu WhatsApp ayachal mathrame nokkan pattu sir.',
+  closeOk: 'Sheri sir.',
+  closeAfterOrder: 'Sheri sir, ship aayal parayam.',
+  shipAfterOrder: 'Order cheytha shesham ship aakum sir. Athinu munp delivery date illa.',
+  soldOutLead: (item) => `${item} stock illa sir.`,
+  optionOutLead: (option) => `${option} stock illa sir. Ithu ind:`,
+  notSoldLead: (item) => `${item} ee shopil illa sir.`,
+  priceAsk: 'Ethu iteminte vila venam sir?',
   orderEtaUnknown:
-    'Ee orderil delivery date illa saar. Ippo unfulfilled aanu. Ship aayal parayam.',
+    'Ee orderil delivery date illa sir. Ippo unfulfilled aanu. Ship aayal parayam.',
   orderCannotCancel:
-    'Chatil cancel cheyyan pattilla saar. Customer helpline ningale contact cheyyum.',
+    'Chatil cancel cheyyan pattilla sir. Customer helpline ningale contact cheyyum.',
   orderNotMine:
     'Ithu ningalude order allengil order number allengil checkout number ayakku. Customer helpline ningale contact cheyyum.',
-  shipAfterOrder: 'Order cheytha shesham ship aakum saar. Athinu munp delivery date illa.',
-  orderFoundLead: 'Order kandi saar.',
+  orderFoundLead: 'Order kandi sir.',
   orderStaffCheck:
     'Ee orderil delivery date illa. Ippo unfulfilled aanu. Customer helpline ningale contact cheyyum.',
-  orderPromiseLead: (date) => `Ee orderinte shop promise ${date} aanu saar. Ippo ship aayittilla.`,
-  courierUnknown: 'Ee orderil delivery partner illa saar. Ippo ship aayittilla.',
+  orderPromiseLead: (date) => `Ee orderinte shop promise ${date} aanu sir. Ippo ship aayittilla.`,
+  courierUnknown: 'Ee orderil delivery partner illa sir. Ippo ship aayittilla.',
 }
 
 const HI: PhraseSet = {
@@ -635,10 +635,10 @@ export function isReplyScriptValid(
 
 function buildStrictScriptReminder(language: string, scriptStyle?: ScriptStyle): string {
   if (isMalayalam(language) && scriptStyle !== 'malayalam_script') {
-    return 'Write the reply in Manglish — Malayalam words spelled with English letters. Do not use Malayalam script and do not write plain English. Do not open with "Ind saar" unless the facts confirm we have a matching product.'
+    return 'Write the reply in Manglish — Malayalam words spelled with English letters. Do not use Malayalam script and do not write plain English. Write a full sentence. Use sir, not saar. Do not open with "Ind saar" or any stock catchphrase.'
   }
   if (isMalayalam(language)) {
-    return 'Write the reply in Malayalam script only. No English sentences, no Tamil, no Hindi. Do not open with "ഉണ്ട് സാർ" unless the facts confirm we have a matching product.'
+    return 'Write the reply in Malayalam script only. No English sentences, no Tamil, no Hindi. Write a full sentence. Do not open with "ഉണ്ട് സാർ" or any stock catchphrase.'
   }
   return `Write the reply in ${language} only, using the script ${language} is normally written in.`
 }

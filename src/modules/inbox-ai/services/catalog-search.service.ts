@@ -251,17 +251,18 @@ export function pickPrimaryCatalogMatch(
   categoryNamesById?: Map<number, string>
 ): CatalogMatch | null {
   if (matches.length === 0) return null
-  if (!categoryName) return matches[0]
-  return (
-    matches.find((m) =>
-      productMatchesRequestedCategory(
-        m.product,
-        categoryName,
-        m.categoryName ??
-          (m.product.category_id != null ? categoryNamesById?.get(m.product.category_id) : null),
-      ),
-    ) ?? null
-  )
+  const pool = categoryName
+    ? matches.filter((m) =>
+        productMatchesRequestedCategory(
+          m.product,
+          categoryName,
+          m.categoryName ??
+            (m.product.category_id != null ? categoryNamesById?.get(m.product.category_id) : null),
+        ),
+      )
+    : matches
+  if (pool.length === 0) return null
+  return pool.reduce((best, row) => (row.score > best.score ? row : best))
 }
 
 export async function getStoreCatalogSummary(storeId: number): Promise<StoreCatalogSummary> {

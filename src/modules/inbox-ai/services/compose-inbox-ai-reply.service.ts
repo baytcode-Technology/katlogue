@@ -10,8 +10,10 @@ import {
   formatConversationHistory,
   type InboxAiChannel,
 } from './conversation-history.service.js'
+import { inboxAgentEnabled, runInboxAgent } from '../agent/run-inbox-agent.js'
 import {
   parseCustomerIntent,
+  parseCustomerIntentOffline,
   type ConversationHistoryLine,
   type ParsedCustomerIntent,
 } from './parse-customer-intent.service.js'
@@ -69,6 +71,56 @@ export async function composeInboxAiReply(
   const recentMessages = filterSessionHistory(input.recentMessages ?? [])
   const conversationHistory = formatConversationHistory(recentMessages)
   const shopSells = formatShopCategories(await getStoreCatalogSummary(input.store.id))
+
+  if (inboxAgentEnabled()) {
+    const offline = parseCustomerIntentOffline(text, {
+      recentMessages,
+      storeCategories: shopSells,
+    })
+    if (input.staffWarnedAt) {
+      const empty: ProductReplyResult = {
+        primaryText: '',
+        followUpText: null,
+        matches: [],
+        primaryMatch: null,
+        imageUrl: null,
+      }
+      return {
+        intent: offline,
+        lastShownProduct: null,
+        reply: empty,
+        replyText: '',
+        wouldSendImage: false,
+        staffHandoff: 'wait',
+      }
+    }
+
+    try {
+      const agent = await runInboxAgent({
+        store: input.store,
+        channel: input.channel,
+        customerText: text,
+        recentMessages,
+        customerPhone: input.customerPhone ?? null,
+        conversationId: input.conversationId ?? null,
+        shopSells,
+      })
+      if (agent) {
+        const wouldSendImage =
+          input.channel === 'whatsapp' && Boolean(agent.reply.imageUrl && agent.reply.primaryMatch)
+        return {
+          ...agent,
+          replyText: formatReplyTextForChannel(input.channel, agent.reply),
+          wouldSendImage,
+        }
+      }
+    } catch (err) {
+      console.error(
+        '[inbox-ai-agent] falling back:',
+        err instanceof Error ? err.message : err
+      )
+    }
+  }
 
   const intent = await parseCustomerIntent(text, {
     recentMessages,

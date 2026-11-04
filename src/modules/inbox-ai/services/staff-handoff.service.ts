@@ -17,7 +17,7 @@ export function staffConnectLine(language: string, scriptStyle?: string): string
     return 'കസ്റ്റമർ ഹെൽപ്‌ലൈൻ താങ്കളെ ബന്ധപ്പെടും സാർ. ഈ ചാറ്റിൽ കാത്തിരിക്കൂ.'
   }
   if (lang === 'malayalam') {
-    return 'Customer helpline ningale contact cheyyum saar. Ee chatil wait cheyyu.'
+    return 'Customer helpline ningale contact cheyyum sir. Ee chatil wait cheyyu.'
   }
   return 'Our customer helpline will contact you sir. Please wait in this chat.'
 }

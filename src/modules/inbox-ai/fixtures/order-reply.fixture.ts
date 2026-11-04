@@ -97,6 +97,8 @@ test('all-orders detector does not steal singular last-order asks', () => {
 test('extracts product hint from order question', () => {
   const hint = extractOrderProductHint('where is my shirt order')
   assert.ok(hint?.includes('shirt'))
+  const check = extractOrderProductHint('where is my check shirt order')
+  assert.match(check ?? '', /check/i)
 })
 
 test('extracts typed phone and ignores order numbers', () => {
@@ -322,6 +324,31 @@ test('product scope filters by item name', () => {
   })
   assert.equal(selected.length, 1)
   assert.equal(selected[0].order_number, 'JAN26-1')
+  const checkOrder = mockOrder({
+    id: 3,
+    order_number: 'JAN26-3',
+    created_at: '2026-01-21T10:00:00.000Z',
+    items: [
+      {
+        id: 3,
+        order_id: 3,
+        product_id: 3,
+        variant_id: null,
+        quantity: 1,
+        unit_price: 499,
+        total_price: 499,
+        snapshot: { product: { name: 'Check Shirt' } },
+      },
+    ],
+  })
+  const byCheck = selectOrdersForScope([shirt, pants, checkOrder], {
+    orderScope: 'product',
+    orderNumber: null,
+    orderNumberHint: null,
+    orderProductHint: 'check shirt',
+  })
+  assert.equal(byCheck.length, 1)
+  assert.equal(byCheck[0].order_number, 'JAN26-3')
 })
 
 test('all-scope facts use compact summaries and count', () => {

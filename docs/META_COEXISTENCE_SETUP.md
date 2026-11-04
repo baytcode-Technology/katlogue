@@ -46,13 +46,13 @@ Current webhook code parses `account_update` but does **not** onboard on `PARTNE
 | Step | Action | Status |
 |------|--------|--------|
 | 1 | Meta Business Suite — register business | Done |
-| 2 | Business verification | **In review** |
-| 3 | Tech Provider onboarding (App Dashboard → WhatsApp → Tech Provider onboarding) | After verification |
+| 2 | Business verification | Done |
+| 3 | Tech Provider onboarding (App Dashboard → WhatsApp → Tech Provider onboarding) | **Approved** |
 | 4 | Embedded Signup Builder — Configuration ID with `whatsapp_business_app_onboarding` | After TP approval |
 | 5 | Connect real WhatsApp Business App number (coexistence) | After Embedded Signup |
 | 6 | Trigger `smb_app_data` sync within 24h | Automatic via Katlogue backend |
 
-**Timeline:** Business verification typically 3–14 days. Tech Provider review adds 1–4 weeks.
+**Timeline:** Business verification and Tech Provider onboarding are approved. Remaining work is Embedded Signup coexistence and live number connect.
 
 ---
 

@@ -86,7 +86,7 @@ test('LLM shirt query is overridden by current pants message', () => {
     },
     PAIRING_MALAYALAM
   )
-  assert.equal(parsed.searchQuery, 'pants')
+  assert.match(parsed.searchQuery, /pant/i)
   assert.equal(parsed.categoryName, 'pants')
   assert.equal(parsed.color, null)
 })
@@ -102,8 +102,50 @@ test('LLM shirt query is overridden by loose pants follow-up', () => {
     },
     'ee vanna photo shirt aahnallo enick vendath loose pants aahn'
   )
-  assert.equal(parsed.searchQuery, 'pants')
+  assert.match(parsed.searchQuery, /pants/i)
   assert.equal(parsed.categoryName, 'pants')
+})
+
+test('check shirt keeps check, not a bare shirt query', () => {
+  const ask = 'hi njan oru video kanditt message cheyyavahn oru check shirt'
+  const offline = parseCustomerIntentOffline(ask)
+  assert.equal(offline.intent, 'product_search')
+  assert.match(offline.searchQuery, /check/i)
+  assert.match(offline.searchQuery, /shirt/i)
+  const fromLlm = fromLlmResult(
+    {
+      intent: 'product_search',
+      customerLanguage: 'Malayalam',
+      searchQuery: 'shirt',
+      categoryName: 'shirts',
+    },
+    ask
+  )
+  assert.match(fromLlm.searchQuery, /check/i)
+  const correction = parseCustomerIntentOffline(
+    'aah okay enick aa check shirt aahn vendath athinte details ayackava',
+    {
+      recentMessages: [
+        { role: 'store', text: 'https://shrox.aishopy.io/product/linen-shirt-8' },
+      ],
+    }
+  )
+  assert.equal(correction.intent, 'product_search')
+  assert.equal(correction.rejectsLastShown, true)
+  assert.match(correction.searchQuery, /check/i)
+  const linen = { name: 'Linen Shirt', description: 'plain linen' }
+  const check = { name: 'Check Shirt', description: 'checked cotton' }
+  const linenScore = scoreProduct(linen, 'check shirt', 'shirts')
+  const checkScore = scoreProduct(check, 'check shirt', 'shirts')
+  assert.ok(checkScore > linenScore, `expected check (${checkScore}) > linen (${linenScore})`)
+  const primary = pickPrimaryCatalogMatch(
+    [
+      { product: linen as Product, variant: null, price: 566, url: 'https://x/linen', score: linenScore },
+      { product: check as Product, variant: null, price: 499, url: 'https://x/check', score: checkScore },
+    ] as CatalogMatch[],
+    'shirts'
+  )
+  assert.equal(primary?.product.name, 'Check Shirt')
 })
 
 test('simple blue shirt LLM result stays shirt', () => {

@@ -26,10 +26,18 @@ import {
   askedOptionKey,
   createInboxAgentTools,
   deniesOtherOptions,
+  extraHitsIdentity,
+  extraOptionVariants,
   INBOX_AGENT_TOOLS,
+  matchAllShopDepartments,
   optionBoardLine,
+  optionPhotoKey,
+  queryIdentityTokens,
   stayOnLastProduct,
   wantsAlsoList,
+  wantsOptionPhotos,
+  wantsOtherModels,
+  wantsWholeStoreShare,
   type InboxAgentToolDeps,
 } from './inbox-agent-tools.js'
 
@@ -164,7 +172,12 @@ export async function runInboxAgent(input: {
   tools.showBestSearchMatch()
 
   const stay = stayOnLastProduct(input.customerText, lastShown?.title ?? null, input.shopSells)
-  if (!tools.state.shown && stay && lastShown) {
+  const storeShare = wantsWholeStoreShare(input.customerText)
+  const optionPhotos = wantsOptionPhotos(input.customerText)
+  if (storeShare) {
+    tools.state.shown = null
+    tools.state.also = []
+  } else if (!tools.state.shown && stay && lastShown) {
     await tools.runTool('search_products', { query: lastShown.title })
     tools.showBestSearchMatch()
   }
@@ -208,6 +221,23 @@ export async function runInboxAgent(input: {
       spoken = cannedGreeting
     }
   }
+  const deptLine = input.shopSells.length > 0 ? input.shopSells.join(', ') : ''
+  const cannedStore =
+    detected.language === 'Malayalam' && detected.scriptStyle === 'malayalam_script'
+      ? `Catalog: ${homeUrl}${deptLine ? `\n${deptLine}` : ''}`
+      : detected.language === 'Malayalam'
+        ? `Catalog ithu: ${homeUrl}.${deptLine ? ` Shopil: ${deptLine}.` : ''}`
+        : `Browse our catalog: ${homeUrl}${deptLine ? `\nWe sell: ${deptLine}.` : ''}`
+  if (storeShare) {
+    spoken = cannedStore
+  }
+  if (
+    optionPhotos &&
+    tools.state.shown &&
+    /sell cheyyunnilla|cannot send|only one photo|system (can )?only|we don.?t sell/i.test(spoken)
+  ) {
+    spoken = cannedProduct
+  }
 
   const allowed = [userMessage, homeUrl, ...tools.state.facts].join('\n')
   if (
@@ -223,8 +253,8 @@ export async function runInboxAgent(input: {
     console.info('[inbox-ai-agent] reply rejected by honesty guard; keeping tools')
     if (tools.state.shown) {
       spoken = cannedProduct
-    } else if (looksLikeGreeting) {
-      spoken = cannedGreeting
+    } else if (storeShare || looksLikeGreeting) {
+      spoken = storeShare ? cannedStore : cannedGreeting
     } else {
       return null
     }
@@ -239,15 +269,50 @@ export async function runInboxAgent(input: {
         ? 'Ithupole vereyum ind:'
         : 'We also have:'
   const extras = wantsAlsoList(input.customerText, lastShown?.title ?? null, input.shopSells)
-  const also = extras ? tools.state.also.slice(0, 3) : []
+  const identity = queryIdentityTokens(input.customerText, input.shopSells)
+  const departmentBrowse =
+    wantsOtherModels(input.customerText) ||
+    matchAllShopDepartments(input.customerText, input.shopSells).length >= 2
+  let also = extras ? tools.state.also.slice(0, 3) : []
+  if (extras && identity.length > 0 && !departmentBrowse) {
+    also = also.filter((row) => extraHitsIdentity(row.product.name, identity)).slice(0, 3)
+  }
   const followUp = shown && also.length > 0 ? formatOtherMatches(also, input.store.currency, header) : ''
+
+  const extraCards =
+    optionPhotos && shown
+      ? extraOptionVariants(
+          shown,
+          optionPhotoKey(input.customerText, shown.variantBoard) ?? '',
+          input.store.slug
+        )
+          .map((row) => {
+            const imageUrl = getMatchImageUrl(row)
+            if (!imageUrl) return null
+            const valueKey = optionPhotoKey(input.customerText, shown.variantBoard)
+            const label = valueKey
+              ? String(row.variant?.options?.[valueKey] ?? row.variant?.name ?? '')
+              : row.variant?.name ?? ''
+            return {
+              imageUrl,
+              caption: [label, formatProductCaption(row, input.store.currency)].filter(Boolean).join('\n\n'),
+            }
+          })
+          .filter((card): card is { imageUrl: string; caption: string } => card != null)
+      : []
+
+  const igExtras =
+    extraCards.length > 0
+      ? extraCards.map((card) => card.caption).join('\n\n')
+      : ''
 
   const reply: ProductReplyResult = {
     primaryText: [spoken, caption].filter(Boolean).join('\n\n'),
-    followUpText: followUp || null,
+    followUpText: [followUp, input.channel === 'instagram' ? igExtras : ''].filter(Boolean).join('\n\n') || null,
     matches: shown ? [shown, ...also] : [],
     primaryMatch: shown,
     imageUrl: shown ? getMatchImageUrl(shown) : null,
+    extraCards,
   }
 
   const kind: ParsedCustomerIntent['intent'] = tools.state.helpline

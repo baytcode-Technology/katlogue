@@ -18,7 +18,9 @@ import {
   matchShopDepartment,
   stayOnLastProduct,
   wantsAlsoList,
+  wantsOptionPhotos,
   wantsOtherModels,
+  wantsWholeStoreShare,
 } from '../agent/inbox-agent-tools.js'
 import { runInboxAgent } from '../agent/run-inbox-agent.js'
 import { buildVariantBoard, scoreProduct } from '../services/catalog-search.service.js'
@@ -52,7 +54,13 @@ const store = {
 
 function catalogMatch(id: number, name: string, price: number): CatalogMatch {
   return {
-    product: { id, name, images: [], thumbnail_url: null, sku: null } as unknown as Product,
+    product: {
+      id,
+      name,
+      images: [`https://img.example/${id}.jpg`],
+      thumbnail_url: `https://img.example/${id}.jpg`,
+      sku: null,
+    } as unknown as Product,
     variant: null,
     price,
     url: `https://shrox.aishopy.io/product/${name.toLowerCase().replace(/\s+/g, '-')}-${id}`,
@@ -92,7 +100,7 @@ function variantOf(
       mark_as_sold: false,
       mark_as_non_inventory: false,
       sku: null,
-      image_url: null,
+      image_url: `https://img.example/${id}.jpg`,
       is_active: true,
       sort_order: 0,
     } as ProductVariant,
@@ -557,6 +565,95 @@ async function main(): Promise<void> {
     assert.doesNotMatch(result?.reply.primaryText ?? '', /mathram/)
   })
 
+  await test('option photos queue extra cards of the same listing', async () => {
+    assert.equal(wantsOptionPhotos('3nteyum photo ayack'), true)
+    assert.equal(wantsOptionPhotos('Okay enne oro colour vech ayack'), true)
+    assert.equal(wantsOptionPhotos('30 size available aayittolla model okke ayack'), false)
+    const metroRecent = [
+      {
+        role: 'store' as const,
+        text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/metronaut-men-regular-fit-striped-spread-collar-casual-shirt-18`,
+      },
+    ]
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: '3nteyum photo ayack',
+      recentMessages: metroRecent,
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Shirt', 'Pants', 'T Shirt'],
+      deps: { searchCatalog: async () => [metroShirt] },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: '3nteyum' } })
+        return '3nteyum ayack ippo nammal sell cheyyunnilla sir.'
+      }) as Completer,
+    })
+    assert.match(result?.reply.primaryMatch?.product.name ?? '', /METRONAUT/i)
+    assert.ok((result?.reply.extraCards?.length ?? 0) >= 2)
+    assert.ok(
+      result?.reply.extraCards?.every((card) =>
+        /metronaut|18|sky blue|yellow|light green/i.test(card.caption)
+      )
+    )
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /sell cheyyunnilla|Shirt, Pants/)
+  })
+
+  await test('striped identity does not dump unrelated shirts', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'Stripp model shirts unda',
+      recentMessages: [
+        {
+          role: 'store',
+          text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/linen-shirt-8`,
+        },
+      ],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Shirt'],
+      deps: {
+        searchCatalog: async () => [metroShirt, linenShirt, checkShirt],
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'stripp shirt' } })
+        await runTool({ name: 'show_product', args: { productId: 18 } })
+        return 'Striped shirt ithu nokku sir.'
+      }) as Completer,
+    })
+    assert.match(result?.reply.primaryMatch?.product.name ?? '', /METRONAUT|Striped/i)
+    assert.doesNotMatch(result?.reply.followUpText ?? '', /Linen Shirt/)
+  })
+
+  await test('whole store share is home URL and departments, not one SKU', async () => {
+    assert.equal(wantsWholeStoreShare('Share your store have all product details'), true)
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'Share your store have all product details',
+      recentMessages: [],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Shirt', 'Pants', 'T Shirt'],
+      deps: { searchCatalog: async () => [linenShirt] },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'shirt' } })
+        await runTool({ name: 'show_product', args: { productId: 8 } })
+        return 'Ithaanu Linen Shirt. Ee linkil koodi nokkam :'
+      }) as Completer,
+    })
+    assert.equal(result?.reply.primaryMatch, null)
+    assert.match(result?.reply.primaryText ?? '', /shrox\.aishopy\.io/)
+    assert.match(result?.reply.primaryText ?? '', /Shirt/)
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /Linen Shirt/)
+  })
+
+  await test('ithinte vere colours unda is Manglish', () => {
+    assert.equal(detectLanguageAndScript('ithinte vere colours unda').language, 'Malayalam')
+    assert.equal(detectLanguageAndScript('Stripp model shirts unda').language, 'Malayalam')
+  })
+
   await test('other RAM of this listing uses owner option keys', async () => {
     const result = await runInboxAgent({
       store,
@@ -786,6 +883,7 @@ async function main(): Promise<void> {
     assert.match(prompt, /How can I assist you/)
     assert.match(prompt, /last photo\/card is the product/)
     assert.match(prompt, /optionValues/)
+    assert.match(prompt, /one photo per variant/)
     assert.match(prompt, /No markdown, no \[here\]\(url\)/)
     assert.match(prompt, /closeNames/)
     assert.match(prompt, /website is wrong/)

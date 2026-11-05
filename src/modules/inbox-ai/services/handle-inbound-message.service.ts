@@ -257,6 +257,17 @@ async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
           caption: reply.primaryText.slice(0, 900),
         })
 
+        for (const card of reply.extraCards ?? []) {
+          if (!card.imageUrl) continue
+          await sendAutoReplyWhatsAppImage({
+            storeId: input.storeId,
+            conversationId: input.conversationId,
+            customerWaNumber: waConversation.customer_wa_number,
+            imageUrl: card.imageUrl,
+            caption: card.caption.slice(0, 900),
+          })
+        }
+
         if (reply.followUpText?.trim()) {
           await sendAutoReplyWhatsAppText({
             storeId: input.storeId,

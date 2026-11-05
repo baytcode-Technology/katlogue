@@ -223,6 +223,8 @@ const FOLLOW_UP_TOKENS = new Set([
   'available',
   'aahna',
   'aahn',
+  'aahno',
+  'ahno',
   'cheytha',
   'cheyyamo',
   'cheyyum',
@@ -233,7 +235,57 @@ const FOLLOW_UP_TOKENS = new Set([
   'avum',
   'vendath',
   'veenda',
+  'ith',
+  'ithu',
+  'mathi',
+  'size',
+  'sizes',
+  'alle',
+  'model',
+  'models',
+  'enick',
+  'njan',
+  'ollo',
+  'oru',
+  'appo',
+  'pole',
+  'mathre',
+  'aah',
+  'ennam',
+  'eduthal',
+  'vallom',
 ])
+
+export function wantsOtherModels(text: string): boolean {
+  return /\b((okke|ellaa|ella)\s+(ayack|ayakku|ayakkavo|ayakkuvo)|all models|every model|all that have|send (all|every))\b/i.test(
+    text
+  )
+}
+
+export function wantsAlsoList(
+  text: string,
+  lastTitle: string | null,
+  shopSells: string[]
+): boolean {
+  if (wantsOtherModels(text)) return true
+  if (!lastTitle?.trim()) return false
+  if (stayOnLastProduct(text, lastTitle, shopSells)) return false
+  const qDept = matchShopDepartment(text, shopSells)
+  const lastDept = matchShopDepartment(lastTitle, shopSells)
+  return Boolean(qDept && lastDept && qDept.toLowerCase() === lastDept.toLowerCase())
+}
+
+export function extractAskedSize(text: string): string | null {
+  if (!/\b(size|sz)\b/i.test(text)) return null
+  const nums = [...text.matchAll(/\b(\d{1,3})\b/g)]
+  if (nums.length > 0) return nums[nums.length - 1][1]
+  const labeled = text.match(/\b(?:size|sz)\s*[:#-]?\s*([a-z]{1,4})\b/i)
+  return labeled?.[1]?.toUpperCase() ?? null
+}
+
+function isFollowUpToken(token: string): boolean {
+  return FOLLOW_UP_TOKENS.has(token) || /^\d+$/.test(token)
+}
 
 function identityTokens(text: string, shopSells: string[]): string[] {
   return cleanSearchQuery(text)
@@ -243,7 +295,7 @@ function identityTokens(text: string, shopSells: string[]): string[] {
       (token) =>
         token.length > 2 &&
         !SEARCH_QUERY_FILLER.has(token) &&
-        !FOLLOW_UP_TOKENS.has(token) &&
+        !isFollowUpToken(token) &&
         !matchShopDepartment(token, shopSells)
     )
 }
@@ -255,6 +307,7 @@ export function stayOnLastProduct(
   shopSells: string[]
 ): boolean {
   if (!lastTitle?.trim()) return false
+  if (wantsOtherModels(query)) return false
   const cleaned = cleanSearchQuery(query)
   const qDept = matchShopDepartment(cleaned, shopSells)
   const lastDept = matchShopDepartment(lastTitle, shopSells)
@@ -269,7 +322,7 @@ export function stayOnLastProduct(
     .split(/\s+/)
     .filter(
       (token) =>
-        token.length > 2 && !SEARCH_QUERY_FILLER.has(token) && !FOLLOW_UP_TOKENS.has(token)
+        token.length > 2 && !SEARCH_QUERY_FILLER.has(token) && !isFollowUpToken(token)
     )
   if (qTokens.length === 0) return true
   if (qDept && lastDept && qDept.toLowerCase() === lastDept.toLowerCase() && qId.length === 0) {
@@ -313,11 +366,21 @@ function publicProduct(
     variantId: match.variant?.id ?? null,
     name: match.product.name,
     variantName: match.variant?.name ?? null,
+    options: match.variant?.options ?? null,
     price: formatMoney(match.price, currency),
     inStock: match.inStock !== false,
     url,
     category: match.categoryName ?? null,
   }
+}
+
+function variantMatchesSize(match: CatalogMatch, size: string): boolean {
+  const want = size.toLowerCase()
+  const nameTokens = (match.variant?.name ?? '').toLowerCase().split(/[^a-z0-9]+/)
+  if (nameTokens.includes(want)) return true
+  return Object.values(match.variant?.options ?? {}).some(
+    (value) => String(value).trim().toLowerCase() === want
+  )
 }
 
 function orderIntent(scope: OrderScope, orderNumber: string, productHint: string): ParsedCustomerIntent {
@@ -390,14 +453,27 @@ export function createInboxAgentTools(input: {
     )
   }
 
-  function findLastShown(): CatalogMatch | null {
-    if (!lastShownTitle) return null
+  function lastProductRows(): CatalogMatch[] {
+    if (!lastShownTitle) return []
     const want = lastShownTitle.toLowerCase()
-    return (
-      [...cache.values()].find((row) => row.product.name.toLowerCase() === want) ??
-      state.found.find((row) => row.product.name.toLowerCase() === want) ??
-      null
+    const rows = [
+      ...cache.values(),
+      ...state.found,
+    ].filter((row) => row.product.name.toLowerCase() === want)
+    return rows.filter(
+      (row, index, all) =>
+        all.findIndex((item) => matchKey(item) === matchKey(row)) === index
     )
+  }
+
+  function pickStayMatch(fallback: CatalogMatch | null): CatalogMatch | null {
+    const size = extractAskedSize(customerText)
+    const same = lastProductRows()
+    if (size) {
+      const sized = same.find((row) => variantMatchesSize(row, size))
+      if (sized) return sized
+    }
+    return same[0] ?? fallback
   }
 
   function markShown(match: CatalogMatch, stay = false): void {
@@ -426,30 +502,52 @@ export function createInboxAgentTools(input: {
   async function runTool(name: string, args: Record<string, unknown>): Promise<unknown> {
     if (name === 'search_products') {
       let query = cleanSearchQuery(argString(args, 'query'))
-      if (
-        lastShownTitle &&
+      const stay =
+        Boolean(lastShownTitle) &&
         (stayOnLastProduct(customerText, lastShownTitle, shopSells) ||
           stayOnLastProduct(query, lastShownTitle, shopSells))
-      ) {
-        query = lastShownTitle
-      }
+      if (stay && lastShownTitle) query = lastShownTitle
       state.lastQuery = query
       const fromModel = argString(args, 'category')
       const categoryName =
         matchShopDepartment(fromModel, shopSells) ??
         matchShopDepartment(query, shopSells) ??
         (fromModel || null)
-      const matches = filterMatchesByScore(
+      const size = argString(args, 'size') || extractAskedSize(customerText) || null
+      const color = argString(args, 'color') || null
+      let matches = filterMatchesByScore(
         await search(input.store.id, input.store.slug, input.store.currency, {
           query,
-          color: argString(args, 'color') || null,
-          size: argString(args, 'size') || null,
+          color,
+          size,
           categoryName,
         })
       )
+      if (stay && lastShownTitle) {
+        const same = matches.filter(
+          (row) => row.product.name.toLowerCase() === lastShownTitle.toLowerCase()
+        )
+        if (same.length === 0) {
+          const retry = filterMatchesByScore(
+            await search(input.store.id, input.store.slug, input.store.currency, {
+              query: lastShownTitle,
+              color: null,
+              size: null,
+              categoryName: matchShopDepartment(lastShownTitle, shopSells),
+            })
+          )
+          matches = [...matches, ...retry]
+        }
+      }
       remember(matches)
       state.found = matches
-      const rows = matches.map((match) =>
+      const shownRows =
+        stay && lastShownTitle
+          ? matches.filter(
+              (row) => row.product.name.toLowerCase() === lastShownTitle.toLowerCase()
+            )
+          : matches
+      const rows = (shownRows.length > 0 ? shownRows : matches).map((match) =>
         publicProduct(match, input.store.currency, input.channel, input.conversationId)
       )
       state.facts.push(JSON.stringify(rows))
@@ -500,8 +598,7 @@ export function createInboxAgentTools(input: {
           : null) ?? null
       if (!match) return { error: 'Unknown product. Search first and use a returned productId.' }
       const stay = stayingOnLast()
-      const keep = stay ? findLastShown() : null
-      const shown = keep ?? match
+      const shown = stay ? pickStayMatch(match) ?? match : match
       markShown(shown, stay && shown.product.name.toLowerCase() === lastShownTitle.toLowerCase())
       return { shown: shown.product.name, url: shown.url }
     }
@@ -573,7 +670,7 @@ export function createInboxAgentTools(input: {
       ? state.found.find((row) => row.product.name.toLowerCase() === last) ?? null
       : null
     if (stay && same) {
-      markShown(same, true)
+      markShown(pickStayMatch(same) ?? same, true)
       return
     }
     if (stay && last) return

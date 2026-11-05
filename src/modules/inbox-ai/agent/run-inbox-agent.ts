@@ -26,6 +26,7 @@ import {
   createInboxAgentTools,
   INBOX_AGENT_TOOLS,
   stayOnLastProduct,
+  wantsAlsoList,
   type InboxAgentToolDeps,
 } from './inbox-agent-tools.js'
 
@@ -77,7 +78,10 @@ function detectCustomerLanguage(
 ): ReturnType<typeof detectLanguageAndScript> {
   const latest = detectLanguageAndScript(text)
   if (latest.language !== 'English') return latest
-  if (text.trim().split(/\s+/).filter(Boolean).length > 3) return latest
+  const clearlyEnglish =
+    /\b(please|would you|thank you|could you)\b/i.test(text) &&
+    text.trim().split(/\s+/).filter(Boolean).length > 4
+  if (clearlyEnglish) return latest
   for (let i = recent.length - 1; i >= 0; i -= 1) {
     if (recent[i].role !== 'customer') continue
     const prior = detectLanguageAndScript(recent[i].text)
@@ -115,7 +119,7 @@ export async function runInboxAgent(input: {
   const userMessage = [
     history ? `Recent chat:\n${history}` : '',
     lastShown
-      ? `Last product card we sent: ${lastShown.title}. Stay on this product until they name a new type. Other colour/size = this product's options. Discount, quantity, book, and "if I order today" stay on this product.`
+      ? `Last product card we sent: ${lastShown.title}. That photo is the product until they name a new type. Size/colour = this listing's options from the tool result. "This one", discount, quantity, and book stay on it. Do not list other products unless they asked for more.`
       : '',
     languageLine,
     `Latest customer message:\n${input.customerText}`,
@@ -225,12 +229,14 @@ export async function runInboxAgent(input: {
       : detected.language === 'Malayalam'
         ? 'Ithupole vereyum ind:'
         : 'We also have:'
-  const followUp = shown ? formatOtherMatches(tools.state.also.slice(0, 3), input.store.currency, header) : ''
+  const extras = wantsAlsoList(input.customerText, lastShown?.title ?? null, input.shopSells)
+  const also = extras ? tools.state.also.slice(0, 3) : []
+  const followUp = shown && also.length > 0 ? formatOtherMatches(also, input.store.currency, header) : ''
 
   const reply: ProductReplyResult = {
     primaryText: [spoken, caption].filter(Boolean).join('\n\n'),
     followUpText: followUp || null,
-    matches: shown ? [shown, ...tools.state.also] : [],
+    matches: shown ? [shown, ...also] : [],
     primaryMatch: shown,
     imageUrl: shown ? getMatchImageUrl(shown) : null,
   }

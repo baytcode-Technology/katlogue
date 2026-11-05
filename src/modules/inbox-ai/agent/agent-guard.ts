@@ -24,6 +24,7 @@ export function sanitizeAgentSpoken(text: string, options?: { stripUrls?: boolea
   let next = text.replace(/\[[^\]]+\]\((https?:\/\/[^)]+)\)/gi, fromMarkdown)
   if (options?.stripUrls) next = next.replace(/https?:\/\/\S+/gi, '')
   return next
+    .replace(/\blink\s+(ithu|here)?\s*:\s*\.?\s*/gi, '')
     .replace(/[*_#`]+/g, '')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')

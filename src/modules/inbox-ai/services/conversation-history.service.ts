@@ -72,6 +72,23 @@ export type LastShownProductRef = {
 
 const PRODUCT_URL_PATTERN = /https?:\/\/\S*\/product\/([a-z0-9-]+)[^\s]*/gi
 
+const ALSO_LIST_HEADER =
+  /ithupole vereyum ind|we also have|i also found these|ഇതുപോലെ വേറെയും ഉണ്ട്/i
+
+function isAlsoListText(text: string): boolean {
+  return ALSO_LIST_HEADER.test(text)
+}
+
+function productRefFromStoreText(text: string): LastShownProductRef | null {
+  if (isAlsoListText(text)) return null
+  const matches = [...text.matchAll(PRODUCT_URL_PATTERN)]
+  if (matches.length === 0) return null
+  const match = matches[0]
+  const title = titleFromProductSlug(match[1])
+  if (!title) return null
+  return { title, url: match[0] }
+}
+
 /**
  * Product name is derived from the storefront URL slug rather than the message
  * text, so it stays correct no matter how the caption was worded and can never
@@ -97,15 +114,8 @@ export function extractLastShownProduct(
   for (let i = lines.length - 1; i >= 0; i -= 1) {
     const line = lines[i]
     if (line.role !== 'store') continue
-
-    const matches = [...line.text.matchAll(PRODUCT_URL_PATTERN)]
-    if (matches.length !== 1) continue
-
-    const [match] = matches
-    const title = titleFromProductSlug(match[1])
-    if (!title) continue
-
-    return { title, url: match[0] }
+    const found = productRefFromStoreText(line.text)
+    if (found) return found
   }
 
   return null
@@ -141,8 +151,9 @@ export function extractOpenOffer(lines: ConversationHistoryLine[]): OpenOffer | 
   }
 
   for (const line of lastTurn) {
+    if (isAlsoListText(line.text)) continue
     const matches = [...line.text.matchAll(PRODUCT_URL_PATTERN)]
-    if (matches.length !== 1) continue
+    if (matches.length === 0) continue
     const [match] = matches
     const title = titleFromProductSlug(match[1])
     const question = questionAfter(line.text, (match.index ?? 0) + match[0].length)

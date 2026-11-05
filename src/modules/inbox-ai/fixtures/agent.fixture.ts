@@ -8,6 +8,7 @@ import type { Store } from '../../stores/types/store.types.js'
 import type { OrderWithDetails } from '../../orders/repositories/order.repository.js'
 import type { CatalogMatch } from '../services/catalog-search.service.js'
 import type { Product } from '../../products/types/product.types.js'
+import { detectLanguageAndScript } from '../../../shared/lib/detect-language-script.js'
 import { replyUsesOnlyToolFacts, sanitizeAgentSpoken } from '../agent/agent-guard.js'
 import { buildInboxAgentSystemPrompt } from '../agent/inbox-agent-prompt.js'
 import {
@@ -15,9 +16,11 @@ import {
   looksLikePlacedOrderAsk,
   matchShopDepartment,
   stayOnLastProduct,
+  wantsOtherModels,
 } from '../agent/inbox-agent-tools.js'
 import { runInboxAgent } from '../agent/run-inbox-agent.js'
 import { scoreProduct } from '../services/catalog-search.service.js'
+import type { ProductVariant } from '../../products/types/product-variant.types.js'
 
 let failed = 0
 
@@ -66,6 +69,52 @@ const trousers = {
 const mixer = {
   ...catalogMatch(31, 'Kitchen Mixer', 1299),
   categoryName: 'Mixers',
+}
+
+function variantOf(
+  match: CatalogMatch,
+  id: number,
+  name: string,
+  options: Record<string, unknown>
+): CatalogMatch {
+  return {
+    ...match,
+    variant: {
+      id,
+      product_id: match.product.id,
+      name,
+      options,
+      price_delta: 0,
+      compare_at_price: null,
+      stock_qty: 1,
+      mark_as_sold: false,
+      mark_as_non_inventory: false,
+      sku: null,
+      image_url: null,
+      is_active: true,
+      sort_order: 0,
+    } as ProductVariant,
+    url: `${match.url.split('?')[0]}?variant=${id}`,
+  }
+}
+
+const lycra28 = variantOf(trousers, 91, '28 / Chocolate Brown', {
+  Size: '28',
+  Color: 'Chocolate Brown',
+})
+const lycra30 = variantOf(trousers, 97, '30 / Black', { Size: '30', Color: 'Black' })
+const relaxed = {
+  ...catalogMatch(20, 'Relaxed Men White Cotton Blend Trousers', 469),
+  categoryName: 'Pants',
+}
+
+const lycraCard = {
+  role: 'store' as const,
+  text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/men-loose-fit-brown-lycra-blend-trousers-19`,
+}
+const lycraAlso = {
+  role: 'store' as const,
+  text: `Ithupole vereyum ind:\n\n• Relaxed Men White Cotton Blend Trousers — ₹469\n  https://shrox.aishopy.io/product/relaxed-men-white-cotton-blend-trousers-20`,
 }
 
 function checkOrder(): OrderWithDetails {
@@ -268,6 +317,23 @@ async function main(): Promise<void> {
     assert.equal(stayOnLastProduct('book cheytha eppoyathekk deliver aavum', 'Check Shirt', sells), true)
     assert.equal(stayOnLastProduct('vere ethelum colour shirts undo', 'Check Shirt', sells), false)
     assert.equal(stayOnLastProduct('pants vehnam', 'Check Shirt', sells), false)
+    assert.equal(
+      stayOnLastProduct(
+        'Ith size 28 alle enick vendath 30 aahn available ahno',
+        'Men Loose Fit Brown Lycra Blend Trousers',
+        sells
+      ),
+      true
+    )
+    assert.equal(
+      stayOnLastProduct(
+        '30 size available aayittolla model okke ayack',
+        'Men Loose Fit Brown Lycra Blend Trousers',
+        sells
+      ),
+      false
+    )
+    assert.equal(wantsOtherModels('30 size available aayittolla model okke ayack'), true)
     assert.equal(looksLikePlacedOrderAsk('book cheytha eppoyathekk deliver aavum'), false)
     assert.equal(looksLikePlacedOrderAsk('where is my order JAN26-3'), true)
   })
@@ -302,6 +368,118 @@ async function main(): Promise<void> {
     assert.equal(result?.reply.primaryMatch?.product.name, 'Check Shirt')
     assert.match(result?.reply.primaryText ?? '', /ithu nokku|Check Shirt/i)
     assert.doesNotMatch(result?.reply.primaryText ?? '', /Linen/i)
+    assert.equal(result?.reply.followUpText, null)
+  })
+
+  await test('size follow-up stays on the primary card not the also-list', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'Ith size 28 alle enick vendath 30 aahn available ahno',
+      recentMessages: [lycraCard, lycraAlso],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Pants', 'Shirt'],
+      deps: {
+        searchCatalog: async (_storeId, _slug, _currency, filters) => {
+          const size = typeof filters === 'string' ? '' : filters.size
+          if (size === '30') return [relaxed, lycra30]
+          return [lycra28, relaxed]
+        },
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'size 30 pants' } })
+        await runTool({ name: 'show_product', args: { productId: 20 } })
+        return 'Ee Relaxed trousers 30 size available alla.'
+      }) as Completer,
+    })
+    assert.match(result?.reply.primaryMatch?.product.name ?? '', /Lycra Blend Trousers/i)
+    assert.match(result?.reply.primaryMatch?.variant?.name ?? '', /30/)
+    assert.doesNotMatch(result?.reply.primaryMatch?.product.name ?? '', /Relaxed/)
+    assert.equal(result?.reply.followUpText, null)
+  })
+
+  await test('ith mathi discount stays on the primary card', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'Aah ith mathi 2 ennam eduthal discount vallom undo',
+      recentMessages: [
+        {
+          role: 'store',
+          text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/men-loose-fit-brown-lycra-blend-trousers-19?variant=97`,
+        },
+        lycraAlso,
+      ],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Pants', 'Shirt'],
+      deps: {
+        searchCatalog: async () => [relaxed, lycra30],
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'discount trousers' } })
+        await runTool({ name: 'show_product', args: { productId: 20 } })
+        return 'Ee Relaxed Men White Cotton Blend Trousers enthayalum vere chodyam undo?'
+      }) as Completer,
+    })
+    assert.match(result?.reply.primaryMatch?.product.name ?? '', /Lycra Blend Trousers/i)
+    assert.doesNotMatch(result?.reply.primaryMatch?.product.name ?? '', /Relaxed/)
+  })
+
+  await test('all models with this size may show another listing', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: '30 size available aayittolla model okke ayack',
+      recentMessages: [lycraCard, lycraAlso],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Pants', 'Shirt'],
+      deps: {
+        searchCatalog: async () => [relaxed, lycra30],
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'pants', size: '30' } })
+        await runTool({ name: 'show_product', args: { productId: 20 } })
+        return 'Ithupole vereyum pants und sir.'
+      }) as Completer,
+    })
+    assert.equal(result?.reply.primaryMatch?.product.name, 'Relaxed Men White Cotton Blend Trousers')
+  })
+
+  await test('Manglish colour follow-up is not answered in English', async () => {
+    assert.equal(
+      detectLanguageAndScript('Ee oru colour mathre ollo appo').language,
+      'Malayalam'
+    )
+    assert.equal(
+      sanitizeAgentSpoken('Check shirt available. Link ithu : . Order cheyyano?', { stripUrls: true }),
+      'Check shirt available. Order cheyyano?'
+    )
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'Ee oru colour mathre ollo appo',
+      recentMessages: [
+        { role: 'customer', text: 'hi njan oru check shirt undo' },
+        {
+          role: 'store',
+          text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/check-shirt-9`,
+        },
+      ],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Shirt'],
+      deps: { searchCatalog: async () => [checkShirt] },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'check shirt' } })
+        await runTool({ name: 'show_product', args: { productId: 9 } })
+        return 'Yes, this check shirt is available in only this colour. If you want to order, please use the link provided.'
+      }) as Completer,
+    })
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /available in only this colour/i)
+    assert.match(result?.reply.primaryText ?? '', /ithu nokku|illa|und/i)
   })
 
   await test('other colour shirts searches shirt and shows a different card', async () => {
@@ -452,8 +630,8 @@ async function main(): Promise<void> {
     assert.match(prompt, /fix this code/)
     assert.match(prompt, /Do not answer them/)
     assert.match(prompt, /How can I assist you/)
-    assert.match(prompt, /last product card is the product/)
-    assert.match(prompt, /Other colour/i)
+    assert.match(prompt, /last photo\/card is the product/)
+    assert.match(prompt, /Size\/colour of that card/)
     assert.match(prompt, /No markdown, no \[here\]\(url\)/)
     assert.match(prompt, /closeNames/)
     assert.match(prompt, /website is wrong/)

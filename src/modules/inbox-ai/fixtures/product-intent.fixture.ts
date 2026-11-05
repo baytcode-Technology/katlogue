@@ -276,6 +276,30 @@ test('the multi-product follow-up is skipped in favour of the single product', (
   assert.equal(last?.title, 'Linen Shirt')
 })
 
+test('a one-item also-have bubble does not replace the primary card', () => {
+  const last = extractLastShownProduct([
+    {
+      role: 'store',
+      text: 'Ithu nokku.\nhttps://shrox.aishopy.io/product/men-loose-fit-brown-lycra-blend-trousers-19',
+    },
+    {
+      role: 'store',
+      text: 'Ithupole vereyum ind:\n\n• Relaxed Men White Cotton Blend Trousers — ₹469\n  https://shrox.aishopy.io/product/relaxed-men-white-cotton-blend-trousers-20',
+    },
+  ])
+  assert.equal(last?.title, 'Men Loose Fit Brown Lycra Blend Trousers')
+})
+
+test('several product URLs in one card use the first URL', () => {
+  const last = extractLastShownProduct([
+    {
+      role: 'store',
+      text: 'Check Shirt\nhttps://shrox.aishopy.io/product/check-shirt-9\nhttps://shrox.aishopy.io/product/linen-shirt-8',
+    },
+  ])
+  assert.equal(last?.title, 'Check Shirt')
+})
+
 console.log('\n=== Catalog ranking ===')
 
 test('effective query prefers pants over stale shirt searchQuery', () => {

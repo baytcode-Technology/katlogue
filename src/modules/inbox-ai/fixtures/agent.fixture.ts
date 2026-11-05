@@ -10,7 +10,12 @@ import type { CatalogMatch } from '../services/catalog-search.service.js'
 import type { Product } from '../../products/types/product.types.js'
 import { replyUsesOnlyToolFacts, sanitizeAgentSpoken } from '../agent/agent-guard.js'
 import { buildInboxAgentSystemPrompt } from '../agent/inbox-agent-prompt.js'
-import { cleanSearchQuery, matchShopDepartment } from '../agent/inbox-agent-tools.js'
+import {
+  cleanSearchQuery,
+  looksLikePlacedOrderAsk,
+  matchShopDepartment,
+  stayOnLastProduct,
+} from '../agent/inbox-agent-tools.js'
 import { runInboxAgent } from '../agent/run-inbox-agent.js'
 import { scoreProduct } from '../services/catalog-search.service.js'
 
@@ -178,7 +183,9 @@ async function main(): Promise<void> {
         return 'It is ₹999 sir.'
       }) as Completer,
     })
-    assert.equal(result, null)
+    assert.equal(result?.reply.primaryMatch?.product.name, 'Check Shirt')
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /₹999/)
+    assert.match(result?.reply.primaryText ?? '', /₹499/)
     assert.equal(replyUsesOnlyToolFacts('It is ₹999', '₹499'), false)
     assert.equal(replyUsesOnlyToolFacts('It is ₹499', '₹499'), true)
   })
@@ -249,7 +256,52 @@ async function main(): Promise<void> {
         return 'How can I assist you today at Shrox?'
       }) as Completer,
     })
-    assert.equal(helpdesk, null)
+    assert.equal(helpdesk?.reply.primaryMatch?.product.name, 'Check Shirt')
+    assert.match(helpdesk?.reply.primaryText ?? '', /ithu nokku/)
+    assert.doesNotMatch(helpdesk?.reply.primaryText ?? '', /How can I assist/)
+  })
+
+  await test('stayOnLastProduct keeps the card until they name a new type', () => {
+    const sells = ['Shirt', 'Pants']
+    assert.equal(stayOnLastProduct('Vere colour available aahna', 'Check Shirt', sells), true)
+    assert.equal(stayOnLastProduct('3 piece price korayuvo', 'Men Loose Fit Brown Lycra Blend Trousers', sells), true)
+    assert.equal(stayOnLastProduct('book cheytha eppoyathekk deliver aavum', 'Check Shirt', sells), true)
+    assert.equal(stayOnLastProduct('vere ethelum colour shirts undo', 'Check Shirt', sells), false)
+    assert.equal(stayOnLastProduct('pants vehnam', 'Check Shirt', sells), false)
+    assert.equal(looksLikePlacedOrderAsk('book cheytha eppoyathekk deliver aavum'), false)
+    assert.equal(looksLikePlacedOrderAsk('where is my order JAN26-3'), true)
+  })
+
+  await test('other colour of last card stays on that product', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'Vere colour available aahna',
+      recentMessages: [
+        {
+          role: 'store',
+          text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/check-shirt-9`,
+        },
+      ],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Shirt'],
+      deps: {
+        searchCatalog: async (_storeId, _slug, _currency, filters) => {
+          const query = typeof filters === 'string' ? filters : filters.query
+          if (/linen/i.test(query)) return [linenShirt]
+          return [checkShirt, linenShirt]
+        },
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'colour shirts' } })
+        await runTool({ name: 'show_product', args: { productId: 8 } })
+        return 'Linen shirt um und sir.'
+      }) as Completer,
+    })
+    assert.equal(result?.reply.primaryMatch?.product.name, 'Check Shirt')
+    assert.match(result?.reply.primaryText ?? '', /ithu nokku|Check Shirt/i)
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /Linen/i)
   })
 
   await test('other colour shirts searches shirt and shows a different card', async () => {
@@ -400,11 +452,118 @@ async function main(): Promise<void> {
     assert.match(prompt, /fix this code/)
     assert.match(prompt, /Do not answer them/)
     assert.match(prompt, /How can I assist you/)
-    assert.match(prompt, /other colour/)
+    assert.match(prompt, /last product card is the product/)
+    assert.match(prompt, /Other colour/i)
     assert.match(prompt, /No markdown, no \[here\]\(url\)/)
     assert.match(prompt, /closeNames/)
     assert.match(prompt, /website is wrong/)
     assert.match(prompt, /already placed/)
+  })
+
+  await test('honesty reject still keeps the shown product', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'Pants vehnam',
+      recentMessages: [],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Pants', 'Shirt'],
+      deps: {
+        searchCatalog: async () => [trousers, linenShirt],
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'pants' } })
+        await runTool({ name: 'show_product', args: { productId: 19 } })
+        return 'Yes sir, we have it. How can I assist you today?'
+      }) as Completer,
+    })
+    assert.match(result?.reply.primaryMatch?.product.name ?? '', /Trousers/i)
+    assert.match(result?.reply.primaryText ?? '', /ithu nokku/)
+  })
+
+  await test('discount stay on last product and does not show a new card', async () => {
+    const tshirt = catalogMatch(4, 'Printed T Shirt', 299)
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: '3 piece eduthal price korayuvo',
+      recentMessages: [
+        {
+          role: 'store',
+          text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/men-loose-fit-brown-lycra-blend-trousers-19`,
+        },
+      ],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Pants', 'Shirt', 'T Shirt'],
+      deps: {
+        searchCatalog: async (_storeId, _slug, _currency, filters) => {
+          const query = typeof filters === 'string' ? filters : filters.query
+          if (/t shirt|piece/i.test(query)) return [tshirt]
+          return [trousers]
+        },
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'piece price' } })
+        await runTool({ name: 'show_product', args: { productId: 4 } })
+        return 'Yes sir, 3 piece discount und.'
+      }) as Completer,
+    })
+    assert.match(result?.reply.primaryMatch?.product.name ?? '', /Trousers/i)
+    assert.doesNotMatch(result?.reply.primaryMatch?.product.name ?? '', /T Shirt/)
+  })
+
+  await test('delivery before order does not look up orders', async () => {
+    const called: string[] = []
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'book cheytha eppoyathekk deliver aavum',
+      recentMessages: [
+        {
+          role: 'store',
+          text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/check-shirt-9`,
+        },
+      ],
+      customerPhone: '919999999999',
+      conversationId: 11,
+      shopSells: ['Shirt'],
+      deps: {
+        searchCatalog: async () => [checkShirt],
+        collectOrders: async () => {
+          called.push('collectOrders')
+          return [checkOrder()]
+        },
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        const orders = (await runTool({
+          name: 'get_my_orders',
+          args: { scope: 'latest' },
+        })) as { orders: unknown[]; note?: string }
+        assert.equal(orders.orders.length, 0)
+        await runTool({ name: 'get_shop_info', args: { ask: 'delivery' } })
+        return 'Yes sir, delivery shop policy anusarich aanu.'
+      }) as Completer,
+    })
+    assert.equal(called.includes('collectOrders'), false)
+    assert.equal(result?.intent.intent, 'product_search')
+    assert.equal(result?.reply.primaryMatch?.product.name, 'Check Shirt')
+  })
+
+  await test('greeting includes the shop home URL', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'Hi',
+      recentMessages: [],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Shirt'],
+      completeWithTools: (async () => 'Hello! What can I help you with today at Shrox?') as Completer,
+    })
+    assert.match(result?.reply.primaryText ?? '', /shrox\.aishopy\.io/)
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /What can I help you/)
   })
 
   await test('cancel calls connect_helpline', async () => {

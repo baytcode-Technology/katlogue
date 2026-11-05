@@ -7,7 +7,11 @@ import {
 import type { ScriptStyle } from '../services/parse-customer-intent.service.js'
 
 const HELPDESK_ENGLISH =
-  /\b(how can i assist|let me know if you need|view and purchase|need any (more )?help|here is what i found)\b/i
+  /\b(how can i assist|what can i help you|let me know if you need|could you please let me know|view and purchase|need any (more )?help|here is what i found|if you have any other questions)\b/i
+
+export function isHelpdeskEnglish(reply: string): boolean {
+  return HELPDESK_ENGLISH.test(reply)
+}
 
 const MANGLISH_CUE =
   /\b(und|undo|undu|illa|aanu|aahn|ithu|ithinte|nokku|vere|njan|enick|sheri|cheyyano|vendath|vehnam|kayyil|shopil|ilekku|swagatham)\b/i
@@ -76,10 +80,10 @@ export function isAgentReplyHonest(input: {
   if (!spokenLanguageOk(reply, input.language, input.scriptStyle)) return false
   if (!replyUsesOnlyToolFacts(reply, input.allowed)) return false
   if (!isReplyScriptValid(reply, input.language, input.scriptStyle)) return false
-  if (!isHonestProductClosing(reply)) return false
   if (input.lookedUpOrders) {
     return isHonestOrderTalk(reply, 'order_followup', input.allowed)
   }
+  if (!isHonestProductClosing(reply)) return false
   if (input.showedProduct) {
     return isHonestNoOrderTalk(reply, 'product_lines', {})
   }

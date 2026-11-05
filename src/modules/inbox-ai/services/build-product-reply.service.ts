@@ -42,12 +42,18 @@ import { buildOrderReply } from './build-order-reply.service.js'
 import { checkMessageSafety } from './safety-filter.service.js'
 import type { InboxAiChannel } from './conversation-history.service.js'
 
+export type ProductImageCard = {
+  imageUrl: string
+  caption: string
+}
+
 export type ProductReplyResult = {
   primaryText: string
   followUpText: string | null
   matches: CatalogMatch[]
   primaryMatch: CatalogMatch | null
   imageUrl: string | null
+  extraCards?: ProductImageCard[]
 }
 
 type ReplyContext = {

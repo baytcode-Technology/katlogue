@@ -272,7 +272,34 @@ const FOLLOW_UP_TOKENS = new Set([
   'ennam',
   'eduthal',
   'vallom',
+  'photo',
+  'photos',
+  'image',
+  'images',
+  'ayack',
+  'ayakku',
 ])
+
+export function wantsOptionPhotos(text: string): boolean {
+  const send = /\b(ayack|ayakku|ayackavo|ayakkavo|send)\b/i.test(text)
+  const photo = /\b(photo|photos|images?|picture|pic)\b/i.test(text)
+  const each =
+    /\b(oro|nteyum|ntheyum)\b/i.test(text) ||
+    /\b\d+nteyum\b/i.test(text) ||
+    /\d+\s*(photos?|colours?|colors?)/i.test(text)
+  if (photo && (each || /\b(ella|ellaa|okke|all|every)\b/i.test(text))) return true
+  return send && each
+}
+
+export function wantsWholeStoreShare(text: string): boolean {
+  return /\b(share|details|catalog).{0,50}\b(store|shop)\b|\b(store|shop).{0,50}\b(all product|catalog|all details|all product details)\b|\bshare.{0,40}all product/i.test(
+    text
+  )
+}
+
+export function queryIdentityTokens(text: string, shopSells: string[]): string[] {
+  return identityTokens(text, shopSells)
+}
 
 export function wantsOtherModels(text: string): boolean {
   return /\b((okke|ellaa|ella)\s+(ayack|ayakku|ayakkavo|ayakkuvo|share)|model(?:s)?\s+ella|ella\s+share|enthokke.{0,40}(share|details)|details\s+share|all models|every model|all that have|send (all|every))\b/i.test(
@@ -285,6 +312,7 @@ export function wantsAlsoList(
   lastTitle: string | null,
   shopSells: string[]
 ): boolean {
+  if (wantsOptionPhotos(text) || wantsWholeStoreShare(text)) return false
   if (wantsOtherModels(text)) return true
   if (matchAllShopDepartments(text, shopSells).length >= 2) return true
   if (!lastTitle?.trim()) return false
@@ -292,6 +320,44 @@ export function wantsAlsoList(
   const qDept = matchShopDepartment(text, shopSells)
   const lastDept = matchShopDepartment(lastTitle, shopSells)
   return Boolean(qDept && lastDept && qDept.toLowerCase() === lastDept.toLowerCase())
+}
+
+export function extraHitsIdentity(name: string, tokens: string[]): boolean {
+  const hay = name.toLowerCase()
+  return tokens.some((token) => {
+    if (hay.includes(token)) return true
+    if (token.length > 3 && hay.includes(token.slice(0, -1))) return true
+    return false
+  })
+}
+
+export function optionPhotoKey(text: string, board: VariantBoard | null | undefined): string | null {
+  const named = askedOptionKey(text, board)
+  if (named) return named
+  if (!board) return null
+  return (
+    board.optionKeys.find((key) => (board.optionValues[key]?.length ?? 0) > 1) ?? null
+  )
+}
+
+export function extraOptionVariants(
+  match: CatalogMatch,
+  key: string,
+  storeSlug: string
+): CatalogMatch[] {
+  const current = String(match.variant?.options?.[key] ?? '').toLowerCase()
+  const seen = new Set<string>()
+  const extras: CatalogMatch[] = []
+  for (const variant of match.activeVariants ?? []) {
+    const value = String(variant.options?.[key] ?? '').trim()
+    if (!value) continue
+    const norm = value.toLowerCase()
+    if (norm === current || seen.has(norm)) continue
+    seen.add(norm)
+    extras.push(matchWithVariant(storeSlug, match, variant))
+    if (extras.length >= 4) break
+  }
+  return extras
 }
 
 export function askedOptionKey(text: string, board: VariantBoard | null | undefined): string | null {
@@ -374,6 +440,8 @@ export function stayOnLastProduct(
   shopSells: string[]
 ): boolean {
   if (!lastTitle?.trim()) return false
+  if (wantsOptionPhotos(query)) return true
+  if (wantsWholeStoreShare(query)) return false
   if (wantsOtherModels(query)) return false
   const cleaned = cleanSearchQuery(query)
   const qDept = matchShopDepartment(cleaned, shopSells)

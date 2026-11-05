@@ -10,8 +10,9 @@ import type { CatalogMatch } from '../services/catalog-search.service.js'
 import type { Product } from '../../products/types/product.types.js'
 import { replyUsesOnlyToolFacts, sanitizeAgentSpoken } from '../agent/agent-guard.js'
 import { buildInboxAgentSystemPrompt } from '../agent/inbox-agent-prompt.js'
-import { cleanSearchQuery } from '../agent/inbox-agent-tools.js'
+import { cleanSearchQuery, matchShopDepartment } from '../agent/inbox-agent-tools.js'
 import { runInboxAgent } from '../agent/run-inbox-agent.js'
+import { scoreProduct } from '../services/catalog-search.service.js'
 
 let failed = 0
 
@@ -53,6 +54,14 @@ function catalogMatch(id: number, name: string, price: number): CatalogMatch {
 
 const checkShirt = catalogMatch(9, 'Check Shirt', 499)
 const linenShirt = catalogMatch(8, 'Linen Shirt', 566)
+const trousers = {
+  ...catalogMatch(19, 'Men Loose Fit Brown Lycra Blend Trousers', 499),
+  categoryName: 'Pants',
+}
+const mixer = {
+  ...catalogMatch(31, 'Kitchen Mixer', 1299),
+  categoryName: 'Mixers',
+}
 
 function checkOrder(): OrderWithDetails {
   return {
@@ -276,6 +285,103 @@ async function main(): Promise<void> {
     assert.doesNotMatch(result?.reply.primaryText ?? '', /\[here\]\(/)
   })
 
+  await test('pants query uses this shop Pants department and shows Trousers', async () => {
+    assert.equal(matchShopDepartment('pants', ['Pants', 'Shirt']), 'Pants')
+    let categoryName: string | null | undefined
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'Pants vehnam',
+      recentMessages: [],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Pants', 'Shirt'],
+      deps: {
+        searchCatalog: async (_storeId, _slug, _currency, filters) => {
+          categoryName = typeof filters === 'string' ? null : filters.categoryName
+          return [trousers, linenShirt]
+        },
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        const found = (await runTool({
+          name: 'search_products',
+          args: { query: 'pants' },
+        })) as { products: Array<{ name: string }> }
+        assert.ok(found.products.some((row) => /trousers/i.test(row.name)))
+        await runTool({ name: 'show_product', args: { productId: 19 } })
+        return 'Yes sir, ithu nokku. Pant und.'
+      }) as Completer,
+    })
+    assert.equal(categoryName, 'Pants')
+    assert.match(result?.reply.primaryMatch?.product.name ?? '', /Trousers/i)
+  })
+
+  await test('mixie matches this shop Mixer name stem, not clothing', () => {
+    assert.ok(scoreProduct({ name: 'Kitchen Mixer', description: null }, 'mixie') >= 40)
+    assert.equal(scoreProduct({ name: 'Linen Shirt', description: null }, 'mixie'), 0)
+  })
+
+  await test('empty search returns shop names and does not invent a website error', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'oru banyan undo',
+      recentMessages: [],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Mixers'],
+      deps: {
+        searchCatalog: async () => [],
+        getStoreCatalogSummary: async () => ({
+          productNames: ['Kitchen Mixer'],
+          categoryNames: ['Mixers'],
+        }),
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        const found = (await runTool({
+          name: 'search_products',
+          args: { query: 'banyan' },
+        })) as { products: unknown[]; departments: string[]; closeNames: string[] }
+        assert.equal(found.products.length, 0)
+        assert.ok(found.departments.includes('Mixers'))
+        assert.ok(found.closeNames.includes('Kitchen Mixer'))
+        return 'Banyan ee shopil illa sir. Mixers aanu ullath.'
+      }) as Completer,
+    })
+    assert.match(result?.reply.primaryText ?? '', /Mixers/)
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /website|helpline|error/i)
+  })
+
+  await test('product complaint does not look up orders', async () => {
+    const called: string[] = []
+    await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'Currently ith evidunn vann ippo alle illann vanne',
+      recentMessages: [
+        {
+          role: 'store',
+          text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/men-loose-fit-brown-lycra-blend-trousers-19`,
+        },
+      ],
+      customerPhone: '919999999999',
+      conversationId: 11,
+      shopSells: ['Pants'],
+      deps: {
+        searchCatalog: async () => [trousers],
+        collectOrders: async () => [checkOrder()],
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        called.push('search_products')
+        await runTool({ name: 'search_products', args: { query: 'pants' } })
+        await runTool({ name: 'show_product', args: { productId: 19 } })
+        return 'Yes sir, pant ippo und. Ithu nokku.'
+      }) as Completer,
+    })
+    assert.ok(called.includes('search_products'))
+    assert.equal(called.includes('get_my_orders'), false)
+  })
+
   await test('salesman prompt uses this shop and refuses weather or code help', () => {
     const prompt = buildInboxAgentSystemPrompt({
       storeName: 'Shrox',
@@ -296,6 +402,9 @@ async function main(): Promise<void> {
     assert.match(prompt, /How can I assist you/)
     assert.match(prompt, /other colour/)
     assert.match(prompt, /No markdown, no \[here\]\(url\)/)
+    assert.match(prompt, /closeNames/)
+    assert.match(prompt, /website is wrong/)
+    assert.match(prompt, /already placed/)
   })
 
   await test('cancel calls connect_helpline', async () => {

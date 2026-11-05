@@ -127,6 +127,7 @@ export async function runInboxAgent(input: {
     channel: input.channel,
     customerPhone: input.customerPhone,
     conversationId: input.conversationId,
+    shopSells: input.shopSells,
     deps: input.deps,
   })
 

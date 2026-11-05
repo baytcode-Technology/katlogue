@@ -21,9 +21,11 @@ import {
   formatOrderFactCard,
   selectOrdersForScope,
 } from '../services/build-order-reply.service.js'
-import type {
-  OrderScope,
-  ParsedCustomerIntent,
+import {
+  extractOrderNumber,
+  extractOrderNumberHint,
+  type OrderScope,
+  type ParsedCustomerIntent,
 } from '../services/parse-customer-intent.service.js'
 import type { LlmToolDefinition } from '../../../shared/llm/types.js'
 
@@ -31,6 +33,7 @@ export type AgentTurnState = {
   shown: CatalogMatch | null
   also: CatalogMatch[]
   found: CatalogMatch[]
+  lastQuery: string
   facts: string[]
   helpline: boolean
   lookedUpOrders: boolean
@@ -47,7 +50,7 @@ export const INBOX_AGENT_TOOLS: LlmToolDefinition[] = [
   {
     name: 'search_products',
     description:
-      'Search THIS shop catalog. Pass identifying words (style, fabric, brand, model, type). Keep "check shirt". Never put colour, color, other, or vere in the query. For "other colour shirts" after a shirt card, query is shirt.',
+      'Search THIS shop catalog. Pass identifying words (style, fabric, brand, model, type). Keep "check shirt". Never put colour, color, other, or vere in the query. Do not search again for discount, quantity, book, or other colour/size of the last card.',
     parameters: {
       type: 'object',
       properties: {
@@ -86,7 +89,7 @@ export const INBOX_AGENT_TOOLS: LlmToolDefinition[] = [
   {
     name: 'get_my_orders',
     description:
-      'Look up orders for the WhatsApp number on this chat only. Use only if they asked about an order they already placed. Never use it for a product complaint or a catalog search.',
+      'Look up orders for the WhatsApp number on this chat only. Use only if they asked about an order they already placed (order number, tracking, where is my order). Do not use for "if I order today when will it arrive", booking, or a discount.',
     parameters: {
       type: 'object',
       properties: {
@@ -188,6 +191,101 @@ export function cleanSearchQuery(query: string): string {
   return kept.length > 0 ? kept.join(' ') : raw
 }
 
+const FOLLOW_UP_TOKENS = new Set([
+  'piece',
+  'pieces',
+  'price',
+  'discount',
+  'offer',
+  'offers',
+  'book',
+  'booking',
+  'order',
+  'link',
+  'deliver',
+  'delivery',
+  'when',
+  'today',
+  'combo',
+  'cheap',
+  'cheaper',
+  'quantity',
+  'qty',
+  'pay',
+  'checkout',
+  'confirm',
+  'how',
+  'engan',
+  'engana',
+  'korayuvo',
+  'kurayuvo',
+  'orumich',
+  'available',
+  'aahna',
+  'aahn',
+  'cheytha',
+  'cheyyamo',
+  'cheyyum',
+  'eppoyathekk',
+  'eppoy',
+  'eppol',
+  'aavum',
+  'avum',
+  'vendath',
+  'veenda',
+])
+
+function identityTokens(text: string, shopSells: string[]): string[] {
+  return cleanSearchQuery(text)
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(
+      (token) =>
+        token.length > 2 &&
+        !SEARCH_QUERY_FILLER.has(token) &&
+        !FOLLOW_UP_TOKENS.has(token) &&
+        !matchShopDepartment(token, shopSells)
+    )
+}
+
+/** Same product until they name a new type or a new identity word. */
+export function stayOnLastProduct(
+  query: string,
+  lastTitle: string | null,
+  shopSells: string[]
+): boolean {
+  if (!lastTitle?.trim()) return false
+  const cleaned = cleanSearchQuery(query)
+  const qDept = matchShopDepartment(cleaned, shopSells)
+  const lastDept = matchShopDepartment(lastTitle, shopSells)
+  if (qDept && lastDept && qDept.toLowerCase() !== lastDept.toLowerCase()) return false
+
+  const lastId = identityTokens(lastTitle, shopSells)
+  const qId = identityTokens(cleaned, shopSells)
+  if (lastId.length > 0 && qId.some((token) => lastId.includes(token))) return true
+
+  const qTokens = cleaned
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(
+      (token) =>
+        token.length > 2 && !SEARCH_QUERY_FILLER.has(token) && !FOLLOW_UP_TOKENS.has(token)
+    )
+  if (qTokens.length === 0) return true
+  if (qDept && lastDept && qDept.toLowerCase() === lastDept.toLowerCase() && qId.length === 0) {
+    return false
+  }
+  return qTokens.every((token) => lastTitle.toLowerCase().includes(token))
+}
+
+export function looksLikePlacedOrderAsk(text: string): boolean {
+  if (extractOrderNumber(text) || extractOrderNumberHint(text)) return true
+  if (/\b(if i order|njan order|book cheytha)\b/i.test(text)) return false
+  return /\b(my order|order status|tracking|where is my.{0,40}\border|ente order|order evide)\b/i.test(
+    text
+  )
+}
+
 function argString(args: Record<string, unknown>, key: string): string {
   const value = args[key]
   return typeof value === 'string' ? value.trim() : ''
@@ -262,6 +360,8 @@ export function createInboxAgentTools(input: {
   customerPhone: string | null
   conversationId: number | null
   shopSells?: string[]
+  lastShownTitle?: string | null
+  customerText?: string
   deps?: InboxAgentToolDeps
 }) {
   const search = input.deps?.searchCatalog ?? searchCatalog
@@ -269,23 +369,46 @@ export function createInboxAgentTools(input: {
   const orders = input.deps?.collectOrders ?? collectOrders
   const summaryFn = input.deps?.getStoreCatalogSummary ?? getStoreCatalogSummary
   const shopSells = input.shopSells ?? []
+  const lastShownTitle = input.lastShownTitle?.trim() ?? ''
+  const customerText = input.customerText ?? ''
   const cache = new Map<string, CatalogMatch>()
   const state: AgentTurnState = {
     shown: null,
     also: [],
     found: [],
+    lastQuery: '',
     facts: [],
     helpline: false,
     lookedUpOrders: false,
   }
 
-  function markShown(match: CatalogMatch): void {
-    state.shown = match
-    state.also = [...cache.values()].filter(
-      (row, index, all) =>
-        row.product.id !== match.product.id &&
-        all.findIndex((item) => item.product.id === row.product.id) === index
+  function stayingOnLast(): boolean {
+    const last = lastShownTitle || null
+    return (
+      stayOnLastProduct(customerText, last, shopSells) ||
+      stayOnLastProduct(state.lastQuery, last, shopSells)
     )
+  }
+
+  function findLastShown(): CatalogMatch | null {
+    if (!lastShownTitle) return null
+    const want = lastShownTitle.toLowerCase()
+    return (
+      [...cache.values()].find((row) => row.product.name.toLowerCase() === want) ??
+      state.found.find((row) => row.product.name.toLowerCase() === want) ??
+      null
+    )
+  }
+
+  function markShown(match: CatalogMatch, stay = false): void {
+    state.shown = match
+    state.also = stay
+      ? []
+      : [...cache.values()].filter(
+          (row, index, all) =>
+            row.product.id !== match.product.id &&
+            all.findIndex((item) => item.product.id === row.product.id) === index
+        )
     state.facts.push(`${match.product.name} ${formatMoney(match.price, input.store.currency)} ${match.url}`)
   }
 
@@ -302,7 +425,15 @@ export function createInboxAgentTools(input: {
 
   async function runTool(name: string, args: Record<string, unknown>): Promise<unknown> {
     if (name === 'search_products') {
-      const query = cleanSearchQuery(argString(args, 'query'))
+      let query = cleanSearchQuery(argString(args, 'query'))
+      if (
+        lastShownTitle &&
+        (stayOnLastProduct(customerText, lastShownTitle, shopSells) ||
+          stayOnLastProduct(query, lastShownTitle, shopSells))
+      ) {
+        query = lastShownTitle
+      }
+      state.lastQuery = query
       const fromModel = argString(args, 'category')
       const categoryName =
         matchShopDepartment(fromModel, shopSells) ??
@@ -368,11 +499,20 @@ export function createInboxAgentTools(input: {
           ? cache.get(`${productId}:${variantId ?? 0}`) ?? cache.get(`${productId}:0`)
           : null) ?? null
       if (!match) return { error: 'Unknown product. Search first and use a returned productId.' }
-      markShown(match)
-      return { shown: match.product.name, url: match.url }
+      const stay = stayingOnLast()
+      const keep = stay ? findLastShown() : null
+      const shown = keep ?? match
+      markShown(shown, stay && shown.product.name.toLowerCase() === lastShownTitle.toLowerCase())
+      return { shown: shown.product.name, url: shown.url }
     }
 
     if (name === 'get_my_orders') {
+      if (!looksLikePlacedOrderAsk(customerText)) {
+        const note =
+          'Not an existing-order question. Use get_shop_info for delivery before they pay.'
+        state.facts.push(note)
+        return { orders: [], note }
+      }
       const phone = input.customerPhone?.trim()
       if (!phone) {
         const note = 'Order status can only be checked on WhatsApp from the number used at checkout.'
@@ -425,12 +565,23 @@ export function createInboxAgentTools(input: {
     return { error: `Unknown tool ${name}` }
   }
 
-  function showBestSearchMatch(lastShownTitle?: string | null): void {
+  function showBestSearchMatch(): void {
     if (state.shown || state.found.length === 0) return
-    const last = lastShownTitle?.trim().toLowerCase() ?? ''
+    const last = lastShownTitle.toLowerCase()
+    const stay = stayingOnLast()
+    const same = last
+      ? state.found.find((row) => row.product.name.toLowerCase() === last) ?? null
+      : null
+    if (stay && same) {
+      markShown(same, true)
+      return
+    }
+    if (stay && last) return
     const pick =
-      state.found.find((row) => row.product.name.toLowerCase() !== last) ?? state.found[0]
-    markShown(pick)
+      (!stay && last
+        ? state.found.find((row) => row.product.name.toLowerCase() !== last)
+        : null) ?? state.found[0]
+    markShown(pick, false)
   }
 
   return { state, runTool, showBestSearchMatch }

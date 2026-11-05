@@ -10,6 +10,7 @@ import {
   formatConversationHistory,
   type InboxAiChannel,
 } from './conversation-history.service.js'
+import { stayOnLastProduct } from '../agent/inbox-agent-tools.js'
 import { inboxAgentEnabled, runInboxAgent } from '../agent/run-inbox-agent.js'
 import {
   parseCustomerIntent,
@@ -133,6 +134,14 @@ export async function composeInboxAiReply(
       : openOffer
         ? { title: openOffer.title, url: openOffer.url }
         : extractLastShownProduct(recentMessages)
+  if (
+    lastShownProduct &&
+    stayOnLastProduct(text, lastShownProduct.title, shopSells) &&
+    (intent.intent === 'product_search' || intent.intent === 'buy_intent')
+  ) {
+    intent.searchQuery = lastShownProduct.title
+    intent.requestedItem = lastShownProduct.title
+  }
 
   const staffHandoff = await resolveStaffHandoff({
     store: input.store,

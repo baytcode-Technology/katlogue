@@ -20,11 +20,12 @@ import type {
   ParsedCustomerIntent,
 } from '../services/parse-customer-intent.service.js'
 import type { StaffHandoffAction } from '../services/staff-handoff.service.js'
-import { isAgentReplyHonest, sanitizeAgentSpoken } from './agent-guard.js'
+import { isAgentReplyHonest, isHelpdeskEnglish, sanitizeAgentSpoken } from './agent-guard.js'
 import { buildInboxAgentSystemPrompt } from './inbox-agent-prompt.js'
 import {
   createInboxAgentTools,
   INBOX_AGENT_TOOLS,
+  stayOnLastProduct,
   type InboxAgentToolDeps,
 } from './inbox-agent-tools.js'
 
@@ -114,7 +115,7 @@ export async function runInboxAgent(input: {
   const userMessage = [
     history ? `Recent chat:\n${history}` : '',
     lastShown
-      ? `Last product card we sent: ${lastShown.title}. Other colour/size means another item of this type, not a new search for the word colour.`
+      ? `Last product card we sent: ${lastShown.title}. Stay on this product until they name a new type. Other colour/size = this product's options. Discount, quantity, book, and "if I order today" stay on this product.`
       : '',
     languageLine,
     `Latest customer message:\n${input.customerText}`,
@@ -128,6 +129,8 @@ export async function runInboxAgent(input: {
     customerPhone: input.customerPhone,
     conversationId: input.conversationId,
     shopSells: input.shopSells,
+    lastShownTitle: lastShown?.title ?? null,
+    customerText: input.customerText,
     deps: input.deps,
   })
 
@@ -151,17 +154,46 @@ export async function runInboxAgent(input: {
     )
   ).trim()
 
-  tools.showBestSearchMatch(lastShown?.title)
+  tools.showBestSearchMatch()
+
+  const stay = stayOnLastProduct(input.customerText, lastShown?.title ?? null, input.shopSells)
+  if (!tools.state.shown && stay && lastShown) {
+    await tools.runTool('search_products', { query: lastShown.title })
+    tools.showBestSearchMatch()
+  }
+
+  const cannedProduct =
+    detected.language === 'Malayalam' && detected.scriptStyle === 'malayalam_script'
+      ? 'ഇത് നോക്കൂ സാർ.'
+      : detected.language === 'Malayalam'
+        ? 'Yes sir, ithu nokku.'
+        : 'Yes sir, here it is.'
+  const cannedGreeting =
+    detected.language === 'Malayalam' && detected.scriptStyle === 'malayalam_script'
+      ? `സ്വാഗതം സാർ. Catalog ഇവിടെ: ${homeUrl}`
+      : detected.language === 'Malayalam'
+        ? `Hi sir, swagatham. Catalog ithu: ${homeUrl}`
+        : `Hi, welcome. Browse our catalog.\n${homeUrl}`
+  const looksLikeGreeting = /^(hi|hello|hey|hai|namaste)\b/i.test(input.customerText.trim())
 
   let spoken = sanitizeAgentSpoken(rawSpoken, { stripUrls: Boolean(tools.state.shown) })
 
-  if (!spoken && tools.state.shown) {
-    spoken =
-      detected.language === 'Malayalam' && detected.scriptStyle === 'malayalam_script'
-        ? 'ഇത് നോക്കൂ സാർ.'
-        : detected.language === 'Malayalam'
-          ? 'Yes sir, ithu nokku.'
-          : 'Yes sir, here it is.'
+  if (!spoken && tools.state.shown) spoken = cannedProduct
+  const shownName = tools.state.shown?.product.name.toLowerCase() ?? ''
+  if (
+    stay &&
+    tools.state.shown &&
+    tools.state.found.some((row) => {
+      const name = row.product.name.toLowerCase()
+      return name !== shownName && spoken.toLowerCase().includes(name)
+    })
+  ) {
+    spoken = cannedProduct
+  }
+  if (looksLikeGreeting && !tools.state.shown) {
+    if (!spoken || isHelpdeskEnglish(spoken) || !spoken.includes(homeUrl)) {
+      spoken = cannedGreeting
+    }
   }
 
   const allowed = [userMessage, homeUrl, ...tools.state.facts].join('\n')
@@ -175,8 +207,14 @@ export async function runInboxAgent(input: {
       lookedUpOrders: tools.state.lookedUpOrders,
     })
   ) {
-    console.info('[inbox-ai-agent] reply rejected by honesty guard')
-    return null
+    console.info('[inbox-ai-agent] reply rejected by honesty guard; keeping tools')
+    if (tools.state.shown) {
+      spoken = cannedProduct
+    } else if (looksLikeGreeting) {
+      spoken = cannedGreeting
+    } else {
+      return null
+    }
   }
 
   const shown = tools.state.shown

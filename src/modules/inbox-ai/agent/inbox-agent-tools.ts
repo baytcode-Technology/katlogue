@@ -12,9 +12,11 @@ import {
   filterMatchesByScore,
   findBySku,
   getStoreCatalogSummary,
+  matchWithVariant,
   searchCatalog,
   type CatalogMatch,
   type StoreCatalogSummary,
+  type VariantBoard,
 } from '../services/catalog-search.service.js'
 import {
   collectOrders,
@@ -57,6 +59,10 @@ export const INBOX_AGENT_TOOLS: LlmToolDefinition[] = [
         query: { type: 'string', description: 'Product words to search, e.g. check shirt' },
         color: { type: 'string', description: 'Colour if they named one, else omit' },
         size: { type: 'string', description: 'Size if they named one, else omit' },
+        optionValue: {
+          type: 'string',
+          description: 'Any variant option they named (RAM, colour, storage), else omit',
+        },
         category: { type: 'string', description: 'Shop department only if they named one' },
       },
       required: ['query'],
@@ -155,6 +161,14 @@ const SEARCH_QUERY_FILLER = new Set([
   'ella',
 ])
 
+export function matchAllShopDepartments(query: string, shopSells: string[]): string[] {
+  const hits: string[] = []
+  for (const dept of shopSells) {
+    if (matchShopDepartment(query, [dept]) && !hits.includes(dept)) hits.push(dept)
+  }
+  return hits
+}
+
 export function matchShopDepartment(query: string, shopSells: string[]): string | null {
   const raw = query.trim().toLowerCase().replace(/-/g, ' ').replace(/\s+/g, ' ')
   if (!raw || shopSells.length === 0) return null
@@ -164,7 +178,7 @@ export function matchShopDepartment(query: string, shopSells: string[]): string 
   const exact = shopSells.find((dept) => normalize(dept) === raw)
   if (exact) return exact
 
-  const tokens = raw.split(' ').filter((token) => token.length > 1)
+  const tokens = raw.split(' ').filter((token) => token.length > 0)
   const hits: { dept: string; weight: number }[] = []
   for (const dept of shopSells) {
     const deptTokens = normalize(dept).split(' ').filter(Boolean)
@@ -237,7 +251,11 @@ const FOLLOW_UP_TOKENS = new Set([
   'veenda',
   'ith',
   'ithu',
+  'ithinte',
   'mathi',
+  'undo',
+  'undu',
+  'onda',
   'size',
   'sizes',
   'alle',
@@ -257,7 +275,7 @@ const FOLLOW_UP_TOKENS = new Set([
 ])
 
 export function wantsOtherModels(text: string): boolean {
-  return /\b((okke|ellaa|ella)\s+(ayack|ayakku|ayakkavo|ayakkuvo)|all models|every model|all that have|send (all|every))\b/i.test(
+  return /\b((okke|ellaa|ella)\s+(ayack|ayakku|ayakkavo|ayakkuvo|share)|model(?:s)?\s+ella|ella\s+share|enthokke.{0,40}(share|details)|details\s+share|all models|every model|all that have|send (all|every))\b/i.test(
     text
   )
 }
@@ -268,11 +286,60 @@ export function wantsAlsoList(
   shopSells: string[]
 ): boolean {
   if (wantsOtherModels(text)) return true
+  if (matchAllShopDepartments(text, shopSells).length >= 2) return true
   if (!lastTitle?.trim()) return false
   if (stayOnLastProduct(text, lastTitle, shopSells)) return false
   const qDept = matchShopDepartment(text, shopSells)
   const lastDept = matchShopDepartment(lastTitle, shopSells)
   return Boolean(qDept && lastDept && qDept.toLowerCase() === lastDept.toLowerCase())
+}
+
+export function askedOptionKey(text: string, board: VariantBoard | null | undefined): string | null {
+  if (!board?.optionKeys.length) return null
+  const raw = text.toLowerCase()
+  for (const key of board.optionKeys) {
+    if (key && raw.includes(key.toLowerCase())) return key
+  }
+  if (/\b(colour|color|colours|colors|niram)\b/i.test(text)) {
+    return board.optionKeys.find((key) => /colou?r/i.test(key)) ?? null
+  }
+  if (/\bsize\b/i.test(text)) {
+    return board.optionKeys.find((key) => /size/i.test(key)) ?? null
+  }
+  return null
+}
+
+export function extractAskedOptionValue(text: string, board: VariantBoard | null | undefined): string | null {
+  if (!board) return null
+  const raw = text.toLowerCase()
+  for (const values of Object.values(board.optionValues)) {
+    const hit = values.find((value) => {
+      const token = value.toLowerCase()
+      return token.length > 1 && raw.includes(token)
+    })
+    if (hit) return hit
+  }
+  return extractAskedSize(text)
+}
+
+export function optionBoardLine(
+  key: string,
+  values: string[],
+  language: string,
+  scriptStyle?: string
+): string {
+  const list = values.join(', ')
+  if (language === 'Malayalam' && scriptStyle === 'malayalam_script') {
+    return `${key}: ${list}`
+  }
+  if (language === 'Malayalam') {
+    return `Yes sir, ${key} ${list} und.`
+  }
+  return `Yes, this one has ${key}: ${list}.`
+}
+
+export function deniesOtherOptions(reply: string): boolean {
+  return /\b(mathram|only this|only one|vere colour illa|no other)\b/i.test(reply)
 }
 
 export function extractAskedSize(text: string): string | null {
@@ -328,6 +395,12 @@ export function stayOnLastProduct(
   if (qDept && lastDept && qDept.toLowerCase() === lastDept.toLowerCase() && qId.length === 0) {
     return false
   }
+  if (
+    /\b(ithinte|vere|other|another)\b/i.test(query) &&
+    !(qDept && lastDept && qDept.toLowerCase() !== lastDept.toLowerCase())
+  ) {
+    return qId.every((token) => lastId.includes(token) || token.length <= 4)
+  }
   return qTokens.every((token) => lastTitle.toLowerCase().includes(token))
 }
 
@@ -361,12 +434,16 @@ function publicProduct(
   conversationId: number | null
 ) {
   const url = applyChatSrcToUrl(match.url, channel, conversationId)
+  const board = match.variantBoard
   return {
     productId: match.product.id,
     variantId: match.variant?.id ?? null,
     name: match.product.name,
     variantName: match.variant?.name ?? null,
     options: match.variant?.options ?? null,
+    optionKeys: board?.optionKeys ?? [],
+    optionValues: board?.optionValues ?? {},
+    variants: board?.variants ?? [],
     price: formatMoney(match.price, currency),
     inStock: match.inStock !== false,
     url,
@@ -467,11 +544,27 @@ export function createInboxAgentTools(input: {
   }
 
   function pickStayMatch(fallback: CatalogMatch | null): CatalogMatch | null {
-    const size = extractAskedSize(customerText)
     const same = lastProductRows()
+    const board = same[0]?.variantBoard ?? fallback?.variantBoard
+    const asked = extractAskedOptionValue(customerText, board)
+    if (asked) {
+      const hit = same.find((row) => variantMatchesSize(row, asked))
+      if (hit) return hit
+    }
+    const size = extractAskedSize(customerText)
     if (size) {
       const sized = same.find((row) => variantMatchesSize(row, size))
       if (sized) return sized
+    }
+    const key = askedOptionKey(customerText, board)
+    const current = fallback ?? same[0] ?? null
+    if (key && current) {
+      const currentVal = String(current.variant?.options?.[key] ?? '').toLowerCase()
+      const other = same.find((row) => {
+        const value = String(row.variant?.options?.[key] ?? '').toLowerCase()
+        return value && value !== currentVal && row.inStock !== false
+      })
+      if (other) return other
     }
     return same[0] ?? fallback
   }
@@ -486,6 +579,7 @@ export function createInboxAgentTools(input: {
             all.findIndex((item) => item.product.id === row.product.id) === index
         )
     state.facts.push(`${match.product.name} ${formatMoney(match.price, input.store.currency)} ${match.url}`)
+    if (match.variantBoard) state.facts.push(JSON.stringify(match.variantBoard))
   }
 
   function remember(matches: CatalogMatch[]): void {
@@ -496,6 +590,12 @@ export function createInboxAgentTools(input: {
       }
       cache.set(matchKey(linked), linked)
       cache.set(`${linked.product.id}:0`, linked)
+      for (const variant of match.activeVariants ?? []) {
+        if (variant.id === match.variant?.id) continue
+        const sibling = matchWithVariant(input.store.slug, linked, variant)
+        sibling.url = applyChatSrcToUrl(sibling.url, input.channel, input.conversationId)
+        cache.set(matchKey(sibling), sibling)
+      }
     }
   }
 
@@ -509,20 +609,35 @@ export function createInboxAgentTools(input: {
       if (stay && lastShownTitle) query = lastShownTitle
       state.lastQuery = query
       const fromModel = argString(args, 'category')
+      const namedDepts = matchAllShopDepartments(customerText, shopSells)
       const categoryName =
         matchShopDepartment(fromModel, shopSells) ??
         matchShopDepartment(query, shopSells) ??
         (fromModel || null)
       const size = argString(args, 'size') || extractAskedSize(customerText) || null
       const color = argString(args, 'color') || null
-      let matches = filterMatchesByScore(
-        await search(input.store.id, input.store.slug, input.store.currency, {
-          query,
+      const optionValue = argString(args, 'optionValue') || null
+      const searchOne = (q: string, category: string | null) =>
+        search(input.store.id, input.store.slug, input.store.currency, {
+          query: q,
           color,
           size,
-          categoryName,
+          optionValue,
+          categoryName: category,
         })
-      )
+      let matches: CatalogMatch[]
+      if (!stay && namedDepts.length > 1) {
+        const bags = await Promise.all(namedDepts.map((dept) => searchOne(dept, dept)))
+        const merged: CatalogMatch[] = []
+        for (const bag of bags) {
+          for (const row of bag) {
+            if (!merged.some((item) => item.product.id === row.product.id)) merged.push(row)
+          }
+        }
+        matches = filterMatchesByScore(merged)
+      } else {
+        matches = filterMatchesByScore(await searchOne(query, categoryName))
+      }
       if (stay && lastShownTitle) {
         const same = matches.filter(
           (row) => row.product.name.toLowerCase() === lastShownTitle.toLowerCase()

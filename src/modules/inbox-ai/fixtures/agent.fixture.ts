@@ -14,12 +14,14 @@ import { buildInboxAgentSystemPrompt } from '../agent/inbox-agent-prompt.js'
 import {
   cleanSearchQuery,
   looksLikePlacedOrderAsk,
+  matchAllShopDepartments,
   matchShopDepartment,
   stayOnLastProduct,
+  wantsAlsoList,
   wantsOtherModels,
 } from '../agent/inbox-agent-tools.js'
 import { runInboxAgent } from '../agent/run-inbox-agent.js'
-import { scoreProduct } from '../services/catalog-search.service.js'
+import { buildVariantBoard, scoreProduct } from '../services/catalog-search.service.js'
 import type { ProductVariant } from '../../products/types/product-variant.types.js'
 
 let failed = 0
@@ -115,6 +117,38 @@ const lycraCard = {
 const lycraAlso = {
   role: 'store' as const,
   text: `Ithupole vereyum ind:\n\n• Relaxed Men White Cotton Blend Trousers — ₹469\n  https://shrox.aishopy.io/product/relaxed-men-white-cotton-blend-trousers-20`,
+}
+
+function productWithVariants(base: CatalogMatch, variants: CatalogMatch[]): CatalogMatch {
+  const active = variants
+    .map((row) => row.variant)
+    .filter((row): row is ProductVariant => row != null)
+  return {
+    ...base,
+    activeVariants: active,
+    variantBoard: buildVariantBoard(base.product, active),
+  }
+}
+
+const metroBase = {
+  ...catalogMatch(18, 'METRONAUT Men Regular Fit Striped Spread Collar Casual Shirt', 399),
+  categoryName: 'Shirt',
+}
+const metroGreen = variantOf(metroBase, 82, 'S / Light Green', { Colour: 'Light Green', Size: 'S' })
+const metroBlue = variantOf(metroBase, 83, 'S / Sky Blue', { Colour: 'Sky Blue', Size: 'S' })
+const metroYellow = variantOf(metroBase, 84, 'S / Yellow', { Colour: 'Yellow', Size: 'S' })
+const metroShirt = productWithVariants(metroGreen, [metroGreen, metroBlue, metroYellow])
+
+const phoneBase = {
+  ...catalogMatch(40, 'Shop Phone X', 12999),
+  categoryName: 'Phones',
+}
+const phone8 = variantOf(phoneBase, 401, '8GB', { RAM: '8GB' })
+const phone12 = variantOf(phoneBase, 402, '12GB', { RAM: '12GB' })
+const phoneX = productWithVariants(phone8, [phone8, phone12])
+const tshirt = {
+  ...catalogMatch(4, 'Printed T Shirt', 299),
+  categoryName: 'T Shirt',
 }
 
 function checkOrder(): OrderWithDetails {
@@ -334,6 +368,16 @@ async function main(): Promise<void> {
       false
     )
     assert.equal(wantsOtherModels('30 size available aayittolla model okke ayack'), true)
+    assert.equal(wantsOtherModels('Shirtil olla model ella share cheyy with details'), true)
+    assert.equal(wantsOtherModels('Mensinye enthokke item und details share cheyy'), true)
+    assert.deepEqual(matchAllShopDepartments('Yes shirt and t shirt model', ['Shirt', 'T Shirt', 'Pants']), [
+      'Shirt',
+      'T Shirt',
+    ])
+    assert.equal(
+      wantsAlsoList('Yes shirt and t shirt model', null, ['Shirt', 'T Shirt', 'Pants']),
+      true
+    )
     assert.equal(looksLikePlacedOrderAsk('book cheytha eppoyathekk deliver aavum'), false)
     assert.equal(looksLikePlacedOrderAsk('where is my order JAN26-3'), true)
   })
@@ -480,6 +524,116 @@ async function main(): Promise<void> {
     })
     assert.doesNotMatch(result?.reply.primaryText ?? '', /available in only this colour/i)
     assert.match(result?.reply.primaryText ?? '', /ithu nokku|illa|und/i)
+  })
+
+  await test('other colour of this listing uses the variant board', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'Ithinte vere colour onda',
+      recentMessages: [
+        {
+          role: 'store',
+          text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/metronaut-men-regular-fit-striped-spread-collar-casual-shirt-18`,
+        },
+      ],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Shirt', 'T Shirt'],
+      deps: { searchCatalog: async () => [metroShirt] },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        const found = (await runTool({
+          name: 'search_products',
+          args: { query: 'colour' },
+        })) as { products: Array<{ optionValues?: Record<string, string[]> }> }
+        assert.ok(found.products[0]?.optionValues?.Colour?.includes('Sky Blue'))
+        await runTool({ name: 'show_product', args: { productId: 18 } })
+        return 'Ithinte vere colour illa sir, Light Green mathram und.'
+      }) as Completer,
+    })
+    assert.match(result?.reply.primaryMatch?.product.name ?? '', /METRONAUT/i)
+    assert.match(result?.reply.primaryText ?? '', /Sky Blue/i)
+    assert.match(result?.reply.primaryText ?? '', /Yellow/i)
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /mathram/)
+  })
+
+  await test('other RAM of this listing uses owner option keys', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'vere RAM undo',
+      recentMessages: [
+        {
+          role: 'store',
+          text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/shop-phone-x-40`,
+        },
+      ],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Phones'],
+      deps: { searchCatalog: async () => [phoneX] },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'phone' } })
+        await runTool({ name: 'show_product', args: { productId: 40 } })
+        return '8GB mathram und sir.'
+      }) as Completer,
+    })
+    assert.equal(result?.reply.primaryMatch?.product.name, 'Shop Phone X')
+    assert.match(result?.reply.primaryText ?? '', /8GB/)
+    assert.match(result?.reply.primaryText ?? '', /12GB/)
+  })
+
+  await test('share all models in a department sends extras', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'Shirtil olla model ella share cheyy with details',
+      recentMessages: [
+        {
+          role: 'store',
+          text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/check-shirt-9`,
+        },
+      ],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Shirt', 'T Shirt'],
+      deps: {
+        searchCatalog: async () => [checkShirt, linenShirt, metroShirt],
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'shirt' } })
+        await runTool({ name: 'show_product', args: { productId: 18 } })
+        return 'Shirt models ithu nokku sir.'
+      }) as Completer,
+    })
+    assert.ok(result?.reply.primaryMatch)
+    assert.match(result?.reply.followUpText ?? '', /Check Shirt|Linen Shirt|ithupole|We also have/i)
+  })
+
+  await test('two named departments show extras from both types', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'Yes shirt and t shirt model',
+      recentMessages: [],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Shirt', 'T Shirt', 'Pants'],
+      deps: {
+        searchCatalog: async (_storeId, _slug, _currency, filters) => {
+          const category = typeof filters === 'string' ? '' : filters.categoryName
+          if (category === 'T Shirt') return [tshirt]
+          return [linenShirt, checkShirt]
+        },
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'shirt' } })
+        await runTool({ name: 'show_product', args: { productId: 8 } })
+        return 'Shirt kazhinju T-Shirt kanam.'
+      }) as Completer,
+    })
+    assert.equal(result?.reply.primaryMatch?.product.name, 'Linen Shirt')
+    assert.match(result?.reply.followUpText ?? '', /T Shirt|Printed/i)
   })
 
   await test('other colour shirts searches shirt and shows a different card', async () => {
@@ -631,7 +785,7 @@ async function main(): Promise<void> {
     assert.match(prompt, /Do not answer them/)
     assert.match(prompt, /How can I assist you/)
     assert.match(prompt, /last photo\/card is the product/)
-    assert.match(prompt, /Size\/colour of that card/)
+    assert.match(prompt, /optionValues/)
     assert.match(prompt, /No markdown, no \[here\]\(url\)/)
     assert.match(prompt, /closeNames/)
     assert.match(prompt, /website is wrong/)

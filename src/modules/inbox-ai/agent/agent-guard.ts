@@ -22,7 +22,10 @@ export function sanitizeAgentSpoken(text: string, options?: { stripUrls?: boolea
     ? ''
     : '$1'
   let next = text.replace(/\[[^\]]+\]\((https?:\/\/[^)]+)\)/gi, fromMarkdown)
-  if (options?.stripUrls) next = next.replace(/https?:\/\/\S+/gi, '')
+  if (options?.stripUrls) {
+    next = next.replace(/https?:\/\/\S+/gi, '')
+    next = next.replace(/(?:₹|rs\.?)\s*[\d,]+/gi, '')
+  }
   return next
     .replace(/\blink\s+(ithu|here)?\s*:\s*\.?\s*/gi, '')
     .replace(/[*_#`]+/g, '')

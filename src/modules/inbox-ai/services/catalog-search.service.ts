@@ -17,6 +17,17 @@ import {
 } from '../../products/utils/product-inventory.js'
 import type { ParsedCustomerIntent } from './parse-customer-intent.service.js'
 
+export type VariantBoard = {
+  optionKeys: string[]
+  optionValues: Record<string, string[]>
+  variants: Array<{
+    variantId: number
+    name: string
+    options: Record<string, unknown>
+    inStock: boolean
+  }>
+}
+
 export type CatalogMatch = {
   product: Product
   variant: ProductVariant | null
@@ -29,12 +40,15 @@ export type CatalogMatch = {
   sellableVariant?: ProductVariant | null
   /** This shop's department for the product. */
   categoryName?: string | null
+  variantBoard?: VariantBoard
+  activeVariants?: ProductVariant[]
 }
 
 export type CatalogSearchFilters = {
   query: string
   color?: string | null
   size?: string | null
+  optionValue?: string | null
   categoryName?: string | null
 }
 
@@ -334,6 +348,35 @@ function normalizeOptionValue(value: unknown): string {
   return String(value ?? '').trim().toLowerCase()
 }
 
+export function buildVariantBoard(product: Product, variants: ProductVariant[]): VariantBoard {
+  const active = variants.filter((row) => row.is_active)
+  const optionValues: Record<string, string[]> = {}
+  const rows = active.map((variant) => {
+    for (const [key, value] of Object.entries(variant.options ?? {})) {
+      const text = String(value ?? '').trim()
+      if (!text) continue
+      const bucket = optionValues[key] ?? []
+      if (!bucket.some((item) => item.toLowerCase() === text.toLowerCase())) bucket.push(text)
+      optionValues[key] = bucket
+    }
+    return {
+      variantId: variant.id,
+      name: variant.name,
+      options: variant.options ?? {},
+      inStock: isVariantSellable(product, variant),
+    }
+  })
+  return { optionKeys: Object.keys(optionValues), optionValues, variants: rows }
+}
+
+function variantHasAskedValue(variant: ProductVariant, want: string): boolean {
+  const needle = want.toLowerCase()
+  if (variant.name.toLowerCase().includes(needle)) return true
+  return Object.values(variant.options ?? {}).some((value) =>
+    normalizeOptionValue(value).includes(needle)
+  )
+}
+
 function getVariantOptions(variant: ProductVariant): { color: string | null; size: string | null } {
   const opts = variant.options ?? {}
   let color: string | null = null
@@ -407,6 +450,12 @@ function scoreVariant(
     }
   }
 
+  const asked = filters.optionValue?.trim()
+  if (asked) {
+    if (variantHasAskedValue(variant, asked)) score += 50
+    else score -= 20
+  }
+
   if (q && variant.name.toLowerCase().includes(q)) score += 15
   if (q) {
     for (const v of Object.values(variant.options ?? {})) {
@@ -460,6 +509,7 @@ export function toMatch(
   const sellableVariant = inStock
     ? null
     : variants.find((v) => v !== variant && isVariantSellable(product, v)) ?? null
+  const active = variants.filter((row) => row.is_active)
   return {
     product,
     variant,
@@ -469,6 +519,23 @@ export function toMatch(
     inStock,
     sellableVariant,
     categoryName,
+    activeVariants: active,
+    variantBoard: buildVariantBoard(product, active),
+  }
+}
+
+export function matchWithVariant(
+  storeSlug: string,
+  match: CatalogMatch,
+  variant: ProductVariant
+): CatalogMatch {
+  return {
+    ...match,
+    variant,
+    price: unitPrice(match.product, variant),
+    url: buildUrl(storeSlug, match.product, variant.id),
+    inStock: isVariantSellable(match.product, variant),
+    sellableVariant: null,
   }
 }
 

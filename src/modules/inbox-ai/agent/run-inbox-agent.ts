@@ -23,8 +23,11 @@ import type { StaffHandoffAction } from '../services/staff-handoff.service.js'
 import { isAgentReplyHonest, isHelpdeskEnglish, sanitizeAgentSpoken } from './agent-guard.js'
 import { buildInboxAgentSystemPrompt } from './inbox-agent-prompt.js'
 import {
+  askedOptionKey,
   createInboxAgentTools,
+  deniesOtherOptions,
   INBOX_AGENT_TOOLS,
+  optionBoardLine,
   stayOnLastProduct,
   wantsAlsoList,
   type InboxAgentToolDeps,
@@ -193,6 +196,12 @@ export async function runInboxAgent(input: {
     })
   ) {
     spoken = cannedProduct
+  }
+  const board = tools.state.shown?.variantBoard
+  const optionKey = askedOptionKey(input.customerText, board)
+  const optionValues = optionKey ? board?.optionValues[optionKey] ?? [] : []
+  if (stay && optionKey && optionValues.length > 1 && deniesOtherOptions(spoken)) {
+    spoken = optionBoardLine(optionKey, optionValues, detected.language, detected.scriptStyle)
   }
   if (looksLikeGreeting && !tools.state.shown) {
     if (!spoken || isHelpdeskEnglish(spoken) || !spoken.includes(homeUrl)) {

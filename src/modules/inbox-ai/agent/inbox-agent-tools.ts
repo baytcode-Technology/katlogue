@@ -11,8 +11,10 @@ import type { InboxAiChannel } from '../services/conversation-history.service.js
 import {
   filterMatchesByScore,
   findBySku,
+  getStoreCatalogSummary,
   searchCatalog,
   type CatalogMatch,
+  type StoreCatalogSummary,
 } from '../services/catalog-search.service.js'
 import {
   collectOrders,
@@ -38,6 +40,7 @@ export type InboxAgentToolDeps = {
   searchCatalog?: typeof searchCatalog
   findBySku?: typeof findBySku
   collectOrders?: typeof collectOrders
+  getStoreCatalogSummary?: typeof getStoreCatalogSummary
 }
 
 export const INBOX_AGENT_TOOLS: LlmToolDefinition[] = [
@@ -83,7 +86,7 @@ export const INBOX_AGENT_TOOLS: LlmToolDefinition[] = [
   {
     name: 'get_my_orders',
     description:
-      'Look up orders for the WhatsApp number on this chat only. Never use it for a product they have not ordered.',
+      'Look up orders for the WhatsApp number on this chat only. Use only if they asked about an order they already placed. Never use it for a product complaint or a catalog search.',
     parameters: {
       type: 'object',
       properties: {
@@ -148,6 +151,35 @@ const SEARCH_QUERY_FILLER = new Set([
   'ellaa',
   'ella',
 ])
+
+export function matchShopDepartment(query: string, shopSells: string[]): string | null {
+  const raw = query.trim().toLowerCase().replace(/-/g, ' ').replace(/\s+/g, ' ')
+  if (!raw || shopSells.length === 0) return null
+
+  const normalize = (value: string) =>
+    value.toLowerCase().replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
+  const exact = shopSells.find((dept) => normalize(dept) === raw)
+  if (exact) return exact
+
+  const tokens = raw.split(' ').filter((token) => token.length > 1)
+  const hits: { dept: string; weight: number }[] = []
+  for (const dept of shopSells) {
+    const deptTokens = normalize(dept).split(' ').filter(Boolean)
+    const tokenEq = (a: string, b: string) => a === b || a.replace(/s$/i, '') === b.replace(/s$/i, '')
+    if (deptTokens.length === 1) {
+      if (tokens.some((token) => tokenEq(token, deptTokens[0]))) {
+        hits.push({ dept, weight: deptTokens[0].length })
+      }
+      continue
+    }
+    if (deptTokens.every((part) => tokens.some((token) => tokenEq(token, part)))) {
+      hits.push({ dept, weight: deptTokens.join(' ').length + 10 })
+    }
+  }
+  if (hits.length === 0) return null
+  hits.sort((a, b) => b.weight - a.weight)
+  return hits[0].dept
+}
 
 export function cleanSearchQuery(query: string): string {
   const raw = query.trim()
@@ -229,11 +261,14 @@ export function createInboxAgentTools(input: {
   channel: InboxAiChannel
   customerPhone: string | null
   conversationId: number | null
+  shopSells?: string[]
   deps?: InboxAgentToolDeps
 }) {
   const search = input.deps?.searchCatalog ?? searchCatalog
   const skuLookup = input.deps?.findBySku ?? findBySku
   const orders = input.deps?.collectOrders ?? collectOrders
+  const summaryFn = input.deps?.getStoreCatalogSummary ?? getStoreCatalogSummary
+  const shopSells = input.shopSells ?? []
   const cache = new Map<string, CatalogMatch>()
   const state: AgentTurnState = {
     shown: null,
@@ -268,12 +303,17 @@ export function createInboxAgentTools(input: {
   async function runTool(name: string, args: Record<string, unknown>): Promise<unknown> {
     if (name === 'search_products') {
       const query = cleanSearchQuery(argString(args, 'query'))
+      const fromModel = argString(args, 'category')
+      const categoryName =
+        matchShopDepartment(fromModel, shopSells) ??
+        matchShopDepartment(query, shopSells) ??
+        (fromModel || null)
       const matches = filterMatchesByScore(
         await search(input.store.id, input.store.slug, input.store.currency, {
           query,
           color: argString(args, 'color') || null,
           size: argString(args, 'size') || null,
-          categoryName: argString(args, 'category') || null,
+          categoryName,
         })
       )
       remember(matches)
@@ -282,7 +322,25 @@ export function createInboxAgentTools(input: {
         publicProduct(match, input.store.currency, input.channel, input.conversationId)
       )
       state.facts.push(JSON.stringify(rows))
-      return { products: rows }
+      if (rows.length > 0) return { products: rows }
+
+      let summary: StoreCatalogSummary = { productNames: [], categoryNames: shopSells }
+      try {
+        summary = await summaryFn(input.store.id)
+      } catch {
+        summary = { productNames: [], categoryNames: shopSells }
+      }
+      const closeNames = [...new Set([...summary.categoryNames, ...summary.productNames])].slice(
+        0,
+        12
+      )
+      const empty = {
+        products: [] as typeof rows,
+        departments: shopSells.length > 0 ? shopSells : summary.categoryNames,
+        closeNames,
+      }
+      state.facts.push(JSON.stringify(empty))
+      return empty
     }
 
     if (name === 'get_product_by_sku') {

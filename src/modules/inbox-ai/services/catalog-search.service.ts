@@ -232,8 +232,30 @@ export function scoreProduct(
       if (name.includes(t)) score += 20
       if (desc.includes(t)) score += 5
     }
+    if (score === 0 && queryStemsProductName(q, name)) score = 40
   }
   return score + categoryAffinityScore(product, categoryName, productCategoryName)
+}
+
+/** This shop's product title, not a global synonym list. Does not treat shirt as t-shirt. */
+function queryStemsProductName(query: string, productName: string): boolean {
+  const qTokens = queryTokens(query)
+  const nNorm = productName
+    .toLowerCase()
+    .replace(/\bt\s+shirts?\b/g, 't-shirt')
+    .replace(/\btshirts?\b/g, 't-shirt')
+  const nTokens = nNorm.split(/[^a-z0-9-]+/).filter((t) => t.length > 1)
+  for (const qt of qTokens) {
+    const qs = qt.replace(/s$/i, '')
+    if (qs.length < 4) continue
+    for (const nt of nTokens) {
+      const ns = nt.replace(/s$/i, '')
+      if (ns.length < 4) continue
+      if (qs.slice(0, 4) === ns.slice(0, 4)) return true
+      if (Math.abs(qs.length - ns.length) <= 2 && qs.slice(0, 3) === ns.slice(0, 3)) return true
+    }
+  }
+  return false
 }
 
 export type StoreCatalogSummary = {

@@ -302,7 +302,19 @@ export function queryIdentityTokens(text: string, shopSells: string[]): string[]
 }
 
 export function wantsOtherModels(text: string): boolean {
-  return /\b((okke|ellaa|ella)\s+(ayack|ayakku|ayakkavo|ayakkuvo|share)|model(?:s)?\s+ella|ella\s+share|enthokke.{0,40}(share|details)|details\s+share|all models|every model|all that have|send (all|every))\b/i.test(
+  return /\b((okke|ellaa|ella)\s+(ayack|ayakku|ayakkavo|ayakkuvo|share)|model(?:s)?\s+ella|ella\s+share|enthokke.{0,40}(share|details)|details\s+share|all models|every model|all that have|send (all|every)|(vere|other|another)\s+models?)\b/i.test(
+    text
+  )
+}
+
+export function wantsCheckout(text: string): boolean {
+  return /\b(order cheyyam|order cheyam|order cheyyan|how to order|book it|i want to order)\b/i.test(
+    text
+  )
+}
+
+export function wantsDeliveryEta(text: string): boolean {
+  return /\b((eathra|ethra).{0,24}(day|days|kitt)|how many days|avum kitt|eppo kitt|delivery (days|time|take))\b/i.test(
     text
   )
 }
@@ -475,7 +487,13 @@ export function stayOnLastProduct(
 export function looksLikePlacedOrderAsk(text: string): boolean {
   if (extractOrderNumber(text) || extractOrderNumberHint(text)) return true
   if (/\b(if i order|njan order|book cheytha)\b/i.test(text)) return false
-  return /\b(my order|order status|tracking|where is my.{0,40}\border|ente order|order evide)\b/i.test(
+  const prePay =
+    wantsCheckout(text) ||
+    (wantsDeliveryEta(text) && !/\b(my|ente|last|ella|all|history|status|ship|tracking)\b/i.test(text))
+  if (prePay && !/\b(my order|ente.{0,24}order|last order|order history)\b/i.test(text)) {
+    return false
+  }
+  return /\b(my order|order status|tracking|where is my.{0,40}\border|ente.{0,24}order|order evide|last order|all (my )?orders|ella order|order (history|details)|order history|ship avumbol|status please|^status\b|my order history)\b/i.test(
     text
   )
 }
@@ -675,6 +693,9 @@ export function createInboxAgentTools(input: {
         (stayOnLastProduct(customerText, lastShownTitle, shopSells) ||
           stayOnLastProduct(query, lastShownTitle, shopSells))
       if (stay && lastShownTitle) query = lastShownTitle
+      else if (wantsOtherModels(customerText) && lastShownTitle) {
+        query = matchShopDepartment(lastShownTitle, shopSells) || lastShownTitle
+      }
       state.lastQuery = query
       const fromModel = argString(args, 'category')
       const namedDepts = matchAllShopDepartments(customerText, shopSells)

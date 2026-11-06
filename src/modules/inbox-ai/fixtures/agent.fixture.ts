@@ -159,6 +159,24 @@ const tshirt = {
   categoryName: 'T Shirt',
 }
 
+function completedOrder(): OrderWithDetails {
+  return {
+    ...checkOrder(),
+    id: 5,
+    order_number: 'NOV26-5',
+    order_status: 'completed',
+    payment_status: 'paid',
+    fulfillment_status: 'fulfilled',
+    promised_by: '2026-11-11',
+    items: [
+      {
+        id: 5,
+        snapshot: { product: { name: 'Men Loose Fit Brown Lycra Blend Trousers' } },
+      },
+    ],
+  } as unknown as OrderWithDetails
+}
+
 function checkOrder(): OrderWithDetails {
   return {
     id: 3,
@@ -388,6 +406,12 @@ async function main(): Promise<void> {
     )
     assert.equal(looksLikePlacedOrderAsk('book cheytha eppoyathekk deliver aavum'), false)
     assert.equal(looksLikePlacedOrderAsk('where is my order JAN26-3'), true)
+    assert.equal(looksLikePlacedOrderAsk('ente last order enthayi'), true)
+    assert.equal(looksLikePlacedOrderAsk('ente ella order detailsum onn share cheyy'), true)
+    assert.equal(looksLikePlacedOrderAsk('Status please'), true)
+    assert.equal(looksLikePlacedOrderAsk('order cheyam eathra days avum kittan'), false)
+    assert.equal(wantsOtherModels('vere models indo'), true)
+    assert.equal(stayOnLastProduct('vere models indo', 'Check Shirt', sells), false)
   })
 
   await test('other colour of last card stays on that product', async () => {
@@ -888,6 +912,7 @@ async function main(): Promise<void> {
     assert.match(prompt, /closeNames/)
     assert.match(prompt, /website is wrong/)
     assert.match(prompt, /already placed/)
+    assert.match(prompt, /vere models/)
   })
 
   await test('honesty reject still keeps the shown product', async () => {
@@ -994,6 +1019,163 @@ async function main(): Promise<void> {
     })
     assert.match(result?.reply.primaryText ?? '', /shrox\.aishopy\.io/)
     assert.doesNotMatch(result?.reply.primaryText ?? '', /What can I help you/)
+  })
+
+  await test('last order phrases look up completed orders', async () => {
+    let collected = false
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'ente last order enthayi',
+      recentMessages: [
+        {
+          role: 'store',
+          text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/check-shirt-9`,
+        },
+      ],
+      customerPhone: '919999999999',
+      conversationId: 11,
+      shopSells: ['Shirt'],
+      deps: {
+        collectOrders: async () => {
+          collected = true
+          return [completedOrder()]
+        },
+      },
+      completeWithTools: (async () =>
+        'Ente khedam, ningalude oru orderum ippo recordil illa.') as Completer,
+    })
+    assert.equal(collected, true)
+    assert.equal(result?.reply.primaryMatch, null)
+    assert.match(result?.reply.primaryText ?? '', /NOV26-5/)
+    assert.match(result?.reply.primaryText ?? '', /complete aayi|completed/i)
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /recordil illa|4 business|not shipped/i)
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /delivered on/i)
+  })
+
+  await test('status please uses order API not shop days', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'Status please',
+      recentMessages: [
+        {
+          role: 'store',
+          text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/men-loose-fit-brown-lycra-blend-trousers-19`,
+        },
+      ],
+      customerPhone: '919999999999',
+      conversationId: 11,
+      shopSells: ['Pants'],
+      deps: {
+        collectOrders: async () => [completedOrder()],
+      },
+      completeWithTools: (async () =>
+        'Your order hasn\'t been shipped yet. The usual delivery time is around 4 business days after shipping.') as Completer,
+    })
+    assert.match(result?.reply.primaryText ?? '', /NOV26-5/)
+    assert.match(result?.reply.primaryText ?? '', /complete aayi|completed/i)
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /4 business|hasn't been shipped/i)
+  })
+
+  await test('order cheyyam eathra days is checkout plus shop days', async () => {
+    let collected = false
+    const result = await runInboxAgent({
+      store: { ...store, shop_policies: { default_delivery_business_days: 4 } } as typeof store,
+      channel: 'whatsapp',
+      customerText: 'order cheyam... eathra days avum kittan',
+      recentMessages: [
+        {
+          role: 'store',
+          text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/men-loose-fit-brown-lycra-blend-trousers-19`,
+        },
+      ],
+      customerPhone: '919999999999',
+      conversationId: 11,
+      shopSells: ['Pants'],
+      deps: {
+        searchCatalog: async () => [trousers],
+        collectOrders: async () => {
+          collected = true
+          return [completedOrder()]
+        },
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'trousers' } })
+        await runTool({ name: 'show_product', args: { productId: 19 } })
+        return 'Sir, order cheyyan ee link open cheyyuka. Quantity confirm cheythu payment cheyyuka.'
+      }) as Completer,
+    })
+    assert.equal(collected, false)
+    assert.equal(result?.reply.primaryMatch?.product.name, trousers.product.name)
+    assert.match(result?.reply.primaryText ?? '', /4/)
+    assert.match(result?.reply.primaryText ?? '', /business days/i)
+  })
+
+  await test('vere models shows a different SKU as primary', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'vere models indo',
+      recentMessages: [
+        {
+          role: 'store',
+          text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/check-shirt-9`,
+        },
+      ],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Shirt'],
+      deps: {
+        searchCatalog: async () => [checkShirt, linenShirt, metroShirt],
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'models' } })
+        await runTool({ name: 'show_product', args: { productId: 9 } })
+        return 'Vere optionsum und. Ithu nokku.'
+      }) as Completer,
+    })
+    assert.notEqual(result?.reply.primaryMatch?.product.name, 'Check Shirt')
+    assert.match(result?.reply.primaryMatch?.product.name ?? '', /Linen|METRONAUT/)
+  })
+
+  await test('thanks after an order does not send a product card', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'Thank you',
+      recentMessages: [
+        {
+          role: 'store',
+          text: 'Order number: NOV26-5\nOrder status: Completed\nFulfillment: Fulfilled',
+        },
+      ],
+      customerPhone: '919999999999',
+      conversationId: 11,
+      shopSells: ['Pants'],
+      deps: { searchCatalog: async () => [trousers] },
+      completeWithTools: (async () =>
+        'Thank you! If you need anything else from Shrox, feel free to let me know') as Completer,
+    })
+    assert.equal(result?.reply.primaryMatch, null)
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /Trousers|feel free/i)
+  })
+
+  await test('Manasilayilla and please malayalam stay Manglish', async () => {
+    assert.equal(detectLanguageAndScript('Manasilayilla').language, 'Malayalam')
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'What.? Please malayalam',
+      recentMessages: [{ role: 'customer', text: 'Manasilayilla' }],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Shirt'],
+      completeWithTools: (async () =>
+        'Could you please let me know what you need from Shrox?') as Completer,
+    })
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /Could you please let me know/)
+    assert.match(result?.reply.primaryText ?? '', /vendath|sheri|എന്താണ്/i)
   })
 
   await test('cancel calls connect_helpline', async () => {

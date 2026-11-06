@@ -173,6 +173,7 @@ export function formatOrderFactCard(order: OrderWithDetails, currency: string): 
     `Tracking URL: ${order.tracking_url?.trim() ? order.tracking_url.trim() : 'none on this order'}`,
     `Courier: ${order.courier_name?.trim() ? order.courier_name.trim() : 'none on this order'}`,
     `Promised by: ${order.promised_by?.trim() ? order.promised_by.trim() : 'not set — do not invent a date'}`,
+    `Promised by is an SLA date, not delivered-on. If Fulfillment is Fulfilled or Order status is Completed, the order is done — do not say it is still shipping.`,
     `Delay note: ${order.delay_note?.trim() ? order.delay_note.trim() : 'none'}`,
     `Delivery date on this order: ${order.promised_by?.trim() ? order.promised_by.trim() : 'not on this order'}`,
     `Total: ${formatMoney(order.total, currency)}`,

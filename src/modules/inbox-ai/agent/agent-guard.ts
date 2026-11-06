@@ -29,6 +29,7 @@ export function sanitizeAgentSpoken(text: string, options?: { stripUrls?: boolea
   return next
     .replace(/\blink\s+(ithu|here)?\s*:\s*\.?\s*/gi, '')
     .replace(/\b(ee\s+)?linkil koodi nokkam\s*:\s*/gi, '')
+    .replace(/\blink\s+aanu\s+ithu\b[.!]*/gi, '')
     .replace(/^[ \t]*-[ \t]*$/gm, '')
     .replace(/:\s*$/gm, '')
     .replace(/[*_#`]+/g, '')

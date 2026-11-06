@@ -158,6 +158,22 @@ const tshirt = {
   ...catalogMatch(4, 'Printed T Shirt', 299),
   categoryName: 'T Shirt',
 }
+const forceBase = {
+  ...catalogMatch(21, 'Force Men Printed Round Neck Cotton Blend Black T-Shirt', 368),
+  categoryName: 'T Shirt',
+}
+const forceWhite = variantOf(forceBase, 116, 'S / White', { Color: 'White', Size: 'S' })
+const forceBlack = variantOf(forceBase, 117, 'S / Black', { Color: 'Black', Size: 'S' })
+const forceTee = productWithVariants(forceWhite, [forceWhite, forceBlack])
+const creamBase = {
+  ...catalogMatch(20, 'Relaxed Men White Cotton Blend Trousers', 469),
+  categoryName: 'Pants',
+}
+const cream34 = variantOf(creamBase, 107, '34 / Beige', { Colour: 'Beige', Size: '34' })
+const cream36 = variantOf(creamBase, 110, '36 / Beige', { Colour: 'Beige', Size: '36' })
+const cream38 = variantOf(creamBase, 111, '38 / Beige', { Colour: 'Beige', Size: '38' })
+const creamGrey = variantOf(creamBase, 112, '36 / Grey', { Colour: 'Grey', Size: '36' })
+const creamPant = productWithVariants(cream36, [cream34, cream36, cream38, creamGrey])
 
 function completedOrder(): OrderWithDetails {
   return {
@@ -398,6 +414,9 @@ async function main(): Promise<void> {
     assert.equal(wantsOtherModels('Mensinye enthokke item und details share cheyy'), true)
     assert.deepEqual(matchAllShopDepartments('Yes shirt and t shirt model', ['Shirt', 'T Shirt', 'Pants']), [
       'Shirt',
+      'T Shirt',
+    ])
+    assert.deepEqual(matchAllShopDepartments('enick oru t shirt vehnam', ['Shirt', 'T Shirt', 'Pants']), [
       'T Shirt',
     ])
     assert.equal(
@@ -1176,6 +1195,132 @@ async function main(): Promise<void> {
     })
     assert.doesNotMatch(result?.reply.primaryText ?? '', /Could you please let me know/)
     assert.match(result?.reply.primaryText ?? '', /vendath|sheri|എന്താണ്/i)
+  })
+
+  await test('t shirt ask does not list collared shirts', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'enick oru t shirt vehnam',
+      recentMessages: [],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Shirt', 'T Shirt', 'Pants'],
+      deps: { searchCatalog: async () => [forceTee, linenShirt, checkShirt] },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 't shirt' } })
+        await runTool({ name: 'show_product', args: { productId: 21 } })
+        return 'Yes sir, ithu nokku.'
+      }) as Completer,
+    })
+    assert.match(result?.reply.primaryMatch?.product.name ?? '', /Force Men/i)
+    assert.doesNotMatch(result?.reply.followUpText ?? '', /Linen Shirt|Check Shirt/)
+  })
+
+  await test('vere colour switches to another colour of the same listing', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'vere colour vallom undo',
+      recentMessages: [{ role: 'store', text: `Yes sir, ithu nokku.\n${forceWhite.url}` }],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['T Shirt'],
+      deps: { searchCatalog: async () => [forceTee] },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'colour' } })
+        await runTool({ name: 'show_product', args: { productId: 21, variantId: 116 } })
+        return 'Yes sir, ithu und.'
+      }) as Completer,
+    })
+    assert.equal(result?.reply.primaryMatch?.product.id, 21)
+    assert.equal(result?.reply.primaryMatch?.variant?.options?.Color, 'Black')
+  })
+
+  await test('missing size lists this board and does not send 28', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: '28 or 30aahn size',
+      recentMessages: [{ role: 'store', text: `Yes sir, ithu nokku.\n${cream36.url}` }],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Pants'],
+      deps: { searchCatalog: async () => [creamPant] },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'size' } })
+        await runTool({ name: 'show_product', args: { productId: 20, variantId: 110 } })
+        return '28um 30um size undu ee cream colour pantil.'
+      }) as Completer,
+    })
+    assert.equal(result?.reply.primaryMatch?.variant?.options?.Size, '36')
+    assert.match(result?.reply.primaryText ?? '', /not on this one|illa/i)
+    assert.match(result?.reply.primaryText ?? '', /34/)
+    assert.match(result?.reply.primaryText ?? '', /38/)
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /28um|size 28 aanu/i)
+  })
+
+  await test('asked 28 after 36 still does not invent a 28 variant', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'ith 36 alle size enick vendath 28 aahn',
+      recentMessages: [{ role: 'store', text: `Yes sir, ithu nokku.\n${cream36.url}` }],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Pants'],
+      deps: { searchCatalog: async () => [creamPant] },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'size 28' } })
+        await runTool({ name: 'show_product', args: { productId: 20, variantId: 110 } })
+        return '28 size beige cream colour pant aanu.'
+      }) as Completer,
+    })
+    assert.notEqual(result?.reply.primaryMatch?.variant?.options?.Size, '28')
+    assert.match(result?.reply.primaryText ?? '', /34|36|38/)
+    assert.match(result?.reply.primaryText ?? '', /illa/i)
+  })
+
+  await test('cream maps to beige on this board and keeps the size', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'cream colour undo',
+      recentMessages: [{ role: 'store', text: `Yes sir, ithu nokku.\n${creamGrey.url}` }],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['Pants'],
+      deps: { searchCatalog: async () => [creamPant] },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'cream' } })
+        await runTool({ name: 'show_product', args: { productId: 20, variantId: 112 } })
+        return 'Yes sir, ithu nokku.'
+      }) as Completer,
+    })
+    assert.equal(result?.reply.primaryMatch?.variant?.options?.Colour, 'Beige')
+    assert.equal(result?.reply.primaryMatch?.variant?.options?.Size, '36')
+  })
+
+  await test('spoken black is rewritten when the card is white', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'size undo',
+      recentMessages: [{ role: 'store', text: `Yes sir, ithu nokku.\n${forceWhite.url}` }],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['T Shirt'],
+      deps: { searchCatalog: async () => [forceTee] },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'size' } })
+        await runTool({ name: 'show_product', args: { productId: 21, variantId: 116 } })
+        return 'Ithu black colour undu ithu nokku. Link aanu ithu.'
+      }) as Completer,
+    })
+    assert.equal(result?.reply.primaryMatch?.variant?.options?.Color, 'White')
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /black colour/i)
+    assert.match(result?.reply.primaryText ?? '', /White/)
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /link aanu ithu/i)
   })
 
   await test('cancel calls connect_helpline', async () => {

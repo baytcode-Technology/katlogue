@@ -161,12 +161,32 @@ const SEARCH_QUERY_FILLER = new Set([
   'ella',
 ])
 
+function departmentTokens(dept: string): string[] {
+  return dept.toLowerCase().replace(/-/g, ' ').split(' ').filter(Boolean)
+}
+
+function namedSeparateDepartments(query: string): boolean {
+  return /\b(and|or|um)\b/i.test(query)
+}
+
 export function matchAllShopDepartments(query: string, shopSells: string[]): string[] {
   const hits: string[] = []
   for (const dept of shopSells) {
     if (matchShopDepartment(query, [dept]) && !hits.includes(dept)) hits.push(dept)
   }
-  return hits
+  if (hits.length < 2 || namedSeparateDepartments(query)) return hits
+  return hits.filter((dept) => {
+    const mine = departmentTokens(dept)
+    const coveredByLonger = hits.some((other) => {
+      if (other === dept) return false
+      const theirs = departmentTokens(other)
+      if (theirs.length <= mine.length) return false
+      return mine.every((part) =>
+        theirs.some((token) => token === part || token.replace(/s$/i, '') === part.replace(/s$/i, ''))
+      )
+    })
+    return !coveredByLonger
+  })
 }
 
 export function matchShopDepartment(query: string, shopSells: string[]): string | null {
@@ -421,11 +441,239 @@ export function deniesOtherOptions(reply: string): boolean {
 }
 
 export function extractAskedSize(text: string): string | null {
-  if (!/\b(size|sz)\b/i.test(text)) return null
+  const sizes = extractAskedSizes(text)
+  return sizes[sizes.length - 1] ?? null
+}
+
+export function extractAskedSizes(text: string): string[] {
+  if (!/\b(size|sz)\b/i.test(text)) return []
   const nums = [...text.matchAll(/\b(\d{1,3})\b/g)]
-  if (nums.length > 0) return nums[nums.length - 1][1]
-  const labeled = text.match(/\b(?:size|sz)\s*[:#-]?\s*([a-z]{1,4})\b/i)
-  return labeled?.[1]?.toUpperCase() ?? null
+    .map((match) => match[1])
+    .filter((num) => !(num === '1' && /\b1\s+mathi\b/i.test(text)))
+  if (nums.length > 0) return nums
+  const labeled = text.match(/\b(?:size|sz)\s*[:#-]?\s*(xxxl|xxl|xl|xxs|xs|s|m|l)\b/i)
+  return labeled?.[1] ? [labeled[1].toUpperCase()] : []
+}
+
+const VALUE_ALIASES: Record<string, string[]> = {
+  beige: ['cream', 'beige'],
+  white: ['off white', 'off-white', 'offwhite'],
+  grey: ['gray', 'grey'],
+  gray: ['gray', 'grey'],
+}
+
+export function resolveBoardValue(text: string, values: string[]): string | null {
+  const raw = text.toLowerCase()
+  const direct = values.find((value) => value.length > 1 && raw.includes(value.toLowerCase()))
+  if (direct) return direct
+  for (const value of values) {
+    const words = VALUE_ALIASES[value.toLowerCase()] ?? []
+    if (words.some((word) => raw.includes(word))) return value
+  }
+  return null
+}
+
+export function askedBoardConstraints(
+  text: string,
+  board: VariantBoard | null | undefined
+): {
+  hits: Array<{ key: string; value: string }>
+  missing: Array<{ key: string; asked: string }>
+} {
+  if (!board) return { hits: [], missing: [] }
+  const hits: Array<{ key: string; value: string }> = []
+  const missing: Array<{ key: string; asked: string }> = []
+  for (const key of board.optionKeys) {
+    const values = board.optionValues[key] ?? []
+    if (/size/i.test(key)) {
+      const asked = extractAskedSizes(text)
+      const onBoard = asked.filter((size) =>
+        values.some((value) => value.toLowerCase() === size.toLowerCase())
+      )
+      const off = asked.filter(
+        (size) => !values.some((value) => value.toLowerCase() === size.toLowerCase())
+      )
+      if (onBoard.length > 0) hits.push({ key, value: onBoard[onBoard.length - 1] })
+      if (off.length > 0) missing.push({ key, asked: off.join(', ') })
+      continue
+    }
+    const resolved = resolveBoardValue(text, values)
+    if (resolved) hits.push({ key, value: resolved })
+  }
+  return { hits, missing }
+}
+
+export function missingOptionLine(
+  key: string,
+  asked: string,
+  values: string[],
+  language: string
+): string {
+  const list = values.join(', ')
+  if (language === 'Malayalam') return `${asked} ee itemil illa sir. ${key} ${list} und.`
+  return `${asked} is not on this one. ${key}: ${list}.`
+}
+
+function optionValue(match: CatalogMatch, key: string): string {
+  return String(match.variant?.options?.[key] ?? '').trim()
+}
+
+function sameOption(match: CatalogMatch, key: string, value: string): boolean {
+  return optionValue(match, key).toLowerCase() === value.toLowerCase()
+}
+
+export function variantRowsFor(storeSlug: string, match: CatalogMatch): CatalogMatch[] {
+  const variants = match.activeVariants ?? []
+  if (variants.length === 0) return [match]
+  return variants.map((variant) => {
+    const row = matchWithVariant(storeSlug, match, variant)
+    row.activeVariants = match.activeVariants
+    row.variantBoard = match.variantBoard
+    return row
+  })
+}
+
+export function pickVariantForAsk(
+  storeSlug: string,
+  match: CatalogMatch,
+  text: string,
+  stay: boolean
+): CatalogMatch {
+  const rows = variantRowsFor(storeSlug, match)
+  const board = match.variantBoard
+  if (!board) return match
+  const { hits, missing } = askedBoardConstraints(text, board)
+  if (missing.length > 0) return match
+  const wanted = hits.filter((hit) => !sameOption(match, hit.key, hit.value))
+  if (wanted.length > 0) {
+    const keepsRest = (row: CatalogMatch) =>
+      row.inStock !== false &&
+      wanted.every((ask) => sameOption(row, ask.key, ask.value)) &&
+      board.optionKeys.every((key) => {
+        if (wanted.some((ask) => ask.key === key)) return true
+        const current = optionValue(match, key)
+        return !current || sameOption(row, key, current)
+      })
+    const hit =
+      rows.find(keepsRest) ??
+      rows.find(
+        (row) =>
+          wanted.every((ask) => sameOption(row, ask.key, ask.value)) && row.inStock !== false
+      )
+    if (hit) return hit
+  }
+  const otherKey = askedOptionKey(text, board)
+  const wantsAnother =
+    stay &&
+    Boolean(otherKey) &&
+    /\b(vere|other|another|vallom|alle)\b/i.test(text) &&
+    wanted.length === 0
+  if (wantsAnother && otherKey) {
+    const current = optionValue(match, otherKey).toLowerCase()
+    const other = rows.find((row) => {
+      const value = optionValue(row, otherKey).toLowerCase()
+      return value && value !== current && row.inStock !== false
+    })
+    if (other) return other
+  }
+  return match
+}
+
+const SPOKEN_COLOUR_WORDS = [
+  'black',
+  'white',
+  'beige',
+  'cream',
+  'grey',
+  'gray',
+  'blue',
+  'green',
+  'red',
+  'yellow',
+  'maroon',
+  'purple',
+  'brown',
+  'pink',
+  'navy',
+]
+
+function aliasOf(word: string, value: string): boolean {
+  const left = word.toLowerCase()
+  const right = value.toLowerCase()
+  if (left === right || right.includes(left) || left.includes(right)) return true
+  const words = VALUE_ALIASES[right] ?? VALUE_ALIASES[left] ?? []
+  return words.some((alias) => alias === left || alias === right)
+}
+
+export function spokenConflictsWithVariant(spoken: string, match: CatalogMatch): boolean {
+  const board = match.variantBoard
+  if (!board) return false
+  const text = spoken.toLowerCase()
+  const options = match.variant?.options ?? {}
+  for (const [key, values] of Object.entries(board.optionValues)) {
+    const shown = String(options[key] ?? '').toLowerCase()
+    for (const value of values) {
+      if (value.length <= 1 || !text.includes(value.toLowerCase()) || value.toLowerCase() === shown) {
+        continue
+      }
+      const mentioned = values.filter((item) => text.includes(item.toLowerCase()))
+      if (mentioned.length > 1) continue
+      return true
+    }
+    if (/size/i.test(key)) {
+      for (const num of text.matchAll(/\b(\d{1,3})\b/g)) {
+        if (num[1] === '1' && /\b1\s+mathi\b/i.test(text)) continue
+        const onBoard = values.some((value) => value.toLowerCase() === num[1])
+        if (onBoard && num[1] !== shown) return true
+        if (!onBoard && values.length > 0 && num[1] !== shown && (/\bsize\b/i.test(text) || num[1].length >= 2)) {
+          return true
+        }
+      }
+    }
+  }
+  const shownValues = Object.values(options).map((value) => String(value))
+  const mentionedBoard = Object.values(board.optionValues)
+    .flat()
+    .filter((value) => value.length > 1 && text.includes(value.toLowerCase()))
+  if (mentionedBoard.length > 1) return false
+  return SPOKEN_COLOUR_WORDS.some((word) => {
+    if (!text.includes(word)) return false
+    if (shownValues.some((value) => aliasOf(word, value))) return false
+    const insideListedValue = Object.values(board.optionValues)
+      .flat()
+      .some((value) => {
+      const lower = value.toLowerCase()
+      return lower !== word && lower.includes(word) && text.includes(lower)
+    })
+    return !insideListedValue
+  })
+}
+
+export function boardSpokenOverride(
+  text: string,
+  spoken: string,
+  match: CatalogMatch | null,
+  language: string
+): string | null {
+  if (!match?.variantBoard) return null
+  const { missing } = askedBoardConstraints(text, match.variantBoard)
+  if (missing.length > 0) {
+    return missing
+      .map((row) =>
+        missingOptionLine(
+          row.key,
+          row.asked,
+          match.variantBoard?.optionValues[row.key] ?? [],
+          language
+        )
+      )
+      .join(' ')
+  }
+  if (!spokenConflictsWithVariant(spoken, match)) return null
+  const parts = Object.entries(match.variant?.options ?? {}).map(([key, value]) => `${key} ${value}`)
+  if (parts.length === 0) return null
+  if (language === 'Malayalam') return `Yes sir, ithu ${parts.join(', ')} aanu.`
+  return `Yes, this one is ${parts.join(', ')}.`
 }
 
 function isFollowUpToken(token: string): boolean {
@@ -537,15 +785,6 @@ function publicProduct(
   }
 }
 
-function variantMatchesSize(match: CatalogMatch, size: string): boolean {
-  const want = size.toLowerCase()
-  const nameTokens = (match.variant?.name ?? '').toLowerCase().split(/[^a-z0-9]+/)
-  if (nameTokens.includes(want)) return true
-  return Object.values(match.variant?.options ?? {}).some(
-    (value) => String(value).trim().toLowerCase() === want
-  )
-}
-
 function orderIntent(scope: OrderScope, orderNumber: string, productHint: string): ParsedCustomerIntent {
   return {
     intent: 'order_status',
@@ -630,29 +869,9 @@ export function createInboxAgentTools(input: {
   }
 
   function pickStayMatch(fallback: CatalogMatch | null): CatalogMatch | null {
-    const same = lastProductRows()
-    const board = same[0]?.variantBoard ?? fallback?.variantBoard
-    const asked = extractAskedOptionValue(customerText, board)
-    if (asked) {
-      const hit = same.find((row) => variantMatchesSize(row, asked))
-      if (hit) return hit
-    }
-    const size = extractAskedSize(customerText)
-    if (size) {
-      const sized = same.find((row) => variantMatchesSize(row, size))
-      if (sized) return sized
-    }
-    const key = askedOptionKey(customerText, board)
-    const current = fallback ?? same[0] ?? null
-    if (key && current) {
-      const currentVal = String(current.variant?.options?.[key] ?? '').toLowerCase()
-      const other = same.find((row) => {
-        const value = String(row.variant?.options?.[key] ?? '').toLowerCase()
-        return value && value !== currentVal && row.inStock !== false
-      })
-      if (other) return other
-    }
-    return same[0] ?? fallback
+    const base = fallback ?? lastProductRows()[0] ?? null
+    if (!base) return null
+    return pickVariantForAsk(input.store.slug, base, customerText, true)
   }
 
   function markShown(match: CatalogMatch, stay = false): void {
@@ -802,7 +1021,9 @@ export function createInboxAgentTools(input: {
           : null) ?? null
       if (!match) return { error: 'Unknown product. Search first and use a returned productId.' }
       const stay = stayingOnLast()
-      const shown = stay ? pickStayMatch(match) ?? match : match
+      const lastRow = lastProductRows()[0] ?? null
+      const base = stay && lastRow ? lastRow : match
+      const shown = pickVariantForAsk(input.store.slug, base, customerText, stay)
       markShown(shown, stay && shown.product.name.toLowerCase() === lastShownTitle.toLowerCase())
       return { shown: shown.product.name, url: shown.url }
     }

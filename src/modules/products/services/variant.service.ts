@@ -41,10 +41,7 @@ export async function createVariant(
 
   const existingVariants = await variantRepository.findVariantsByProductId(productId)
 
-  const variant = await variantRepository.insertVariant(
-    productId,
-    { ...input, ...resolveVariantPriceForSave(product.base_price, input) },
-  )
+  const variant = await variantRepository.insertVariant(productId, input)
 
 
 
@@ -116,6 +113,9 @@ export async function updateVariant(
 
 ): Promise<ProductVariant> {
 
+  await assertProductAccess(ownerId, productId)
+
+  await variantRepository.assertVariantBelongsToProduct(variantId, productId)
   const product = await assertProductAccess(ownerId, productId)
 
   await variantRepository.assertVariantBelongsToProduct(variantId, productId)
@@ -123,9 +123,6 @@ export async function updateVariant(
   const priced = resolveVariantPriceFields(product.base_price, input)
 
   return variantRepository.updateVariant(variantId, priced ? { ...input, ...priced } : input)
-
-}
-
 
 
 export async function deleteVariant(

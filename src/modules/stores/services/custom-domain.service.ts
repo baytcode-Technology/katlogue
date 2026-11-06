@@ -8,7 +8,6 @@ import * as storeRepository from '../repositories/store.repository.js'
 import type { Store } from '../types/store.types.js'
 import {
   addVercelProjectDomain,
-  getVercelProjectDomain,
   removeVercelProjectDomain,
   storefrontCnameTarget,
 } from './vercel-domain.service.js'
@@ -125,12 +124,11 @@ export async function setCustomDomain(
     })
   }
 
-  const vercel = await addVercelProjectDomain(hostname)
-  const pointed = vercel.verified || (await dnsPointsAtStorefront(hostname))
+  await addVercelProjectDomain(hostname)
   const updated = await storeRepository.updateStoreCustomDomain(store.id, {
     custom_domain: hostname,
-    custom_domain_status: pointed ? 'active' : 'pending',
-    custom_domain_verified_at: pointed ? new Date().toISOString() : null,
+    custom_domain_status: 'pending',
+    custom_domain_verified_at: null,
   })
   return toCustomDomainView(updated)
 }
@@ -145,8 +143,7 @@ export async function verifyCustomDomain(
   }
 
   await addVercelProjectDomain(store.custom_domain)
-  const vercel = await getVercelProjectDomain(store.custom_domain)
-  const pointed = vercel.verified || (await dnsPointsAtStorefront(store.custom_domain))
+  const pointed = await dnsPointsAtStorefront(store.custom_domain)
   const updated = await storeRepository.updateStoreCustomDomain(store.id, {
     custom_domain: store.custom_domain,
     custom_domain_status: pointed ? 'active' : 'pending',

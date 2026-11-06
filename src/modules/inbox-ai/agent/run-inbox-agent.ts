@@ -45,6 +45,7 @@ import {
   wantsOptionPhotos,
   wantsOtherModels,
   wantsWholeStoreShare,
+  boardSpokenOverride,
   type InboxAgentToolDeps,
 } from './inbox-agent-tools.js'
 
@@ -346,6 +347,13 @@ export async function runInboxAgent(input: {
   if (detected.language === 'Malayalam' && isHelpdeskEnglish(spoken)) {
     spoken = tools.state.shown ? cannedProduct : cannedAskWhat
   }
+  const boardLine = boardSpokenOverride(
+    input.customerText,
+    spoken,
+    tools.state.shown,
+    detected.language
+  )
+  if (boardLine) spoken = boardLine
   if (thanksOnly && sessionTopic === 'order') {
     spoken = cannedClose
   }

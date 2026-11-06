@@ -1,4 +1,5 @@
 import { detectLanguageAndScript } from '../../../shared/lib/detect-language-script.js'
+import { parseShopPolicies } from '../../../shared/lib/shop-policies.js'
 import { getLlmProvider } from '../../../shared/llm/index.js'
 import type { LlmProvider, LlmToolCall } from '../../../shared/llm/types.js'
 import type { Store } from '../../stores/types/store.types.js'
@@ -15,9 +16,12 @@ import {
   formatConversationHistory,
   type InboxAiChannel,
 } from '../services/conversation-history.service.js'
-import type {
-  ConversationHistoryLine,
-  ParsedCustomerIntent,
+import {
+  detectSessionTopic,
+  isLanguageSwitchMessage,
+  languageFromSwitchRequest,
+  type ConversationHistoryLine,
+  type ParsedCustomerIntent,
 } from '../services/parse-customer-intent.service.js'
 import type { StaffHandoffAction } from '../services/staff-handoff.service.js'
 import { isAgentReplyHonest, isHelpdeskEnglish, sanitizeAgentSpoken } from './agent-guard.js'
@@ -29,12 +33,15 @@ import {
   extraHitsIdentity,
   extraOptionVariants,
   INBOX_AGENT_TOOLS,
+  looksLikePlacedOrderAsk,
   matchAllShopDepartments,
   optionBoardLine,
   optionPhotoKey,
   queryIdentityTokens,
   stayOnLastProduct,
   wantsAlsoList,
+  wantsCheckout,
+  wantsDeliveryEta,
   wantsOptionPhotos,
   wantsOtherModels,
   wantsWholeStoreShare,
@@ -87,11 +94,22 @@ function detectCustomerLanguage(
   text: string,
   recent: ConversationHistoryLine[]
 ): ReturnType<typeof detectLanguageAndScript> {
+  const switched = languageFromSwitchRequest(text)
+  if (switched && isLanguageSwitchMessage(text)) {
+    return {
+      language: switched,
+      scriptStyle:
+        switched === 'Malayalam' && /[\u0D00-\u0D7F]/.test(text)
+          ? 'malayalam_script'
+          : 'latin',
+    }
+  }
   const latest = detectLanguageAndScript(text)
   if (latest.language !== 'English') return latest
   const clearlyEnglish =
     /\b(please|would you|thank you|could you)\b/i.test(text) &&
-    text.trim().split(/\s+/).filter(Boolean).length > 4
+    text.trim().split(/\s+/).filter(Boolean).length > 4 &&
+    !/\bmalayalam\b/i.test(text)
   if (clearlyEnglish) return latest
   for (let i = recent.length - 1; i >= 0; i -= 1) {
     if (recent[i].role !== 'customer') continue
@@ -99,6 +117,31 @@ function detectCustomerLanguage(
     if (prior.language !== 'English') return prior
   }
   return latest
+}
+
+function cannedOrderSpoken(
+  facts: string[],
+  language: string,
+  scriptStyle?: ParsedCustomerIntent['scriptStyle']
+): string {
+  const blob = facts.join('\n')
+  const number = blob.match(/Order number:\s*(\S+)/i)?.[1] ?? ''
+  const done =
+    /Fulfillment:\s*Fulfilled/i.test(blob) || /Order status:\s*Completed/i.test(blob)
+  const malayalamScript = language === 'Malayalam' && scriptStyle === 'malayalam_script'
+  if (!number) {
+    if (malayalamScript) return 'ഈ WhatsApp നമ്പറിൽ ഓർഡർ ഇല്ല.'
+    if (language === 'Malayalam') return 'Ee WhatsApp number il order illa sir.'
+    return 'No order on this WhatsApp number.'
+  }
+  if (done) {
+    if (malayalamScript) return `${number} പൂർത്തിയായി.`
+    if (language === 'Malayalam') return `Order ${number} complete aayi sir. Ithu deliver aayi.`
+    return `Order ${number} is completed.`
+  }
+  if (malayalamScript) return `${number} ഇപ്പോൾ ഷിപ്പ് ആയിട്ടില്ല.`
+  if (language === 'Malayalam') return `Order ${number} ippo ship aayittilla sir.`
+  return `Order ${number} has not shipped yet.`
 }
 
 export async function runInboxAgent(input: {
@@ -174,12 +217,61 @@ export async function runInboxAgent(input: {
   const stay = stayOnLastProduct(input.customerText, lastShown?.title ?? null, input.shopSells)
   const storeShare = wantsWholeStoreShare(input.customerText)
   const optionPhotos = wantsOptionPhotos(input.customerText)
+  const placedOrder = looksLikePlacedOrderAsk(input.customerText)
+  const otherModels = wantsOtherModels(input.customerText)
+  const checkout = wantsCheckout(input.customerText)
+  const deliveryEta = wantsDeliveryEta(input.customerText)
+  const sessionTopic = detectSessionTopic(input.recentMessages)
+  const thanksOnly =
+    /^(ok(?:ay)?|thanks?|thank you|sheri)[\s.!,]*$/i.test(input.customerText.trim())
+
+  if (
+    otherModels &&
+    lastShown &&
+    tools.state.shown?.product.name.toLowerCase() === lastShown.title.toLowerCase()
+  ) {
+    const other =
+      tools.state.also.find(
+        (row) => row.product.name.toLowerCase() !== lastShown.title.toLowerCase()
+      ) ??
+      tools.state.found.find(
+        (row) => row.product.name.toLowerCase() !== lastShown.title.toLowerCase()
+      )
+    if (other) {
+      const previous = tools.state.shown
+      tools.state.shown = other
+      tools.state.also = [
+        previous,
+        ...tools.state.also.filter((row) => row.product.id !== other.product.id),
+      ].slice(0, 3)
+    }
+  }
+
   if (storeShare) {
+    tools.state.shown = null
+    tools.state.also = []
+  } else if (placedOrder && !tools.state.helpline && !/\b(cancel|refund)\b/i.test(input.customerText)) {
+    if (!tools.state.lookedUpOrders) {
+      const all = /\b(all|ella|history|details|orders)\b/i.test(input.customerText)
+      await tools.runTool('get_my_orders', { scope: all ? 'all' : 'latest' })
+    }
     tools.state.shown = null
     tools.state.also = []
   } else if (!tools.state.shown && stay && lastShown) {
     await tools.runTool('search_products', { query: lastShown.title })
     tools.showBestSearchMatch()
+  }
+
+  if (!placedOrder && (checkout || deliveryEta) && !tools.state.lookedUpOrders) {
+    const hasDeliveryFact = tools.state.facts.some((row) => /usual delivery/i.test(row))
+    if (deliveryEta && !hasDeliveryFact) {
+      await tools.runTool('get_shop_info', { ask: 'delivery' })
+    }
+  }
+
+  if (thanksOnly && sessionTopic === 'order') {
+    tools.state.shown = null
+    tools.state.also = []
   }
 
   const cannedProduct =
@@ -239,6 +331,64 @@ export async function runInboxAgent(input: {
     spoken = cannedProduct
   }
 
+  const cannedClose =
+    detected.language === 'Malayalam' && detected.scriptStyle === 'malayalam_script'
+      ? 'ശരി സാർ.'
+      : detected.language === 'Malayalam'
+        ? 'Sheri sir.'
+        : 'Okay.'
+  const cannedAskWhat =
+    detected.language === 'Malayalam' && detected.scriptStyle === 'malayalam_script'
+      ? 'എന്താണ് വേണ്ടത്?'
+      : detected.language === 'Malayalam'
+        ? 'Sheri sir, ethu vendath parayu.'
+        : 'What do you need?'
+  if (detected.language === 'Malayalam' && isHelpdeskEnglish(spoken)) {
+    spoken = tools.state.shown ? cannedProduct : cannedAskWhat
+  }
+  if (thanksOnly && sessionTopic === 'order') {
+    spoken = cannedClose
+  }
+
+  const cannedOrder = cannedOrderSpoken(
+    tools.state.facts,
+    detected.language,
+    detected.scriptStyle
+  )
+  if (tools.state.lookedUpOrders && !tools.state.helpline) {
+    const blob = tools.state.facts.join('\n')
+    const done =
+      /Fulfillment:\s*Fulfilled/i.test(blob) || /Order status:\s*Completed/i.test(blob)
+    const noOrder = !/Order number:/i.test(blob)
+    const badStatus =
+      /not shipped|hasn't been shipped|notify you once|4 business|recordil illa|oru orderum/i.test(
+        spoken
+      )
+    const inventedDelivered = /delivered on/i.test(spoken) && /Promised by:/i.test(blob)
+    if (noOrder || done || !spoken || badStatus || inventedDelivered) {
+      spoken = cannedOrder
+    }
+    if (!/\b(address|delivery address)\b/i.test(input.customerText)) {
+      spoken = spoken
+        .replace(/^.*\b(Address|Recipient)\s*:.*$/gim, '')
+        .replace(/\n{2,}/g, '\n')
+        .trim()
+    }
+  }
+
+  const usualDays = parseShopPolicies(input.store.shop_policies).default_delivery_business_days
+  if (!placedOrder && deliveryEta && usualDays != null) {
+    const dayLine =
+      detected.language === 'Malayalam' && detected.scriptStyle === 'malayalam_script'
+        ? `${usualDays} ബിസിനസ് ദിവസം.`
+        : detected.language === 'Malayalam'
+          ? `${usualDays} business days kittum.`
+          : `Usual delivery is ${usualDays} business days.`
+    if (!spoken.includes(String(usualDays))) {
+      spoken = [spoken, dayLine].filter(Boolean).join(' ')
+    }
+  }
+
   const allowed = [userMessage, homeUrl, ...tools.state.facts].join('\n')
   if (
     !isAgentReplyHonest({
@@ -253,11 +403,27 @@ export async function runInboxAgent(input: {
     console.info('[inbox-ai-agent] reply rejected by honesty guard; keeping tools')
     if (tools.state.shown) {
       spoken = cannedProduct
+    } else if (tools.state.lookedUpOrders) {
+      spoken = cannedOrder
+    } else if (thanksOnly && sessionTopic === 'order') {
+      spoken = cannedClose
     } else if (storeShare || looksLikeGreeting) {
       spoken = storeShare ? cannedStore : cannedGreeting
+    } else if (detected.language === 'Malayalam') {
+      spoken = cannedAskWhat
     } else {
       return null
     }
+  }
+
+  if (!placedOrder && deliveryEta && usualDays != null && !spoken.includes(String(usualDays))) {
+    const dayLine =
+      detected.language === 'Malayalam' && detected.scriptStyle === 'malayalam_script'
+        ? `${usualDays} ബിസിനസ് ദിവസം.`
+        : detected.language === 'Malayalam'
+          ? `${usualDays} business days kittum.`
+          : `Usual delivery is ${usualDays} business days.`
+    spoken = [spoken, dayLine].filter(Boolean).join(' ')
   }
 
   const shown = tools.state.shown

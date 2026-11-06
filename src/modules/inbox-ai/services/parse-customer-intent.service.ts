@@ -227,7 +227,7 @@ const LANGUAGE_META_PATTERN =
 
 /** Ask to continue in another language — not “do you know Malayalam?” */
 const LANGUAGE_SWITCH_PATTERN =
-  /\b(malayalathil\s+paray|malayalathil|englishil|hindiil|tamilil|in\s+malayalam|in\s+hindi|in\s+english|hindi\s+il|english\s+il|tamil\s+il|speak\s+(?:in\s+)?(?:malayalam|hindi|english|tamil)|tell\s+me\s+in\s+\w+|reply\s+in\s+\w+|മലയാളത്തിൽ)\b/i
+  /\b(malayalathil\s+paray|malayalathil|englishil|hindiil|tamilil|in\s+malayalam|in\s+hindi|in\s+english|hindi\s+il|english\s+il|tamil\s+il|speak\s+(?:in\s+)?(?:malayalam|hindi|english|tamil)|tell\s+me\s+in\s+\w+|reply\s+in\s+\w+|please\s+malayalam|മലയാളത്തിൽ)\b|\bmalayalam\b/i
 
 const REFUSE_PATTERN =
   /\b(onnum\s*venda|onnum\s*venam\s*illa|enickonnum\s*venda|enik(?:ku)?onnum\s*venda|no\s+thanks|not\s+interested|don'?t\s+want\s+(anything|it)|nothing\s+(needed|thanks)|illa\s+enickonnum\s*venda|vendam\s+okay|onnum\s+venda\s+okay)\b|ഒന്നും\s*വേണ്ട|^(?:no|nope|nah|not\s+now|venda|vendam|veanda|nahi|nahin|வேண்டாம்|വേണ്ട|नहीं)(?:\s+(?:sir|saar|thanks|bro))?[\s.!👎]*$/i
@@ -564,7 +564,7 @@ export function isShopInfoMessage(text: string, sessionTopic: SessionTopic): boo
   return SHOP_INFO_PATTERN.test(trimmed)
 }
 
-function languageFromSwitchRequest(text: string): string | null {
+export function languageFromSwitchRequest(text: string): string | null {
   const lower = text.toLowerCase()
   if (/malayalam|malayalathil|മലയാള/.test(lower)) return 'Malayalam'
   if (/\bhindi\b|hindiil|हिंदी/.test(lower)) return 'Hindi'

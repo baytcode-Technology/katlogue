@@ -11,7 +11,7 @@ const DEVANAGARI_SCRIPT = /[\u0900-\u097F]/
 const ARABIC_SCRIPT = /[\u0600-\u06FF]/
 
 const MANGLISH_PATTERN =
-  /\b(undo|undu|und|unda|ond|onde|olla|ullo|ollo|ulla|illa|ille|aanu|aahn|aan|aano|vendam|vehnam|venam|vendath|ethra|ethokke|ethrayaanu|vila|kittumo|kitteela|kittiyilla|ayakkavo|ayackavo|ayakku|ayack|cheyyam|cheyyan|cheyyamo|edukkam|koodi|entha|enthu|enik+|enick|ente|njan|ningal|pattiya|pattumo|sheri|seri|mathi|mathre|thaa|tharumo|adipoli|kollam|evide|eppo|ippo|appo|oru|ithu|ith|ithinte|alle|pole|sadhanam|saadhanam)\b/i
+  /\b(undo|undu|und|unda|ond|onde|olla|ullo|ollo|ulla|illa|ille|aanu|aahn|aan|aano|vendam|vehnam|venam|vendath|ethra|ethokke|ethrayaanu|vila|kittumo|kitteela|kittiyilla|kittan|ayakkavo|ayackavo|ayakku|ayack|cheyyam|cheyyan|cheyyamo|edukkam|koodi|entha|enthu|enik+|enick|ente|njan|ningal|pattiya|pattumo|sheri|seri|mathi|mathre|thaa|tharumo|adipoli|kollam|evide|eppo|ippo|appo|oru|ithu|ith|ithinte|alle|pole|sadhanam|saadhanam|manasilayilla|avumbol|parayane)\b/i
 
 /** Formal translator Malayalam that should never go out as shop talk. */
 const STIFF_MALAYALAM =

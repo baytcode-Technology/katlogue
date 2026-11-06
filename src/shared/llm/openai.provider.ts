@@ -22,7 +22,7 @@ export class OpenAiProvider implements LlmProvider {
     }
 
     this.client = new OpenAI({ apiKey })
-    this.model = options?.model?.trim() || process.env.LLM_MODEL?.trim() || 'gpt-4o-mini'
+    this.model = options?.model?.trim() || process.env.LLM_MODEL?.trim() || 'gpt-4.1-mini'
   }
 
   async complete(

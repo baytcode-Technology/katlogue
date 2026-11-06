@@ -39,7 +39,7 @@ function getFallbackProvider(): LlmProvider | null {
   }
   cachedFallback = new OpenAiProvider({
     apiKey,
-    model: process.env.LLM_FALLBACK_MODEL?.trim() || 'gpt-4o-mini',
+    model: process.env.LLM_FALLBACK_MODEL?.trim() || 'gpt-4.1-mini',
   })
   return cachedFallback
 }

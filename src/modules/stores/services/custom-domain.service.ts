@@ -1,4 +1,4 @@
-import { resolveCname } from 'node:dns/promises'
+import { resolve4, resolveCname } from 'node:dns/promises'
 import { AppError } from '../../../shared/errors/app.error.js'
 import { env } from '../../../config/env.js'
 import { getPublicStorefrontBaseDomain } from '../../../shared/utils/storefront.js'
@@ -21,7 +21,31 @@ export type CustomDomainView = {
   verified_at: string | null
   cname_host: string
   cname_target: string
+  dns_type: 'A' | 'CNAME'
+  dns_name: string
+  dns_value: string
 }
+
+const VERCEL_APEX_A = '76.76.21.21'
+
+const MULTI_PART_SUFFIXES = [
+  'co.in',
+  'com.in',
+  'net.in',
+  'org.in',
+  'firm.in',
+  'gen.in',
+  'ind.in',
+  'co.uk',
+  'org.uk',
+  'com.au',
+  'net.au',
+  'co.nz',
+  'com.br',
+  'co.za',
+  'com.sg',
+  'com.mx',
+]
 
 export function normalizeCustomDomain(raw: string): string {
   let value = raw.trim().toLowerCase()
@@ -57,9 +81,19 @@ export function assertAssignableCustomDomain(hostname: string): void {
 }
 
 function cnameHostLabel(hostname: string): string {
-  const parts = hostname.split('.')
-  if (parts.length <= 2) return '@'
+  const parts = hostname.toLowerCase().split('.')
+  const suffix = MULTI_PART_SUFFIXES.find((item) => hostname.toLowerCase().endsWith(`.${item}`))
+  const registrableLength = suffix ? suffix.split('.').length + 1 : 2
+  if (parts.length <= registrableLength) return '@'
   return parts[0]
+}
+
+function dnsRecordFor(hostname: string): { dns_type: 'A' | 'CNAME'; dns_name: string; dns_value: string } {
+  const dns_name = cnameHostLabel(hostname)
+  if (dns_name === '@') {
+    return { dns_type: 'A', dns_name, dns_value: VERCEL_APEX_A }
+  }
+  return { dns_type: 'CNAME', dns_name, dns_value: storefrontCnameTarget() }
 }
 
 export function toCustomDomainView(store: Store): CustomDomainView {
@@ -73,6 +107,9 @@ export function toCustomDomainView(store: Store): CustomDomainView {
     verified_at: store.custom_domain_verified_at ?? null,
     cname_host: store.custom_domain ? cnameHostLabel(store.custom_domain) : 'shop',
     cname_target: storefrontCnameTarget(),
+    ...(store.custom_domain
+      ? dnsRecordFor(store.custom_domain)
+      : { dns_type: 'CNAME' as const, dns_name: 'shop', dns_value: storefrontCnameTarget() }),
   }
 }
 
@@ -86,14 +123,24 @@ async function requireOwnedStore(userId: string, storeId: number): Promise<Store
 }
 
 async function dnsPointsAtStorefront(hostname: string): Promise<boolean> {
+  const target = storefrontCnameTarget()
+  const base = getPublicStorefrontBaseDomain()
   try {
     const records = await resolveCname(hostname)
-    const target = storefrontCnameTarget()
-    const base = getPublicStorefrontBaseDomain()
-    return records.some((record) => {
-      const value = record.replace(/\.$/, '').toLowerCase()
-      return value === target || value === base || value.endsWith(`.${base}`)
-    })
+    if (
+      records.some((record) => {
+        const value = record.replace(/\.$/, '').toLowerCase()
+        return value === target || value === base || value.endsWith(`.${base}`)
+      })
+    ) {
+      return true
+    }
+  } catch {
+    // Apex domains use an A record. A missing CNAME is expected.
+  }
+  try {
+    const addresses = await resolve4(hostname)
+    return addresses.includes(VERCEL_APEX_A)
   } catch {
     return false
   }

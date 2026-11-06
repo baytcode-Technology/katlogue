@@ -29,5 +29,14 @@ export async function updateProduct(
       ? { ...input, mark_as_sold: false, mark_as_non_inventory: false }
       : input
 
-  return productRepository.updateProduct(productId, patch)
+  const updated = await productRepository.updateProduct(productId, patch)
+
+  if (
+    input.base_price !== undefined &&
+    Number(input.base_price) !== Number(existing.base_price)
+  ) {
+    await variantRepository.syncPriceDeltasForBaseChange(productId, Number(input.base_price))
+  }
+
+  return updated
 }

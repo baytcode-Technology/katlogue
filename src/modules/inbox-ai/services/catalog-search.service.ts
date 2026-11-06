@@ -10,6 +10,7 @@ import { findActiveProductsByStoreId } from '../../products/repositories/product
 import { findVariantsByProductIds } from '../../products/repositories/product-variant.repository.js'
 import type { Product } from '../../products/types/product.types.js'
 import type { ProductVariant } from '../../products/types/product-variant.types.js'
+import { variantSellingPrice } from '../../products/lib/variant-price.js'
 import {
   isProductSellable,
   isSimpleProductSellable,
@@ -332,7 +333,7 @@ export function formatShopCategories(summary: StoreCatalogSummary): string[] {
 }
 
 function unitPrice(product: Product, variant: ProductVariant | null): number {
-  return Number(product.base_price) + Number(variant?.price_delta ?? 0)
+  return variantSellingPrice(product.base_price, variant)
 }
 
 function buildUrl(storeSlug: string, product: Product, variantId?: number | null): string {

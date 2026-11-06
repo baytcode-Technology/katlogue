@@ -7,6 +7,7 @@ import {
   hasPremiumAccess,
 } from '../../../shared/lib/subscription.js'
 import type { CreateProductInput, CreateProductResult } from '../types/product.types.js'
+import { resolveVariantPriceForSave } from '../lib/variant-price.js'
 
 export async function createProduct(
   ownerId: string,
@@ -39,7 +40,10 @@ export async function createProduct(
   const product = await productRepository.insertProduct(productInput)
   const variants = await variantRepository.insertVariants(
     product.id,
-    input.variants ?? []
+    (input.variants ?? []).map((variant) => ({
+      ...variant,
+      ...resolveVariantPriceForSave(input.base_price, variant),
+    })),
   )
 
   await storeRepository.incrementProductCount(input.store_id)

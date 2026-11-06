@@ -5,6 +5,7 @@ import * as variantRepository from '../repositories/product-variant.repository.j
 import { AppError } from '../../../shared/errors/app.error.js'
 
 import type { CreateProductVariantInput, ProductVariant, UpdateProductVariantInput } from '../types/product-variant.types.js'
+import { resolveVariantPriceFields, resolveVariantPriceForSave } from '../lib/variant-price.js'
 
 
 
@@ -40,7 +41,10 @@ export async function createVariant(
 
   const existingVariants = await variantRepository.findVariantsByProductId(productId)
 
-  const variant = await variantRepository.insertVariant(productId, input)
+  const variant = await variantRepository.insertVariant(
+    productId,
+    { ...input, ...resolveVariantPriceForSave(product.base_price, input) },
+  )
 
 
 
@@ -112,11 +116,13 @@ export async function updateVariant(
 
 ): Promise<ProductVariant> {
 
-  await assertProductAccess(ownerId, productId)
+  const product = await assertProductAccess(ownerId, productId)
 
   await variantRepository.assertVariantBelongsToProduct(variantId, productId)
 
-  return variantRepository.updateVariant(variantId, input)
+  const priced = resolveVariantPriceFields(product.base_price, input)
+
+  return variantRepository.updateVariant(variantId, priced ? { ...input, ...priced } : input)
 
 }
 

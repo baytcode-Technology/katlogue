@@ -6,7 +6,8 @@ export const productStatusSchema = z.enum(['active', 'draft', 'unlisted'])
 export const createProductVariantSchema = z.object({
   name: z.string().trim().min(1, 'Variant name is required').max(200),
   options: z.record(z.string(), z.unknown()).default({}),
-  price_delta: z.coerce.number().default(0),
+  price: z.union([z.null(), z.coerce.number().min(0, 'Price must be 0 or greater')]).optional(),
+  price_delta: z.coerce.number().optional(),
   compare_at_price: z.coerce
     .number()
     .min(0, 'Compare at price must be 0 or greater')
@@ -109,6 +110,7 @@ export const updateProductVariantSchema = z
   .object({
     name: z.string().trim().min(1, 'Variant name cannot be empty').max(200).optional(),
     options: z.record(z.string(), z.unknown()).optional(),
+    price: z.union([z.null(), z.coerce.number().min(0, 'Price must be 0 or greater')]).optional(),
     price_delta: z.coerce.number().optional(),
     compare_at_price: z.union([
       z.coerce.number().min(0, 'Compare at price must be 0 or greater'),

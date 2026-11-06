@@ -21,6 +21,7 @@ import {
 import * as variantRepository from '../../products/repositories/product-variant.repository.js'
 import type { Product } from '../../products/types/product.types.js'
 import type { ProductVariant } from '../../products/types/product-variant.types.js'
+import { variantSellingPrice } from '../../products/lib/variant-price.js'
 import {
   effectiveProductStockQty,
   effectiveVariantStockQty,
@@ -140,9 +141,7 @@ function buildLineItems(
       )
     }
 
-    const unit_price = variant
-      ? Number(product.base_price) + Number(variant.price_delta)
-      : Number(product.base_price)
+    const unit_price = variantSellingPrice(product.base_price, variant)
 
     lines.push({
       input: item,
@@ -172,6 +171,7 @@ function buildItemSnapshot(product: Product, variant: ProductVariant | null): Re
           id: variant.id,
           name: variant.name,
           options: variant.options,
+          price: variant.price,
           price_delta: variant.price_delta,
           compare_at_price: variant.compare_at_price,
           sku: variant.sku,

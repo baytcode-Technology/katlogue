@@ -16,7 +16,8 @@ export async function insertVariants(
     product_id: productId,
     name: v.name,
     options: v.options ?? {},
-    price_delta: v.price_delta,
+    price: v.price ?? null,
+    price_delta: v.price_delta ?? 0,
     compare_at_price: v.compare_at_price ?? null,
     stock_qty: v.stock_qty,
     mark_as_sold: v.mark_as_sold ?? false,
@@ -123,6 +124,7 @@ export async function updateVariant(
   const row: Record<string, unknown> = {}
   if (patch.name !== undefined) row.name = patch.name
   if (patch.options !== undefined) row.options = patch.options
+  if (patch.price !== undefined) row.price = patch.price
   if (patch.price_delta !== undefined) row.price_delta = patch.price_delta
   if (patch.compare_at_price !== undefined) row.compare_at_price = patch.compare_at_price
   if (patch.stock_qty !== undefined) row.stock_qty = patch.stock_qty
@@ -147,6 +149,28 @@ export async function updateVariant(
   }
 
   return data as ProductVariant
+}
+
+export async function syncPriceDeltasForBaseChange(
+  productId: number,
+  basePrice: number,
+): Promise<void> {
+  const variants = await findVariantsByProductId(productId)
+  const base = Number(basePrice)
+  for (const variant of variants) {
+    const nextDelta =
+      variant.price === null || variant.price === undefined
+        ? 0
+        : Math.round((Number(variant.price) - base) * 100) / 100
+    if (Number(variant.price_delta) === nextDelta) continue
+    const { error } = await supabaseAdmin
+      .from('product_variants')
+      .update({ price_delta: nextDelta })
+      .eq('id', variant.id)
+    if (error) {
+      throw new AppError(400, error.message, 'VARIANT_UPDATE_FAILED')
+    }
+  }
 }
 
 export async function adjustVariantStock(variantId: number, delta: number): Promise<void> {

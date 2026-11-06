@@ -3,6 +3,7 @@ export type ProductVariant = {
   product_id: number
   name: string
   options: Record<string, unknown>
+  price: number | null
   price_delta: number
   compare_at_price: number | null
   stock_qty: number
@@ -17,7 +18,8 @@ export type ProductVariant = {
 export type CreateProductVariantInput = {
   name: string
   options?: Record<string, unknown>
-  price_delta: number
+  price?: number | null
+  price_delta?: number
   compare_at_price?: number | null
   stock_qty: number
   mark_as_sold?: boolean
@@ -31,6 +33,7 @@ export type CreateProductVariantInput = {
 export type UpdateProductVariantInput = {
   name?: string
   options?: Record<string, unknown>
+  price?: number | null
   price_delta?: number
   compare_at_price?: number | null
   stock_qty?: number

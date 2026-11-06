@@ -120,6 +120,7 @@ export const shopPoliciesSchema = z.object({
   same_day_delivery: z.boolean().optional(),
   next_day_delivery: z.boolean().optional(),
   service_area: optionalNote,
+  returns_allowed: z.boolean().nullable().optional(),
   return_days: optionalCount,
   exchange_allowed: z.boolean().optional(),
   refund_days_after_cancel: optionalCount,

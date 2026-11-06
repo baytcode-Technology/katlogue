@@ -327,6 +327,12 @@ export function wantsOtherModels(text: string): boolean {
   )
 }
 
+export function wantsReturnPolicy(text: string): boolean {
+  return /\b(return\s+policy|can i return|return chey\w*|return parumo|exchange|refund policy)\b/i.test(
+    text
+  )
+}
+
 export function wantsCheckout(text: string): boolean {
   return /\b(order cheyyam|order cheyam|order cheyyan|how to order|book it|i want to order)\b/i.test(
     text
@@ -733,6 +739,7 @@ export function stayOnLastProduct(
 }
 
 export function looksLikePlacedOrderAsk(text: string): boolean {
+  if (wantsReturnPolicy(text)) return false
   if (extractOrderNumber(text) || extractOrderNumberHint(text)) return true
   if (/\b(if i order|njan order|book cheytha)\b/i.test(text)) return false
   const prePay =

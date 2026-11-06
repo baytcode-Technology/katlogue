@@ -1,5 +1,5 @@
 import { detectLanguageAndScript } from '../../../shared/lib/detect-language-script.js'
-import { parseShopPolicies } from '../../../shared/lib/shop-policies.js'
+import { parseShopPolicies, spokenReturnPolicy } from '../../../shared/lib/shop-policies.js'
 import { getLlmProvider } from '../../../shared/llm/index.js'
 import type { LlmProvider, LlmToolCall } from '../../../shared/llm/types.js'
 import type { Store } from '../../stores/types/store.types.js'
@@ -23,7 +23,7 @@ import {
   type ConversationHistoryLine,
   type ParsedCustomerIntent,
 } from '../services/parse-customer-intent.service.js'
-import type { StaffHandoffAction } from '../services/staff-handoff.service.js'
+import { staffConnectLine, type StaffHandoffAction } from '../services/staff-handoff.service.js'
 import { isAgentReplyHonest, isHelpdeskEnglish, sanitizeAgentSpoken } from './agent-guard.js'
 import { buildInboxAgentSystemPrompt } from './inbox-agent-prompt.js'
 import {
@@ -41,6 +41,7 @@ import {
   stayOnLastProduct,
   wantsAlsoList,
   wantsCheckout,
+  wantsReturnPolicy,
   wantsDeliveryEta,
   wantsOptionPhotos,
   wantsOtherModels,
@@ -221,6 +222,7 @@ export async function runInboxAgent(input: {
   const placedOrder = looksLikePlacedOrderAsk(input.customerText)
   const otherModels = wantsOtherModels(input.customerText)
   const checkout = wantsCheckout(input.customerText)
+  const returnPolicy = wantsReturnPolicy(input.customerText)
   const deliveryEta = wantsDeliveryEta(input.customerText)
   const sessionTopic = detectSessionTopic(input.recentMessages)
   const thanksOnly =
@@ -268,6 +270,12 @@ export async function runInboxAgent(input: {
     if (deliveryEta && !hasDeliveryFact) {
       await tools.runTool('get_shop_info', { ask: 'delivery' })
     }
+  }
+  if (
+    returnPolicy &&
+    !tools.state.facts.some((row) => /^Returns:/im.test(row) || /Return window:/i.test(row))
+  ) {
+    await tools.runTool('get_shop_info', { ask: 'returns' })
   }
 
   if (thanksOnly && sessionTopic === 'order') {
@@ -384,7 +392,8 @@ export async function runInboxAgent(input: {
     }
   }
 
-  const usualDays = parseShopPolicies(input.store.shop_policies).default_delivery_business_days
+  const policies = parseShopPolicies(input.store.shop_policies)
+  const usualDays = policies.default_delivery_business_days
   if (!placedOrder && deliveryEta && usualDays != null) {
     const dayLine =
       detected.language === 'Malayalam' && detected.scriptStyle === 'malayalam_script'
@@ -396,6 +405,21 @@ export async function runInboxAgent(input: {
       spoken = [spoken, dayLine].filter(Boolean).join(' ')
     }
   }
+
+  const returnLine = returnPolicy
+    ? (spokenReturnPolicy(policies, detected.language, detected.scriptStyle) ??
+      staffConnectLine(detected.language, detected.scriptStyle))
+    : null
+  if (returnLine) {
+    spoken = returnLine
+  } else if (/staff\s+nokki|\bnokkum\b|thannal\s+mathi|staff\s+will\s+check/i.test(spoken)) {
+    spoken = staffConnectLine(detected.language, detected.scriptStyle)
+  }
+  spoken = spoken
+    .replace(/see (it|the details|details) when you purchase[^.?!]*[.?!]?/gi, '')
+    .replace(/\b(anything else|enthenkilum venel)\b[^.?!]*[.?!]?/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
 
   const allowed = [userMessage, homeUrl, ...tools.state.facts].join('\n')
   if (
@@ -409,7 +433,9 @@ export async function runInboxAgent(input: {
     })
   ) {
     console.info('[inbox-ai-agent] reply rejected by honesty guard; keeping tools')
-    if (tools.state.shown) {
+    if (returnLine) {
+      spoken = returnLine
+    } else if (tools.state.shown) {
       spoken = cannedProduct
     } else if (tools.state.lookedUpOrders) {
       spoken = cannedOrder

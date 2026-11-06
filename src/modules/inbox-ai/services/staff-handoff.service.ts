@@ -51,6 +51,8 @@ async function canAnswerFromFacts(input: {
   if (intent.intent === 'shop_info' && resolveShopInfoAsk(input.customerText) === 'returns') {
     const policies = parseShopPolicies(store.shop_policies)
     return (
+      policies.returns_allowed === true ||
+      policies.returns_allowed === false ||
       policies.return_days != null ||
       policies.exchange_allowed ||
       policies.refund_days_after_cancel != null ||

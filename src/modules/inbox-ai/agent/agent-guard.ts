@@ -14,7 +14,7 @@ export function isHelpdeskEnglish(reply: string): boolean {
 }
 
 const MANGLISH_CUE =
-  /\b(und|undo|undu|unda|illa|aanu|aahn|ithu|ithinte|nokku|vere|njan|enick|sheri|cheyyano|vendath|vehnam|kayyil|shopil|ilekku|swagatham|ethokke|ayack|manasilayilla|avumbol|parayane|kittan)\b/i
+  /\b(und|undo|undu|unda|illa|aanu|aahn|ithu|ithinte|nokku|vere|njan|enick|sheri|cheyyano|cheyyum|vendath|vehnam|kayyil|shopil|ilekku|swagatham|ethokke|ayack|manasilayilla|avumbol|parayane|kittan|helpline)\b/i
 
 /** Drop markdown. Strip URLs when code is already sending the product card. */
 export function sanitizeAgentSpoken(text: string, options?: { stripUrls?: boolean }): string {

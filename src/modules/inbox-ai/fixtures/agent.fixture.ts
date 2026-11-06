@@ -1323,6 +1323,67 @@ async function main(): Promise<void> {
     assert.doesNotMatch(result?.reply.primaryText ?? '', /link aanu ithu/i)
   })
 
+  await test('return before buy uses the shop yes and does not look up orders', async () => {
+    const called: string[] = []
+    const result = await runInboxAgent({
+      store: { ...store, shop_policies: { returns_allowed: true, return_days: 7 } } as typeof store,
+      channel: 'whatsapp',
+      customerText: 'Njan purchase cheythal enik return cheyan parumo',
+      recentMessages: [
+        { role: 'store', text: `Yes sir, ithu nokku.\nhttps://shrox.aishopy.io/product/linen-shirt` },
+      ],
+      customerPhone: '919999999999',
+      conversationId: 11,
+      shopSells: ['Shirt'],
+      deps: {
+        collectOrders: async () => {
+          called.push('collectOrders')
+          return []
+        },
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'get_my_orders', args: { scope: 'latest' } })
+        return 'Return policy kurichu staff nokki thannal mathi. See the details when you purchase. Anything else?'
+      }) as Completer,
+    })
+    assert.equal(called.includes('collectOrders'), false)
+    assert.match(result?.reply.primaryText ?? '', /return/i)
+    assert.match(result?.reply.primaryText ?? '', /7/)
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /nokki|purchase|anything else/i)
+  })
+
+  await test('explicit no returns is a no, not the helpline', async () => {
+    const result = await runInboxAgent({
+      store: { ...store, shop_policies: { returns_allowed: false } } as typeof store,
+      channel: 'whatsapp',
+      customerText: 'Njan purchase cheythal enik return cheyan parumo',
+      recentMessages: [],
+      customerPhone: '919999999999',
+      conversationId: 11,
+      shopSells: ['Shirt'],
+      completeWithTools: (async () =>
+        'Return policy kurichu staff nokki thannal mathi.') as Completer,
+    })
+    assert.match(result?.reply.primaryText ?? '', /illa|not available/i)
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /helpline|nokki/i)
+  })
+
+  await test('unset returns uses the helpline line', async () => {
+    const result = await runInboxAgent({
+      store: { ...store, shop_policies: {} } as typeof store,
+      channel: 'whatsapp',
+      customerText: 'Njan purchase cheythal enik return cheyan parumo',
+      recentMessages: [],
+      customerPhone: '919999999999',
+      conversationId: 11,
+      shopSells: ['Shirt'],
+      completeWithTools: (async () =>
+        'Return policy kurichu staff nokki thannal mathi.') as Completer,
+    })
+    assert.match(result?.reply.primaryText ?? '', /helpline/i)
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /nokki|thannal mathi/i)
+  })
+
   await test('cancel calls connect_helpline', async () => {
     let reason = ''
     const result = await runInboxAgent({

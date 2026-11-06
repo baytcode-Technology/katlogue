@@ -8,6 +8,7 @@ export type ShopPolicies = {
   same_day_delivery: boolean
   next_day_delivery: boolean
   service_area: string | null
+  returns_allowed: boolean | null
   return_days: number | null
   exchange_allowed: boolean
   refund_days_after_cancel: number | null
@@ -26,6 +27,7 @@ export const EMPTY_SHOP_POLICIES: ShopPolicies = {
   same_day_delivery: false,
   next_day_delivery: false,
   service_area: null,
+  returns_allowed: null,
   return_days: null,
   exchange_allowed: false,
   refund_days_after_cancel: null,
@@ -71,6 +73,8 @@ export function parseShopPolicies(raw: unknown): ShopPolicies {
     same_day_delivery: record.same_day_delivery === true,
     next_day_delivery: record.next_day_delivery === true,
     service_area: asString(record.service_area),
+    returns_allowed:
+      record.returns_allowed === true ? true : record.returns_allowed === false ? false : null,
     return_days: returnDays != null && returnDays >= 0 ? Math.round(returnDays) : null,
     exchange_allowed: record.exchange_allowed === true,
     refund_days_after_cancel:
@@ -137,8 +141,14 @@ export function formatShopPolicyFacts(policies: ShopPolicies, currency: string):
   } else {
     lines.push('Current offer: none listed — do not invent a discount')
   }
-  if (policies.return_days != null) {
-    lines.push(`Return window: ${policies.return_days} day(s)`)
+  if (policies.returns_allowed === true) {
+    lines.push(
+      policies.return_days != null
+        ? `Returns: yes. ${policies.return_days} day(s).`
+        : 'Returns: yes.'
+    )
+  } else if (policies.returns_allowed === false) {
+    lines.push('Returns: no.')
   } else {
     lines.push('Return window: not set — customer helpline will contact them')
   }
@@ -149,6 +159,27 @@ export function formatShopPolicyFacts(policies: ShopPolicies, currency: string):
   if (policies.return_note) lines.push(`Return note: ${policies.return_note}`)
   if (policies.pickup_note) lines.push(`Pickup: ${policies.pickup_note}`)
   return lines.join('\n')
+}
+
+export function spokenReturnPolicy(
+  policies: ShopPolicies,
+  language: string,
+  scriptStyle?: string
+): string | null {
+  const script = language === 'Malayalam' && scriptStyle === 'malayalam_script'
+  const malayalam = language === 'Malayalam'
+  if (policies.returns_allowed === true) {
+    const days = policies.return_days
+    if (script) return days != null ? `റിട്ടേൺ ഉണ്ട് സാർ. ${days} ദിവസം.` : 'റിട്ടേൺ ഉണ്ട് സാർ.'
+    if (malayalam) return days != null ? `Return und sir. ${days} days.` : 'Return und sir.'
+    return days != null ? `Returns are available. ${days} days.` : 'Returns are available.'
+  }
+  if (policies.returns_allowed === false) {
+    if (script) return 'റിട്ടേൺ ഇല്ല സാർ.'
+    if (malayalam) return 'Return illa sir.'
+    return 'Returns are not available.'
+  }
+  return null
 }
 
 /** Customer-facing copy. Omits internal "not set" instructions. */
@@ -171,12 +202,23 @@ export function formatShopPolicyCustomerCopy(policies: ShopPolicies, currency: s
   if (policies.same_day_delivery) lines.push('Same-day delivery: yes.')
   if (policies.next_day_delivery) lines.push('Next-day delivery: yes.')
   if (policies.current_offer_note) lines.push(policies.current_offer_note)
-  if (policies.return_days != null) lines.push(`Returns: ${policies.return_days} day(s).`)
-  if (policies.exchange_allowed) lines.push('Exchange: yes.')
+  if (policies.returns_allowed === true) {
+    lines.push(
+      policies.return_days != null
+        ? `Returns: yes. ${policies.return_days} day(s).`
+        : 'Returns: yes.'
+    )
+    if (policies.exchange_allowed) lines.push('Exchange: yes.')
+    if (policies.return_note) lines.push(policies.return_note)
+  } else if (policies.returns_allowed === false) {
+    lines.push('Returns: no.')
+  }
   if (policies.refund_days_after_cancel != null) {
     lines.push(`Refund after cancel: about ${policies.refund_days_after_cancel} day(s).`)
   }
-  if (policies.return_note) lines.push(policies.return_note)
+  if (policies.return_note && policies.returns_allowed === null) {
+    lines.push(policies.return_note)
+  }
   if (policies.pickup_note) lines.push(policies.pickup_note)
   return lines.join('\n')
 }

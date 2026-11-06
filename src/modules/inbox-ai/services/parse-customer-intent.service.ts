@@ -243,7 +243,8 @@ const SHOP_LOCATION_PATTERN =
 
 const SHOP_HOURS_PATTERN = /\b(shop\s+(timings?|hours)|hours|open\s+time)\b/i
 const SHOP_OFFER_PATTERN = /\b(special\s+offers?|discounts?\s+currently|any\s+offer)\b/i
-const SHOP_RETURNS_PATTERN = /\b(return\s+policy|replacement|exchange|refund\s+policy)\b/i
+const SHOP_RETURNS_PATTERN =
+  /\b(return\s+policy|can i return|return chey\w*|return parumo|replacement|exchange|refund\s+policy)\b/i
 const SHOP_DELIVERY_POLICY_PATTERN =
   /\b(deliver(y)?\s+(to|charge|fee|take|time)|free\s+delivery|same[\s-]?day|next[\s-]?day)\b/i
 const SHOP_PAYMENT_PATTERN =

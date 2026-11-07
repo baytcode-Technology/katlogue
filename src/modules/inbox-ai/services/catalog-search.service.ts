@@ -336,12 +336,26 @@ function unitPrice(product: Product, variant: ProductVariant | null): number {
   return variantSellingPrice(product.base_price, variant)
 }
 
-function buildUrl(storeSlug: string, product: Product, variantId?: number | null): string {
+function shareOrigin(url: string): string | null {
+  try {
+    return new URL(url).origin
+  } catch {
+    return null
+  }
+}
+
+function buildUrl(
+  storeSlug: string,
+  product: Product,
+  variantId?: number | null,
+  origin?: string | null
+): string {
   return buildStorefrontProductUrl(
     storeSlug,
     getPublicStorefrontBaseDomain(),
     product,
-    variantId
+    variantId,
+    origin ? { origin } : undefined
   )
 }
 
@@ -500,7 +514,8 @@ export function toMatch(
   variant: ProductVariant | null,
   score: number,
   variants: ProductVariant[] = [],
-  categoryName: string | null = null
+  categoryName: string | null = null,
+  origin?: string | null
 ): CatalogMatch {
   const inStock = variant
     ? isVariantSellable(product, variant)
@@ -515,7 +530,7 @@ export function toMatch(
     product,
     variant,
     price: unitPrice(product, variant),
-    url: buildUrl(storeSlug, product, variant?.id ?? null),
+    url: buildUrl(storeSlug, product, variant?.id ?? null, origin),
     score,
     inStock,
     sellableVariant,
@@ -534,7 +549,7 @@ export function matchWithVariant(
     ...match,
     variant,
     price: unitPrice(match.product, variant),
-    url: buildUrl(storeSlug, match.product, variant.id),
+    url: buildUrl(storeSlug, match.product, variant.id, shareOrigin(match.url)),
     inStock: isVariantSellable(match.product, variant),
     sellableVariant: null,
   }
@@ -548,7 +563,7 @@ export function withSellableVariant(storeSlug: string, match: CatalogMatch): Cat
     ...match,
     variant,
     price: unitPrice(match.product, variant),
-    url: buildUrl(storeSlug, match.product, variant.id),
+    url: buildUrl(storeSlug, match.product, variant.id, shareOrigin(match.url)),
     inStock: true,
     sellableVariant: null,
   }
@@ -559,7 +574,8 @@ function searchProducts(
   variantMap: Map<number, ProductVariant[]>,
   storeSlug: string,
   filters: CatalogSearchFilters,
-  categoryNamesById?: Map<number, string>
+  categoryNamesById?: Map<number, string>,
+  origin?: string | null
 ): CatalogMatch[] {
   const scored = products
     .map((product) => {
@@ -594,7 +610,8 @@ function searchProducts(
       variant,
       total,
       variantMap.get(product.id) ?? [],
-      product.category_id != null ? categoryNamesById?.get(product.category_id) ?? null : null
+      product.category_id != null ? categoryNamesById?.get(product.category_id) ?? null : null,
+      origin
     )
   )
 }
@@ -603,7 +620,8 @@ export async function searchCatalog(
   storeId: number,
   storeSlug: string,
   currency: string,
-  filters: CatalogSearchFilters | string
+  filters: CatalogSearchFilters | string,
+  origin?: string | null
 ): Promise<CatalogMatch[]> {
   const normalized: CatalogSearchFilters =
     typeof filters === 'string' ? { query: filters.trim() } : filters
@@ -644,33 +662,42 @@ export async function searchCatalog(
           variant,
           total,
           variantMap.get(product.id) ?? [],
-          product.category_id != null ? categoryNamesById.get(product.category_id) ?? null : null
+          product.category_id != null ? categoryNamesById.get(product.category_id) ?? null : null,
+          origin
         )
       )
   }
 
-  return searchProducts(products, variantMap, storeSlug, normalized, categoryNamesById)
+  return searchProducts(products, variantMap, storeSlug, normalized, categoryNamesById, origin)
 }
 
 export async function searchCatalogFromIntent(
   storeId: number,
   storeSlug: string,
   currency: string,
-  intent: Pick<ParsedCustomerIntent, 'searchQuery' | 'color' | 'size' | 'categoryName'>
+  intent: Pick<ParsedCustomerIntent, 'searchQuery' | 'color' | 'size' | 'categoryName'>,
+  origin?: string | null
 ): Promise<CatalogMatch[]> {
-  return searchCatalog(storeId, storeSlug, currency, {
-    query: resolveEffectiveSearchQuery(intent.searchQuery, intent.categoryName),
-    color: intent.color,
-    size: intent.size,
-    categoryName: intent.categoryName,
-  })
+  return searchCatalog(
+    storeId,
+    storeSlug,
+    currency,
+    {
+      query: resolveEffectiveSearchQuery(intent.searchQuery, intent.categoryName),
+      color: intent.color,
+      size: intent.size,
+      categoryName: intent.categoryName,
+    },
+    origin
+  )
 }
 
 export async function findBySku(
   storeId: number,
   storeSlug: string,
   currency: string,
-  sku: string
+  sku: string,
+  origin?: string | null
 ): Promise<CatalogMatch | null> {
   const normalized = sku.trim().toLowerCase()
   if (!normalized) return null
@@ -682,13 +709,13 @@ export async function findBySku(
     const variants = variantMap.get(product.id) ?? []
     if (product.sku?.trim().toLowerCase() === normalized) {
       const variant = pickBestVariant(product, variants, { query: '' })
-      return toMatch(storeSlug, product, variant, 100, variants)
+      return toMatch(storeSlug, product, variant, 100, variants, null, origin)
     }
     const variant = variants.find(
       (v) => v.is_active && v.sku?.trim().toLowerCase() === normalized
     )
     if (variant) {
-      return toMatch(storeSlug, product, variant, 100, variants)
+      return toMatch(storeSlug, product, variant, 100, variants, null, origin)
     }
   }
 
@@ -699,7 +726,8 @@ export async function findByCategoryName(
   storeId: number,
   storeSlug: string,
   currency: string,
-  categoryName: string
+  categoryName: string,
+  origin?: string | null
 ): Promise<CatalogMatch[]> {
   const name = categoryName.trim().toLowerCase()
   if (!name) return []
@@ -719,7 +747,7 @@ export async function findByCategoryName(
     .map((product, index) => {
       const variants = variantMap.get(product.id) ?? []
       const variant = pickBestVariant(product, variants, { query: '' })
-      return toMatch(storeSlug, product, variant, 50 - index, variants, category.name)
+      return toMatch(storeSlug, product, variant, 50 - index, variants, category.name, origin)
     })
 }
 

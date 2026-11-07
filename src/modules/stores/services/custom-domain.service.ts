@@ -217,17 +217,21 @@ export async function removeCustomDomain(
   return toCustomDomainView(updated)
 }
 
-export async function resolveHostToSlug(host: string): Promise<{ slug: string } | null> {
+export async function resolveHostToSlug(
+  host: string
+): Promise<{ slug: string | null; pending: boolean }> {
   const hostname = host.split(':')[0].toLowerCase().trim()
-  if (!hostname) return null
+  if (!hostname) return { slug: null, pending: false }
 
   const base = env.STOREFRONT_BASE_DOMAIN
-  const store =
-    (await storeRepository.findActiveStoreByCustomDomain(hostname)) ??
-    null
+  if (base && (hostname === base || hostname.endsWith(`.${base}`))) {
+    return { slug: null, pending: false }
+  }
 
-  if (!store) return null
-  if (store.custom_domain_status !== 'active') return null
-  if (base && (hostname === base || hostname.endsWith(`.${base}`))) return null
-  return { slug: store.slug }
+  const store = await storeRepository.findActiveStoreByCustomDomain(hostname)
+  if (!store) return { slug: null, pending: false }
+  if (store.custom_domain_status !== 'active') {
+    return { slug: null, pending: true }
+  }
+  return { slug: store.slug, pending: false }
 }

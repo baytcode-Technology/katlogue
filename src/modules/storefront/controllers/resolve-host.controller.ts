@@ -10,10 +10,8 @@ export const resolvePublicHost = asyncHandler(async (req: Request, res: Response
   }
 
   const resolved = await resolveHostToSlug(host)
-  if (!resolved) {
-    res.status(200).json({ success: true, data: { slug: null } })
-    return
-  }
-
-  res.status(200).json({ success: true, data: { slug: resolved.slug } })
+  res.status(200).json({
+    success: true,
+    data: { slug: resolved.slug, pending: resolved.pending },
+  })
 })

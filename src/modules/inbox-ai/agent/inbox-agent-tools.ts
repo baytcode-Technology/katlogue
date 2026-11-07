@@ -12,6 +12,7 @@ import {
   filterMatchesByScore,
   findBySku,
   getStoreCatalogSummary,
+  getStoreHomeUrl,
   matchWithVariant,
   searchCatalog,
   type CatalogMatch,
@@ -838,6 +839,7 @@ export function createInboxAgentTools(input: {
 }) {
   const search = input.deps?.searchCatalog ?? searchCatalog
   const skuLookup = input.deps?.findBySku ?? findBySku
+  const origin = getStoreHomeUrl(input.store)
   const orders = input.deps?.collectOrders ?? collectOrders
   const summaryFn = input.deps?.getStoreCatalogSummary ?? getStoreCatalogSummary
   const shopSells = input.shopSells ?? []
@@ -933,13 +935,19 @@ export function createInboxAgentTools(input: {
       const color = argString(args, 'color') || null
       const optionValue = argString(args, 'optionValue') || null
       const searchOne = (q: string, category: string | null) =>
-        search(input.store.id, input.store.slug, input.store.currency, {
-          query: q,
-          color,
-          size,
-          optionValue,
-          categoryName: category,
-        })
+        search(
+          input.store.id,
+          input.store.slug,
+          input.store.currency,
+          {
+            query: q,
+            color,
+            size,
+            optionValue,
+            categoryName: category,
+          },
+          origin
+        )
       let matches: CatalogMatch[]
       if (!stay && namedDepts.length > 1) {
         const bags = await Promise.all(namedDepts.map((dept) => searchOne(dept, dept)))
@@ -959,12 +967,18 @@ export function createInboxAgentTools(input: {
         )
         if (same.length === 0) {
           const retry = filterMatchesByScore(
-            await search(input.store.id, input.store.slug, input.store.currency, {
-              query: lastShownTitle,
-              color: null,
-              size: null,
-              categoryName: matchShopDepartment(lastShownTitle, shopSells),
-            })
+            await search(
+              input.store.id,
+              input.store.slug,
+              input.store.currency,
+              {
+                query: lastShownTitle,
+                color: null,
+                size: null,
+                categoryName: matchShopDepartment(lastShownTitle, shopSells),
+              },
+              origin
+            )
           )
           matches = [...matches, ...retry]
         }
@@ -1007,7 +1021,8 @@ export function createInboxAgentTools(input: {
         input.store.id,
         input.store.slug,
         input.store.currency,
-        argString(args, 'sku')
+        argString(args, 'sku'),
+        origin
       )
       if (!match) {
         state.facts.push('sku: none')

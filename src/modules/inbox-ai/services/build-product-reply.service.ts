@@ -113,15 +113,16 @@ async function searchSlice(store: Store, slice: CatalogSlice): Promise<CatalogMa
     categoryName: slice.categoryName,
   }
 
-  let matches = await searchCatalogFromIntent(store.id, store.slug, currency, searchIntent)
+  const origin = getStoreHomeUrl(store)
+  let matches = await searchCatalogFromIntent(store.id, store.slug, currency, searchIntent, origin)
 
   if (matches.length === 0 && slice.sku) {
-    const skuMatch = await findBySku(store.id, store.slug, currency, slice.sku)
+    const skuMatch = await findBySku(store.id, store.slug, currency, slice.sku, origin)
     if (skuMatch) matches = [skuMatch]
   }
 
   if (matches.length === 0 && slice.categoryName && !slice.color) {
-    matches = await findByCategoryName(store.id, store.slug, currency, slice.categoryName)
+    matches = await findByCategoryName(store.id, store.slug, currency, slice.categoryName, origin)
   }
 
   if (slice.categoryName) {
@@ -140,7 +141,7 @@ async function resolveCatalogOffer(
   const currency = store.currency
 
   if (intent.intent === 'sku_lookup' && intent.sku) {
-    const match = await findBySku(store.id, store.slug, currency, intent.sku)
+    const match = await findBySku(store.id, store.slug, currency, intent.sku, getStoreHomeUrl(store))
     return { matches: match ? [match] : [], missingItem: null, offeredCategory: null }
   }
 

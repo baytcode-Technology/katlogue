@@ -2,7 +2,10 @@ import type { Request, Response } from 'express'
 import { asyncHandler } from '../../../shared/helpers/async-handler.js'
 import { AppError } from '../../../shared/errors/app.error.js'
 import type { RequiredStoreQuery } from '../validations/store.validation.js'
-import type { SetCustomDomainBody } from '../validations/custom-domain.validation.js'
+import type {
+  SetCustomDomainBody,
+  SetPublicLinkHostBody,
+} from '../validations/custom-domain.validation.js'
 import * as customDomainService from '../services/custom-domain.service.js'
 
 function requireUser(req: Request) {
@@ -36,6 +39,18 @@ export const verifyCustomDomain = asyncHandler(async (req: Request, res: Respons
     message: data.status === 'active' ? 'Domain is active' : 'Domain is not verified yet',
     data,
   })
+})
+
+export const setPublicLinkHost = asyncHandler(async (req: Request, res: Response) => {
+  const user = requireUser(req)
+  const { store_id } = req.validatedQuery as RequiredStoreQuery
+  const body = req.body as SetPublicLinkHostBody
+  const data = await customDomainService.setPublicLinkHost(
+    user.id,
+    store_id,
+    body.public_link_host
+  )
+  res.status(200).json({ success: true, message: 'Store link updated', data })
 })
 
 export const deleteCustomDomain = asyncHandler(async (req: Request, res: Response) => {

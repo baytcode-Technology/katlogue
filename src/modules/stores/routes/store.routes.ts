@@ -12,6 +12,7 @@ import {
   deleteCustomDomain,
   getCustomDomain,
   setCustomDomain,
+  setPublicLinkHost,
   verifyCustomDomain,
 } from '../controllers/custom-domain.controller.js'
 import inboxAiRoutes from '../../inbox-ai/routes/inbox-ai.routes.js'
@@ -30,7 +31,10 @@ import {
   staffStoreQuerySchema,
   updateStoreSchema,
 } from '../validations/store.validation.js'
-import { setCustomDomainSchema } from '../validations/custom-domain.validation.js'
+import {
+  setCustomDomainSchema,
+  setPublicLinkHostSchema,
+} from '../validations/custom-domain.validation.js'
 
 const router = Router()
 
@@ -60,6 +64,13 @@ router.put(
   validateQuery(requiredStoreQuerySchema),
   validateBody(setCustomDomainSchema),
   setCustomDomain
+)
+router.patch(
+  '/me/custom-domain/link',
+  requireAuth,
+  validateQuery(requiredStoreQuerySchema),
+  validateBody(setPublicLinkHostSchema),
+  setPublicLinkHost
 )
 router.post(
   '/me/custom-domain/verify',

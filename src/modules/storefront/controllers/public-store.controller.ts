@@ -18,6 +18,7 @@ export const getPublicStore = asyncHandler(async (req: Request, res: Response) =
         slug: req.store.slug,
         customDomain: req.store.custom_domain,
         customDomainStatus: req.store.custom_domain_status,
+        publicLinkHost: req.store.public_link_host,
         baseDomain: env.STOREFRONT_BASE_DOMAIN,
       }),
     },

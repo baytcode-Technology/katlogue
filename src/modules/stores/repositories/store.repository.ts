@@ -368,6 +368,7 @@ export async function updateStoreCustomDomain(
     custom_domain: string | null
     custom_domain_status: 'pending' | 'active' | 'failed' | null
     custom_domain_verified_at: string | null
+    public_link_host?: 'custom' | 'subdomain'
   }
 ): Promise<Store> {
   const { data, error } = await supabaseAdmin
@@ -376,6 +377,7 @@ export async function updateStoreCustomDomain(
       custom_domain: patch.custom_domain,
       custom_domain_status: patch.custom_domain_status,
       custom_domain_verified_at: patch.custom_domain_verified_at,
+      ...(patch.public_link_host ? { public_link_host: patch.public_link_host } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq('id', storeId)

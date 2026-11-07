@@ -45,10 +45,12 @@ export function buildStorefrontOrigin(input: {
   slug: string
   customDomain?: string | null
   customDomainStatus?: string | null
+  publicLinkHost?: string | null
   baseDomain?: string
 }): string {
   const domain = input.customDomain?.trim().toLowerCase()
-  if (input.customDomainStatus === 'active' && domain) {
+  const shareCustom = input.publicLinkHost !== 'subdomain'
+  if (input.customDomainStatus === 'active' && domain && shareCustom) {
     return `https://${domain}`
   }
   return buildSubdomainUrl(input.slug, input.baseDomain ?? getPublicStorefrontBaseDomain())

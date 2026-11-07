@@ -14,11 +14,14 @@ import {
 
 const HOSTNAME_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/
 
+export type PublicLinkHost = 'custom' | 'subdomain'
+
 export type CustomDomainView = {
   subdomain: string
   custom_domain: string | null
   status: 'none' | 'pending' | 'active' | 'failed'
   verified_at: string | null
+  public_link_host: PublicLinkHost
   cname_host: string
   cname_target: string
   dns_type: 'A' | 'CNAME'
@@ -105,6 +108,7 @@ export function toCustomDomainView(store: Store): CustomDomainView {
     custom_domain: store.custom_domain ?? null,
     status,
     verified_at: store.custom_domain_verified_at ?? null,
+    public_link_host: store.public_link_host === 'subdomain' ? 'subdomain' : 'custom',
     cname_host: store.custom_domain ? cnameHostLabel(store.custom_domain) : 'shop',
     cname_target: storefrontCnameTarget(),
     ...(store.custom_domain
@@ -213,6 +217,29 @@ export async function removeCustomDomain(
     custom_domain: null,
     custom_domain_status: null,
     custom_domain_verified_at: null,
+    public_link_host: 'custom',
+  })
+  return toCustomDomainView(updated)
+}
+
+export async function setPublicLinkHost(
+  userId: string,
+  storeId: number,
+  publicLinkHost: PublicLinkHost
+): Promise<CustomDomainView> {
+  const store = await requireOwnedStore(userId, storeId)
+  if (store.custom_domain_status !== 'active' || !store.custom_domain) {
+    throw new AppError(
+      400,
+      'Choose a link after the custom domain is live',
+      'DOMAIN_NOT_ACTIVE'
+    )
+  }
+  const updated = await storeRepository.updateStoreCustomDomain(store.id, {
+    custom_domain: store.custom_domain,
+    custom_domain_status: 'active',
+    custom_domain_verified_at: store.custom_domain_verified_at ?? null,
+    public_link_host: publicLinkHost,
   })
   return toCustomDomainView(updated)
 }

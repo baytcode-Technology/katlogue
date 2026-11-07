@@ -48,6 +48,7 @@ export type Store = {
   custom_domain?: string | null
   custom_domain_status?: 'pending' | 'active' | 'failed' | null
   custom_domain_verified_at?: string | null
+  public_link_host?: 'custom' | 'subdomain' | null
   subscription_plan: 'starter' | 'business' | 'enterprise'
   subscription_expires_at: string | null
   product_count: number

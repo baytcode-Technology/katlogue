@@ -800,7 +800,7 @@ export function formatOtherMatches(
 }
 
 export function getStoreHomeUrl(
-  storeOrSlug: string | Pick<Store, 'slug' | 'custom_domain' | 'custom_domain_status'>
+  storeOrSlug: string | Pick<Store, 'slug' | 'custom_domain' | 'custom_domain_status' | 'public_link_host'>
 ): string {
   if (typeof storeOrSlug === 'string') {
     return buildStorefrontOrigin({ slug: storeOrSlug })
@@ -809,5 +809,6 @@ export function getStoreHomeUrl(
     slug: storeOrSlug.slug,
     customDomain: storeOrSlug.custom_domain,
     customDomainStatus: storeOrSlug.custom_domain_status,
+    publicLinkHost: storeOrSlug.public_link_host,
   })
 }

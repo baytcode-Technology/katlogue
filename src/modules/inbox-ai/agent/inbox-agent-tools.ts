@@ -22,6 +22,7 @@ import {
 import {
   collectOrders,
   formatOrderFactCard,
+  orderHasCourierDetails,
   selectOrdersForScope,
 } from '../services/build-order-reply.service.js'
 import {
@@ -1075,7 +1076,12 @@ export function createInboxAgentTools(input: {
       })
       const selected = selectOrdersForScope(collected, intent)
       state.lookedUpOrders = true
-      const cards = selected.map((order) => formatOrderFactCard(order, input.store.currency))
+      const policies = parseShopPolicies(input.store.shop_policies)
+      const cards = selected.map((order) =>
+        formatOrderFactCard(order, input.store.currency, {
+          includeCourier: policies.courier_tracking || orderHasCourierDetails(order),
+        })
+      )
       state.facts.push(cards.join('\n') || 'no orders')
       return { orders: cards }
     }

@@ -15,6 +15,7 @@ export type ShopPolicies = {
   return_note: string | null
   current_offer_note: string | null
   pickup_note: string | null
+  courier_tracking: boolean
 }
 
 export const EMPTY_SHOP_POLICIES: ShopPolicies = {
@@ -34,6 +35,7 @@ export const EMPTY_SHOP_POLICIES: ShopPolicies = {
   return_note: null,
   current_offer_note: null,
   pickup_note: null,
+  courier_tracking: false,
 }
 
 function asNumber(value: unknown): number | null {
@@ -82,6 +84,7 @@ export function parseShopPolicies(raw: unknown): ShopPolicies {
     return_note: asString(record.return_note),
     current_offer_note: asString(record.current_offer_note),
     pickup_note: asString(record.pickup_note),
+    courier_tracking: record.courier_tracking === true,
   }
 }
 

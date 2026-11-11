@@ -21,6 +21,7 @@ import {
   notifyWhatsAppChat,
 } from '../../notifications/services/send-store-notification.service.js'
 import { composeInboxAiReply } from './compose-inbox-ai-reply.service.js'
+import { shouldSkipAutomatedInbound } from './skip-automated-inbound.js'
 import {
   fetchRecentConversationHistory,
   type InboxAiChannel,
@@ -161,6 +162,15 @@ async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
       storeId: input.storeId,
       conversationId: input.conversationId,
     })
+
+    if (shouldSkipAutomatedInbound(text, recentMessages)) {
+      console.info(
+        '[inbox-ai] skip store=%d conversation=%d reason=automated_inbound',
+        input.storeId,
+        input.conversationId
+      )
+      return
+    }
 
     const customerPhone =
       input.channel === 'whatsapp' && 'customer_wa_number' in conversation

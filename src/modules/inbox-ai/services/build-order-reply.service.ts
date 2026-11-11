@@ -160,24 +160,48 @@ export function formatOrderFactsBlock(order: OrderWithDetails, currency: string)
 }
 
 /** Short card for the model — not the WhatsApp dump the customer already saw. */
-export function formatOrderFactCard(order: OrderWithDetails, currency: string): string {
+export function orderHasCourierDetails(order: {
+  courier_name?: string | null
+  tracking_number?: string | null
+  tracking_url?: string | null
+}): boolean {
+  return Boolean(order.courier_name?.trim() || order.tracking_number?.trim() || order.tracking_url?.trim())
+}
+
+export function formatOrderFactCard(
+  order: OrderWithDetails,
+  currency: string,
+  options?: { includeCourier?: boolean }
+): string {
+  const includeCourier = options?.includeCourier !== false
   const tracking = order.tracking_number?.trim()
-  return [
+  const lines = [
     `Order number: ${order.order_number}`,
     `Placed: ${formatOrderDate(order.created_at)}`,
     `Order status: ${formatOrderStatusLabel(order.order_status)}`,
     `Payment status: ${formatOrderStatusLabel(order.payment_status)}`,
     `Fulfillment: ${formatOrderStatusLabel(order.fulfillment_status)}`,
     `Payment method: ${formatPaymentProviderLabel(order.payment?.provider)}`,
-    `Tracking: ${tracking ? tracking : 'none on this order'}`,
-    `Tracking URL: ${order.tracking_url?.trim() ? order.tracking_url.trim() : 'none on this order'}`,
-    `Courier: ${order.courier_name?.trim() ? order.courier_name.trim() : 'none on this order'}`,
+  ]
+  if (includeCourier) {
+    lines.push(`Tracking: ${tracking ? tracking : 'none on this order'}`)
+    lines.push(
+      `Tracking URL: ${order.tracking_url?.trim() ? order.tracking_url.trim() : 'none on this order'}`
+    )
+    lines.push(`Courier: ${order.courier_name?.trim() ? order.courier_name.trim() : 'none on this order'}`)
+  } else {
+    lines.push(
+      'Courier tracking: this shop does not use it. Do not mention a courier, tracking number, or tracking link.'
+    )
+  }
+  lines.push(
     `Promised by: ${order.promised_by?.trim() ? order.promised_by.trim() : 'not set — do not invent a date'}`,
     `Promised by is an SLA date, not delivered-on. If Fulfillment is Fulfilled or Order status is Completed, the order is done — do not say it is still shipping.`,
     `Delay note: ${order.delay_note?.trim() ? order.delay_note.trim() : 'none'}`,
     `Delivery date on this order: ${order.promised_by?.trim() ? order.promised_by.trim() : 'not on this order'}`,
-    `Total: ${formatMoney(order.total, currency)}`,
-  ].join('\n')
+    `Total: ${formatMoney(order.total, currency)}`
+  )
+  return lines.join('\n')
 }
 
 const COPIED_FACT_LINE =
@@ -434,13 +458,16 @@ export async function buildOrderReply(input: {
   const template = orderTemplateForAsk(orderAsk, orders.length > 0)
   const attachBlock = shouldAttachOrderBlock(orderAsk, orders.length > 0, input.conversationHistory)
   const first = orders[0] ?? null
-  const usualDays = parseShopPolicies(store.shop_policies).default_delivery_business_days
+  const shopPolicies = parseShopPolicies(store.shop_policies)
+  const usualDays = shopPolicies.default_delivery_business_days
+  const includeCourier = (order: OrderWithDetails) =>
+    shopPolicies.courier_tracking || orderHasCourierDetails(order)
   const usualLine =
     usualDays != null
       ? `Usual shop delivery days: ${usualDays}`
       : 'Usual shop delivery days: not set — do not invent a number'
   const modelFacts = first
-    ? `${hints ? `Lookup hints: ${hints}\n` : ''}Ask hint: ${orderAsk}\n${formatOrderFactCard(first, store.currency)}\n${usualLine}`
+    ? `${hints ? `Lookup hints: ${hints}\n` : ''}Ask hint: ${orderAsk}\n${formatOrderFactCard(first, store.currency, { includeCourier: includeCourier(first) })}\n${usualLine}`
     : `${hints ? `Lookup hints: ${hints}\n\n` : ''}${formatOrdersFactsForScope(orders, store.currency, scope)}\n${usualLine}`
 
   const spoken = await buildLocalizedReply({

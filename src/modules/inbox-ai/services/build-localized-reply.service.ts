@@ -446,6 +446,11 @@ function buildFallback(
         if (promised && !orderCardIsEmpty(promised)) return p.orderPromiseLead(promised)
         return p.orderEtaUnknown
       }
+      if (/does not use courier tracking/i.test(card)) {
+        const promised = orderCardValue(card, 'Promised by')
+        if (promised && !orderCardIsEmpty(promised)) return p.orderPromiseLead(promised)
+        return p.orderEtaUnknown
+      }
       const courier = orderCardValue(card, 'Courier')
       const tracking = orderCardValue(card, 'Tracking')
       if (courier && !orderCardIsEmpty(courier)) {

@@ -127,6 +127,7 @@ export const shopPoliciesSchema = z.object({
   return_note: optionalNote,
   current_offer_note: optionalNote,
   pickup_note: optionalNote,
+  courier_tracking: z.boolean().optional(),
 })
 
 const optionalUrl = z

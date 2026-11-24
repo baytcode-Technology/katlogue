@@ -61,6 +61,8 @@ app.use((req, res, next) => {
         },
       },
       crossOriginEmbedderPolicy: false,
+      // same-origin makes the opener treat this popup as closed and drops the Meta code.
+      crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
     })(req, res, next)
   }
 

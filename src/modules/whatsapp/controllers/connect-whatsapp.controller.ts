@@ -14,6 +14,8 @@ import { assertPremiumAccess } from '../../../shared/lib/subscription.js'
 
 import {
 
+  buildEmbeddedSignupPageUrl,
+
   buildMetaOAuthUrl,
 
   buildWhatsAppOAuthLaunchUrl,
@@ -84,10 +86,14 @@ export const connectWhatsApp = asyncHandler(async (req: Request, res: Response) 
 
 
 
-  /** Mobile Custom Tabs cannot receive FB.login postMessage — use oauth/launch → dialog/oauth redirect. */
-  const url = env.META.EMBEDDED_SIGNUP_CONFIG_ID
-    ? buildWhatsAppOAuthLaunchUrl({ state, apiBaseUrl })
-    : buildMetaOAuthUrl({ state })
+  /** Website uses FB.login. Phones cannot receive that message, so they keep the OAuth redirect. */
+  const forWeb = req.query.client === 'web'
+  const url =
+    env.META.EMBEDDED_SIGNUP_CONFIG_ID && forWeb
+      ? `${buildEmbeddedSignupPageUrl({ state, apiBaseUrl })}&return=web`
+      : env.META.EMBEDDED_SIGNUP_CONFIG_ID
+        ? buildWhatsAppOAuthLaunchUrl({ state, apiBaseUrl })
+        : buildMetaOAuthUrl({ state })
 
 
 
@@ -135,9 +141,11 @@ export const connectWhatsApp = asyncHandler(async (req: Request, res: Response) 
 
     storeId,
 
-    signupFlow: env.META.EMBEDDED_SIGNUP_CONFIG_ID
-      ? 'oauth-launch-redirect'
-      : 'oauth-dialog',
+    signupFlow: forWeb
+      ? 'embedded-signup-sdk'
+      : env.META.EMBEDDED_SIGNUP_CONFIG_ID
+        ? 'oauth-launch-redirect'
+        : 'oauth-dialog',
 
     launchUrlType,
 

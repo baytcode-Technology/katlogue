@@ -17,6 +17,7 @@ function buildEmbeddedSignupBridgeHtml(input: {
   apiBaseUrl: string
   appRedirectUri: string
   oauthCallbackUrl: string
+  webReturnUrl: string
 }): string {
   const safe = (value: string) =>
     JSON.stringify(value).replace(/<\//g, '<\\/')
@@ -58,6 +59,7 @@ function buildEmbeddedSignupBridgeHtml(input: {
       var API_BASE = ${safe(input.apiBaseUrl)};
       var OAUTH_CALLBACK = ${safe(input.oauthCallbackUrl)};
       var APP_REDIRECT = ${safe(input.appRedirectUri)};
+      var WEB_RETURN = ${safe(input.webReturnUrl)};
       var statusEl = document.getElementById('status');
       var launchBtn = document.getElementById('launch');
       var sdkReady = false;
@@ -103,7 +105,10 @@ function buildEmbeddedSignupBridgeHtml(input: {
         if (completing || !code) return;
         completing = true;
         setStatus('Success — returning to AiShopy…');
-        window.location.replace(buildDeepLink(code));
+        var target = WEB_RETURN
+          ? WEB_RETURN + '?code=' + encodeURIComponent(code) + '&state=' + encodeURIComponent(STATE)
+          : buildDeepLink(code);
+        window.location.replace(target);
       }
 
       function waitForAuthCode() {
@@ -276,6 +281,11 @@ export const embeddedSignupPage = asyncHandler(async (req: Request, res: Respons
     env.META.OAUTH_REDIRECT_URI?.replace(/\/$/, '') ??
     `${apiBaseUrl}/api/whatsapp/oauth/callback`
 
+  const webReturnUrl =
+    req.query.return === 'web'
+      ? `${env.WEB_APP_URL.replace(/\/$/, '')}/whatsapp-oauth`
+      : ''
+
   console.info('[whatsapp][embedded-signup] bridge page served', {
     storeId: parsed.storeId,
     apiBaseUrl,
@@ -294,6 +304,7 @@ export const embeddedSignupPage = asyncHandler(async (req: Request, res: Respons
         apiBaseUrl,
         appRedirectUri: WHATSAPP_APP_AUTH_REDIRECT_URI,
         oauthCallbackUrl,
+        webReturnUrl,
       })
     )
 })

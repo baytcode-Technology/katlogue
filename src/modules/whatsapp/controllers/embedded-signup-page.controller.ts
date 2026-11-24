@@ -166,7 +166,9 @@ function buildEmbeddedSignupBridgeHtml(input: {
         }
 
         if (loginStarted || esInProgress) {
-          setStatus('Complete all steps in Meta, then tap Finish.');
+          loginStarted = false;
+          launchBtn.disabled = false;
+          setStatus('On the last Meta screen press Skip and finish setup. Closing that window with the X does not connect AiShopy.', true);
           return;
         }
 
@@ -201,6 +203,7 @@ function buildEmbeddedSignupBridgeHtml(input: {
           response_type: 'code',
           override_default_response_type: true,
           redirect_uri: OAUTH_CALLBACK,
+          state: STATE,
           extras: {
             setup: {},
             version: 'v4',
@@ -295,6 +298,7 @@ export const embeddedSignupPage = asyncHandler(async (req: Request, res: Respons
     .status(200)
     .set('Content-Type', 'text/html; charset=utf-8')
     .set('Cache-Control', 'no-store')
+    .set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups')
     .send(
       buildEmbeddedSignupBridgeHtml({
         appId: env.META.APP_ID,

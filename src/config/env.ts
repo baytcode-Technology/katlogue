@@ -30,6 +30,8 @@ export const env = {
    * e.g. https://aishopy.up.railway.app — Railway may also set RAILWAY_PUBLIC_DOMAIN.
    */
   API_PUBLIC_URL: process.env.API_PUBLIC_URL?.trim() || undefined,
+  /** Merchant website. Desktop WhatsApp OAuth returns here; phones use the app deep link. */
+  WEB_APP_URL: process.env.WEB_APP_URL?.trim() || 'https://app.aishopy.io',
   /** Supabase Storage bucket for product images (must exist and be public) */
   SUPABASE_STORAGE_BUCKET:
     process.env.SUPABASE_STORAGE_BUCKET?.trim() || 'product-images',

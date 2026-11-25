@@ -132,6 +132,51 @@ export class OpenAiProvider implements LlmProvider {
   }
 }
 
+export async function completeImageJson(input: {
+  systemPrompt: string
+  userText: string
+  image: Buffer
+  mimeType: string
+}): Promise<string> {
+  const apiKey = process.env.LLM_API_KEY?.trim()
+  if (!apiKey) {
+    throw new AppError(500, 'LLM_API_KEY is not configured', 'LLM_NOT_CONFIGURED')
+  }
+
+  const model = process.env.LLM_VISION_MODEL?.trim() || 'gpt-4.1-mini'
+  const client = new OpenAI({ apiKey })
+  const dataUrl = `data:${input.mimeType};base64,${input.image.toString('base64')}`
+
+  try {
+    const response = await client.chat.completions.create({
+      model,
+      temperature: 0,
+      max_tokens: 300,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: input.systemPrompt },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: input.userText },
+            { type: 'image_url', image_url: { url: dataUrl } },
+          ],
+        },
+      ],
+    })
+
+    const text = response.choices[0]?.message?.content?.trim()
+    if (!text) {
+      throw new AppError(502, 'Empty response from AI provider', 'LLM_EMPTY_RESPONSE')
+    }
+    return text
+  } catch (err) {
+    if (err instanceof AppError) throw err
+    const message = err instanceof Error ? err.message : 'AI request failed'
+    throw new AppError(502, message, 'LLM_REQUEST_FAILED')
+  }
+}
+
 function toOpenAiTool(tool: LlmToolDefinition): OpenAI.Chat.Completions.ChatCompletionTool {
   const properties: Record<string, { type: 'string' | 'integer'; description?: string }> = {}
   for (const [key, spec] of Object.entries(tool.parameters.properties)) {

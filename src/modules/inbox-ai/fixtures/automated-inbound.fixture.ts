@@ -3,7 +3,14 @@
  * Run: npx tsx src/modules/inbox-ai/fixtures/automated-inbound.fixture.ts
  */
 import assert from 'node:assert/strict'
+import { SESSION_MAX_AGE_MS } from '../services/conversation-history.service.js'
 import { shouldSkipAutomatedInbound } from '../services/skip-automated-inbound.js'
+
+function isoAge(msAgo: number): string {
+  return new Date(Date.now() - msAgo).toISOString()
+}
+
+const STORE_WELCOME = 'Hi, welcome. Browse our catalog.\nhttps://shrox.aishopy.io'
 
 let failed = 0
 
@@ -48,8 +55,42 @@ test('first Hai with no store greeting is not skipped', () => {
 
 test('Hai after a store welcome is skipped', () => {
   assert.equal(
+    shouldSkipAutomatedInbound('Hai', [{ role: 'store', text: STORE_WELCOME }]),
+    true
+  )
+})
+
+test('Hai one minute after a store welcome is skipped', () => {
+  assert.equal(
     shouldSkipAutomatedInbound('Hai', [
-      { role: 'store', text: 'Hi, welcome. Browse our catalog.\nhttps://shrox.aishopy.io' },
+      { role: 'store', text: STORE_WELCOME, at: isoAge(60_000) },
+    ]),
+    true
+  )
+})
+
+test('Hai after a store welcome from a previous visit is not skipped', () => {
+  assert.equal(
+    shouldSkipAutomatedInbound('Hai', [
+      { role: 'store', text: STORE_WELCOME, at: isoAge(SESSION_MAX_AGE_MS + 60_000) },
+    ]),
+    false
+  )
+})
+
+test('Hello, Hey, and Hi after a previous visit are not skipped', () => {
+  const previousVisit = [
+    { role: 'store' as const, text: STORE_WELCOME, at: isoAge(SESSION_MAX_AGE_MS + 60_000) },
+  ]
+  assert.equal(shouldSkipAutomatedInbound('Hello', previousVisit), false)
+  assert.equal(shouldSkipAutomatedInbound('Hey!', previousVisit), false)
+  assert.equal(shouldSkipAutomatedInbound('Hi', previousVisit), false)
+})
+
+test('a channel post is still skipped when the only welcome is from a previous visit', () => {
+  assert.equal(
+    shouldSkipAutomatedInbound("Welcome to RBI's Official WhatsApp Channel", [
+      { role: 'store', text: STORE_WELCOME, at: isoAge(SESSION_MAX_AGE_MS + 60_000) },
     ]),
     true
   )

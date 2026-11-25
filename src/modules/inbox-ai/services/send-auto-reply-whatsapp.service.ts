@@ -1,50 +1,41 @@
 import axios from 'axios'
-import FormData from 'form-data'
-import { AppError } from '../../../shared/errors/app.error.js'
-import * as customerRepository from '../../customers/repositories/customer.repository.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
-import * as chatRepository from '../../whatsapp/repositories/whatsapp-chat.repository.js'
-import { emitOutboundWhatsAppMessage } from '../../whatsapp/services/emit-outbound-message.service.js'
+import { recordOutboundWhatsAppMessage } from '../../whatsapp/services/record-outbound-whatsapp-message.service.js'
+import { uploadWhatsAppMediaBuffer } from '../../whatsapp/services/upload-whatsapp-media.service.js'
 import {
   isWhatsAppReadyForStore,
-  resolveBusinessFromNumber,
   resolveStoreWhatsAppCredentials,
   sendMediaMessage,
   sendTextMessage,
-  type WhatsAppCredentials,
 } from '../../whatsapp/services/whatsapp.service.js'
 
-function graphMediaUrl(credentials: WhatsAppCredentials): string {
-  return `https://graph.facebook.com/${credentials.apiVersion}/${credentials.phoneNumberId}/media`
-}
-
-async function uploadImageFromUrl(
-  credentials: WhatsAppCredentials,
-  imageUrl: string
-): Promise<string> {
-  const response = await axios.get<ArrayBuffer>(imageUrl, {
-    responseType: 'arraybuffer',
-    timeout: 30_000,
-  })
-  const buffer = Buffer.from(response.data)
-  const form = new FormData()
-  form.append('messaging_product', 'whatsapp')
-  form.append('type', 'image/jpeg')
-  form.append('file', buffer, { filename: 'product.jpg', contentType: 'image/jpeg' })
-
-  const { data } = await axios.post<{ id?: string }>(graphMediaUrl(credentials), form, {
-    headers: {
-      Authorization: `Bearer ${credentials.accessToken}`,
-      ...form.getHeaders(),
-    },
-    timeout: 60_000,
-  })
-
-  const mediaId = data.id?.trim()
-  if (!mediaId) {
-    throw new AppError(502, 'Meta did not return a media id', 'WHATSAPP_MEDIA_UPLOAD_FAILED')
+function imageFileFromResponse(imageUrl: string, contentType: unknown): {
+  mimeType: string
+  filename: string
+} {
+  const header = typeof contentType === 'string' ? contentType.split(';')[0].trim().toLowerCase() : ''
+  let path = imageUrl.toLowerCase()
+  try {
+    path = new URL(imageUrl).pathname.toLowerCase()
+  } catch {
+    // keep the raw string for extension checks
   }
-  return mediaId
+
+  const mimeType =
+    header === 'image/png' || header === 'image/webp' || header === 'image/gif' || header === 'image/jpeg'
+      ? header
+      : path.endsWith('.png')
+        ? 'image/png'
+        : path.endsWith('.webp')
+          ? 'image/webp'
+          : path.endsWith('.gif')
+            ? 'image/gif'
+            : 'image/jpeg'
+
+  const ext =
+    mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : mimeType === 'image/gif' ? 'gif' : 'jpg'
+
+  return { mimeType, filename: `product.${ext}` }
 }
 
 export async function sendAutoReplyWhatsAppText(input: {
@@ -67,37 +58,17 @@ export async function sendAutoReplyWhatsAppText(input: {
     credentials,
   })
 
-  const now = new Date().toISOString()
-  const customer = await customerRepository.findOrCreateByWhatsApp(store.id, customerWaNumber)
-
-  const conversation = await chatRepository.upsertConversation({
-    storeId: store.id,
-    waPhoneNumberId: credentials.phoneNumberId,
+  await recordOutboundWhatsAppMessage({
+    store,
+    phoneNumberId: credentials.phoneNumberId,
     customerWaNumber,
-    customerId: customer.id,
-    lastMessageAt: now,
-    lastMessagePreview: message,
-  })
-
-  const saved = await chatRepository.insertMessage({
-    storeId: store.id,
-    conversationId: conversation.id,
     metaMessageId: metaResult.metaMessageId,
-    direction: 'outbound',
-    fromNumber: resolveBusinessFromNumber(store),
-    toNumber: customerWaNumber,
     type: 'text',
     textBody: message,
-    status: 'sent',
+    preview: message,
     rawPayload: { ...(metaResult.raw as object), source: 'inbox_ai' },
-    timestamp: now,
+    duplicate: 'reload',
   })
-
-  const messageToEmit =
-    saved ?? (await chatRepository.findMessageByMetaMessageId(metaResult.metaMessageId))
-  if (messageToEmit) {
-    emitOutboundWhatsAppMessage({ storeId: store.id, conversation, message: messageToEmit })
-  }
 }
 
 export async function sendAutoReplyWhatsAppImage(input: {
@@ -113,48 +84,40 @@ export async function sendAutoReplyWhatsAppImage(input: {
   const credentials = resolveStoreWhatsAppCredentials(store)!
   const customerWaNumber = input.customerWaNumber.trim()
 
-  const mediaId = await uploadImageFromUrl(credentials, input.imageUrl)
+  const response = await axios.get<ArrayBuffer>(input.imageUrl, {
+    responseType: 'arraybuffer',
+    timeout: 30_000,
+  })
+  const file = imageFileFromResponse(input.imageUrl, response.headers['content-type'])
+  const uploaded = await uploadWhatsAppMediaBuffer({
+    credentials,
+    kind: 'image',
+    buffer: Buffer.from(response.data),
+    mimeType: file.mimeType,
+    filename: file.filename,
+  })
+
   const metaResult = await sendMediaMessage({
     to: customerWaNumber,
     type: 'image',
-    mediaId,
+    mediaId: uploaded.mediaId,
     caption: input.caption,
     credentials,
   })
 
-  const now = new Date().toISOString()
-  const customer = await customerRepository.findOrCreateByWhatsApp(store.id, customerWaNumber)
   const preview = input.caption?.trim() || 'Photo'
-
-  const conversation = await chatRepository.upsertConversation({
-    storeId: store.id,
-    waPhoneNumberId: credentials.phoneNumberId,
+  await recordOutboundWhatsAppMessage({
+    store,
+    phoneNumberId: credentials.phoneNumberId,
     customerWaNumber,
-    customerId: customer.id,
-    lastMessageAt: now,
-    lastMessagePreview: preview,
-  })
-
-  const saved = await chatRepository.insertMessage({
-    storeId: store.id,
-    conversationId: conversation.id,
     metaMessageId: metaResult.metaMessageId,
-    direction: 'outbound',
-    fromNumber: resolveBusinessFromNumber(store),
-    toNumber: customerWaNumber,
     type: 'image',
     textBody: preview,
-    mediaId,
-    mimeType: 'image/jpeg',
+    preview,
+    mediaId: uploaded.mediaId,
+    mimeType: uploaded.mimeType,
     caption: input.caption ?? null,
-    status: 'sent',
     rawPayload: { ...(metaResult.raw as object), source: 'inbox_ai' },
-    timestamp: now,
+    duplicate: 'reload',
   })
-
-  const messageToEmit =
-    saved ?? (await chatRepository.findMessageByMetaMessageId(metaResult.metaMessageId))
-  if (messageToEmit) {
-    emitOutboundWhatsAppMessage({ storeId: store.id, conversation, message: messageToEmit })
-  }
 }

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../../../config/supabase.js'
 import { AppError } from '../../../shared/errors/app.error.js'
+import type { PendingCheckout } from '../pending-checkout.js'
 
 export type InboxChannel = 'whatsapp' | 'instagram'
 
@@ -124,6 +125,68 @@ export async function markStaffWarned(input: {
   if (error) {
     throw new AppError(400, error.message, 'CONVERSATION_STAFF_WARN_FAILED')
   }
+}
+
+export async function saveWhatsAppPendingCheckout(input: {
+  storeId: number
+  conversationId: number
+  checkout: PendingCheckout
+}): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('whatsapp_conversations')
+    .update({
+      pending_checkout: input.checkout,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('store_id', input.storeId)
+    .eq('id', input.conversationId)
+
+  if (error) {
+    throw new AppError(400, error.message, 'WHATSAPP_CHECKOUT_SAVE_FAILED')
+  }
+}
+
+export async function clearWhatsAppPendingCheckout(input: {
+  storeId: number
+  conversationId: number
+}): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('whatsapp_conversations')
+    .update({
+      pending_checkout: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('store_id', input.storeId)
+    .eq('id', input.conversationId)
+
+  if (error) {
+    throw new AppError(400, error.message, 'WHATSAPP_CHECKOUT_CLEAR_FAILED')
+  }
+}
+
+/** Moves awaiting_proof to creating. A second photo updates zero rows. */
+export async function claimWhatsAppPendingCheckout(input: {
+  storeId: number
+  conversationId: number
+  checkout: PendingCheckout
+}): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('whatsapp_conversations')
+    .update({
+      pending_checkout: input.checkout,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('store_id', input.storeId)
+    .eq('id', input.conversationId)
+    .filter('pending_checkout->>status', 'eq', 'awaiting_proof')
+    .select('id')
+    .maybeSingle()
+
+  if (error) {
+    throw new AppError(400, error.message, 'WHATSAPP_CHECKOUT_CLAIM_FAILED')
+  }
+
+  return Boolean(data)
 }
 
 export async function markStaffWaiting(input: {

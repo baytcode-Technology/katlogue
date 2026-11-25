@@ -5,7 +5,7 @@ type PendingJob = {
 
 const pending = new Map<string, PendingJob>()
 
-const DEBOUNCE_MS = 2500
+const DEBOUNCE_MS = 1500
 
 export function scheduleDebouncedInboxAi(
   key: string,

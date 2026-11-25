@@ -31,6 +31,7 @@ import {
   sendAutoReplyWhatsAppImage,
   sendAutoReplyWhatsAppText,
 } from './send-auto-reply-whatsapp.service.js'
+import { handleWhatsAppCheckoutText } from './whatsapp-chat-checkout.service.js'
 
 export type { InboxAiChannel } from './conversation-history.service.js'
 
@@ -162,6 +163,16 @@ async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
       storeId: input.storeId,
       conversationId: input.conversationId,
     })
+
+    if (input.channel === 'whatsapp' && 'customer_wa_number' in conversation) {
+      const handled = await handleWhatsAppCheckoutText({
+        store,
+        conversation,
+        text,
+        recentMessages,
+      })
+      if (handled) return
+    }
 
     if (shouldSkipAutomatedInbound(text, recentMessages)) {
       console.info(

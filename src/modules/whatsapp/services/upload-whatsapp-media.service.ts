@@ -49,24 +49,14 @@ function normalizeMime(mime: string, kind: WhatsAppMediaKind): string {
   return 'audio/mp4'
 }
 
-export async function uploadWhatsAppMediaToMeta(input: {
-  storeId: number
-  ownerId: string
+export async function uploadWhatsAppMediaBuffer(input: {
+  credentials: WhatsAppCredentials
   kind: WhatsAppMediaKind
   buffer: Buffer
   mimeType: string
   filename: string
   voice?: boolean
 }): Promise<{ mediaId: string; mimeType: string }> {
-  await storeRepository.assertStoreMember(input.storeId, input.ownerId)
-  const store = await storeRepository.findStoreById(input.storeId)
-  if (!store) throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
-
-  const credentials = resolveStoreWhatsAppCredentials(store)
-  if (!credentials) {
-    throw new AppError(503, 'WhatsApp is not connected for this store', 'WHATSAPP_NOT_CONNECTED')
-  }
-
   let buffer = input.buffer
   let filename = input.filename
   let mimeType = input.mimeType
@@ -99,9 +89,9 @@ export async function uploadWhatsAppMediaToMeta(input: {
   form.append('file', buffer, { filename, contentType: mimeType })
 
   try {
-    const { data } = await axios.post<{ id?: string }>(graphMediaUrl(credentials), form, {
+    const { data } = await axios.post<{ id?: string }>(graphMediaUrl(input.credentials), form, {
       headers: {
-        Authorization: `Bearer ${credentials.accessToken}`,
+        Authorization: `Bearer ${input.credentials.accessToken}`,
         ...form.getHeaders(),
       },
       timeout: 120_000,
@@ -122,4 +112,32 @@ export async function uploadWhatsAppMediaToMeta(input: {
         : 'Failed to upload media to WhatsApp'
     throw new AppError(400, message, 'WHATSAPP_MEDIA_UPLOAD_FAILED')
   }
+}
+
+export async function uploadWhatsAppMediaToMeta(input: {
+  storeId: number
+  ownerId: string
+  kind: WhatsAppMediaKind
+  buffer: Buffer
+  mimeType: string
+  filename: string
+  voice?: boolean
+}): Promise<{ mediaId: string; mimeType: string }> {
+  await storeRepository.assertStoreMember(input.storeId, input.ownerId)
+  const store = await storeRepository.findStoreById(input.storeId)
+  if (!store) throw new AppError(404, 'Store not found', 'STORE_NOT_FOUND')
+
+  const credentials = resolveStoreWhatsAppCredentials(store)
+  if (!credentials) {
+    throw new AppError(503, 'WhatsApp is not connected for this store', 'WHATSAPP_NOT_CONNECTED')
+  }
+
+  return uploadWhatsAppMediaBuffer({
+    credentials,
+    kind: input.kind,
+    buffer: input.buffer,
+    mimeType: input.mimeType,
+    filename: input.filename,
+    voice: input.voice,
+  })
 }

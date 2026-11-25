@@ -1,4 +1,5 @@
 import { AppError } from '../../../shared/errors/app.error.js'
+import { assertWithinMessagingWindow } from '../../../shared/lib/session-window.js'
 import * as customerRepository from '../../customers/repositories/customer.repository.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import * as chatRepository from '../repositories/instagram-chat.repository.js'
@@ -12,29 +13,6 @@ import {
   emitInstagramConversationUpdated,
   emitInstagramNewMessage,
 } from './process-instagram-webhook.service.js'
-
-const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000
-
-async function assertWithinSessionWindow(input: {
-  storeId: number
-  customerIgId: string
-}) {
-  const lastInbound = await chatRepository.getLastInboundMessageAt({
-    storeId: input.storeId,
-    customerIgId: input.customerIgId,
-  })
-
-  if (!lastInbound) return
-
-  const elapsed = Date.now() - new Date(lastInbound).getTime()
-  if (elapsed > SESSION_WINDOW_MS) {
-    throw new AppError(
-      403,
-      'Outside the 24-hour Instagram messaging window. Wait for the customer to message again.',
-      'INSTAGRAM_SESSION_EXPIRED'
-    )
-  }
-}
 
 export type SendInstagramTextInput = {
   storeId: number
@@ -77,7 +55,16 @@ export async function sendInstagramTextMessageService(input: SendInstagramTextIn
     username: customerUsername,
   })
 
-  await assertWithinSessionWindow({ storeId: input.storeId, customerIgId })
+  const lastInbound = await chatRepository.getLastInboundMessageAt({
+    storeId: input.storeId,
+    customerIgId,
+  })
+  assertWithinMessagingWindow({
+    lastInboundAt: lastInbound,
+    expiredMessage:
+      'Outside the 24-hour Instagram messaging window. Wait for the customer to message again.',
+    expiredCode: 'INSTAGRAM_SESSION_EXPIRED',
+  })
 
   const metaResult = await sendInstagramTextMessage({
     igUserId: credentials.igUserId,

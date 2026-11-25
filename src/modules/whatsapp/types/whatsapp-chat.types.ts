@@ -41,6 +41,7 @@ export type WhatsAppConversation = {
   ai_disclosure_sent: boolean
   staff_warned_at: string | null
   staff_waiting_at: string | null
+  pending_checkout?: unknown
 
   created_at: string
 

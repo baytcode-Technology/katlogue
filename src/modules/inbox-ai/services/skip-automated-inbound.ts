@@ -1,3 +1,4 @@
+import { filterSessionHistory } from './conversation-history.service.js'
 import type { ConversationHistoryLine } from './parse-customer-intent.service.js'
 
 const DISCLOSURE_PATTERN =
@@ -18,12 +19,15 @@ const BARE_HELLO_PATTERN = /^(hi|hello|hey|hai|namaste|welcome)[\s!.?,]*$/i
 const REAL_ASK_PATTERN = /\b(product|order|price|size|return|shirt|pant|buy)\b/i
 
 function storeAlreadyGreeted(recentMessages: ConversationHistoryLine[]): boolean {
-  return recentMessages.some(
+  return filterSessionHistory(recentMessages).some(
     (line) => line.role === 'store' && STORE_GREETING_PATTERN.test(line.text)
   )
 }
 
-/** True when this inbound text is another bot, a channel post, or a second hello. */
+/**
+ * True when this inbound text is another bot, a channel post, or a second hello
+ * in the current 4-hour visit. A hello after that visit is a new customer message.
+ */
 export function shouldSkipAutomatedInbound(
   text: string,
   recentMessages: ConversationHistoryLine[] = []

@@ -1,37 +1,15 @@
 import { AppError } from '../../../shared/errors/app.error.js'
+import { assertWithinMessagingWindow } from '../../../shared/lib/session-window.js'
 import { normalizeWhatsAppNumber } from '../../../shared/utils/phone.js'
-import * as customerRepository from '../../customers/repositories/customer.repository.js'
 import * as storeRepository from '../../stores/repositories/store.repository.js'
 import * as chatRepository from '../repositories/whatsapp-chat.repository.js'
-import { emitOutboundWhatsAppMessage } from './emit-outbound-message.service.js'
+import { recordOutboundWhatsAppMessage } from './record-outbound-whatsapp-message.service.js'
 import { formatWhatsAppMessagePreview } from './whatsapp-message-content.service.js'
 import {
   isWhatsAppReadyForStore,
-  resolveBusinessFromNumber,
   resolveStoreWhatsAppCredentials,
   sendMediaMessage,
 } from './whatsapp.service.js'
-
-const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000
-
-async function assertWithinSessionWindow(input: {
-  storeId: number
-  customerWaNumber: string
-}) {
-  const lastInbound = await chatRepository.getLastInboundMessageAt({
-    storeId: input.storeId,
-    customerWaNumber: input.customerWaNumber,
-  })
-  if (!lastInbound) return
-  const elapsed = Date.now() - new Date(lastInbound).getTime()
-  if (elapsed > SESSION_WINDOW_MS) {
-    throw new AppError(
-      403,
-      'Outside the 24-hour WhatsApp session window. Send a template message instead.',
-      'WHATSAPP_SESSION_EXPIRED'
-    )
-  }
-}
 
 export type SendWhatsAppMediaInput = {
   storeId: number
@@ -65,7 +43,7 @@ export async function sendWhatsAppMediaMessage(input: SendWhatsAppMediaInput) {
   const credentials = resolveStoreWhatsAppCredentials(store)!
   const preview = previewForType(input.type, input.caption)
 
-  let conversation =
+  const conversation =
     (input.conversationId
       ? await chatRepository.findConversationById({
           storeId: input.storeId,
@@ -81,8 +59,15 @@ export async function sendWhatsAppMediaMessage(input: SendWhatsAppMediaInput) {
     ? normalizeWhatsAppNumber(conversation.customer_wa_number)
     : normalizeWhatsAppNumber(input.to)
 
-  const customer = await customerRepository.findOrCreateByWhatsApp(input.storeId, customerWaNumber)
-  await assertWithinSessionWindow({ storeId: input.storeId, customerWaNumber })
+  const lastInbound = await chatRepository.getLastInboundMessageAt({
+    storeId: input.storeId,
+    customerWaNumber,
+  })
+  assertWithinMessagingWindow({
+    lastInboundAt: lastInbound,
+    expiredMessage: 'Outside the 24-hour WhatsApp session window. Send a template message instead.',
+    expiredCode: 'WHATSAPP_SESSION_EXPIRED',
+  })
 
   const sendVoice =
     input.type === 'audio' &&
@@ -98,38 +83,24 @@ export async function sendWhatsAppMediaMessage(input: SendWhatsAppMediaInput) {
     mimeType: input.mimeType,
   })
 
-  const now = new Date().toISOString()
-  conversation = await chatRepository.upsertConversation({
-    storeId: input.storeId,
-    waPhoneNumberId: credentials.phoneNumberId,
+  const recorded = await recordOutboundWhatsAppMessage({
+    store,
+    phoneNumberId: credentials.phoneNumberId,
     customerWaNumber,
-    customerId: customer.id,
-    lastMessageAt: now,
-    lastMessagePreview: preview,
-  })
-
-  const saved = await chatRepository.insertMessage({
-    storeId: input.storeId,
-    conversationId: conversation.id,
     metaMessageId: metaResult.metaMessageId,
-    direction: 'outbound',
-    fromNumber: resolveBusinessFromNumber(store),
-    toNumber: customerWaNumber,
     type: input.type,
     textBody: formatWhatsAppMessagePreview({ type: input.type, textBody: preview }),
+    preview,
     mediaId: input.mediaId,
     mimeType: input.mimeType ?? null,
     caption: input.caption ?? null,
-    status: 'sent',
     rawPayload: metaResult.raw,
-    timestamp: now,
+    duplicate: 'throw',
   })
 
-  if (!saved) {
-    throw new AppError(500, 'Failed to persist outbound message', 'WHATSAPP_MESSAGE_SAVE_FAILED')
+  return {
+    conversation: recorded.conversation,
+    message: recorded.message,
+    metaMessageId: metaResult.metaMessageId,
   }
-
-  emitOutboundWhatsAppMessage({ storeId: input.storeId, conversation, message: saved })
-
-  return { conversation, message: saved, metaMessageId: metaResult.metaMessageId }
 }

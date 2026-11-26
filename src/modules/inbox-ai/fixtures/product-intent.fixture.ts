@@ -861,6 +861,21 @@ test('a newer store turn or a link without a question is no open offer', () => {
   )
 })
 
+test('book ask without a URL still opens the last card offer', () => {
+  const offer = extractOpenOffer([
+    {
+      role: 'store',
+      text: `Force Men Printed Round Neck Cotton Blend Black T-Shirt\n${OFFER_URL}`,
+    },
+    {
+      role: 'store',
+      text: 'Ad kandittu ithu thanne aano? Ithu Black, Size S aanu. Ithu book cheyyamo?',
+    },
+  ])
+  assert.equal(offer?.url, OFFER_URL)
+  assert.match(offer?.question ?? '', /book cheyyamo/i)
+})
+
 test('model yes to the offer is buy, no is refuse, a new item stays product search', () => {
   const yes = fromLlmResult(
     { intent: 'acknowledgement', customerLanguage: 'English', searchQuery: '', replyToLastQuestion: 'yes' },

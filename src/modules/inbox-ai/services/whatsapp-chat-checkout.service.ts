@@ -23,14 +23,18 @@ import { downloadWhatsAppMedia } from '../../whatsapp/services/whatsapp-media.se
 import * as whatsappChatRepository from '../../whatsapp/repositories/whatsapp-chat.repository.js'
 import type { WhatsAppConversation } from '../../whatsapp/types/whatsapp-chat.types.js'
 import {
-  addressFromCheckoutParse,
+  fillSingleMissingField,
+  isAddressAlreadySaid,
   isCheckoutExpired,
   isProductQuestion,
   lastCheckoutProduct,
   buyQuantity,
   checkoutChoice,
   matchCheckoutVariant,
+  missingAddressFields,
+  nextAddressDraft,
   nextCheckoutClaim,
+  parseCommaAddress,
   parsePendingCheckout,
   readImageDecision,
   variantForSize,
@@ -89,7 +93,18 @@ function productUrl(store: Store, product: Product, variantId: number | null): s
 }
 
 function choiceMessage(title: string): string {
-  return `Want to buy ${title}?\nReply website for the link, or pay here for the UPI QR.`
+  return `${title} book cheyyano sir?\nWebsite link venam engil "website" type cheyyu. WhatsApp il pay cheyyan "pay here" paranju kodukku.`
+}
+
+function addressAskMessage(): string {
+  return 'Delivery details oru message il ayachu tharu sir: name, address, city, district, state, PIN.'
+}
+
+function addressMissingMessage(missing: string[]): string {
+  if (missing.length === 1) {
+    return `${missing[0]} mathram koodi ayachu tharu sir.`
+  }
+  return `Ithokke koodi ayachu tharu sir: ${missing.join(', ')}.`
 }
 
 function proofMessage(amount: string): string {
@@ -253,12 +268,17 @@ async function beginCheckout(input: {
     address: null,
     created_at: new Date().toISOString(),
   }
+  const url = productUrl(input.store, product, variant?.id ?? null)
+  if (checkoutChoice(input.text) === 'website') {
+    await payOnWebsite({ store: input.store, conversation: input.conversation, url })
+    return true
+  }
   if (input.payHere) {
     await beginPayHere({
       store: input.store,
       conversation: input.conversation,
       checkout,
-      url: productUrl(input.store, product, variant?.id ?? null),
+      url,
     })
     return true
   }
@@ -375,7 +395,7 @@ async function beginPayHere(input: {
     storeId: input.store.id,
     conversationId: input.conversation.id,
     to: input.conversation.customer_wa_number,
-    message: 'Send the delivery details in one message: name, address, city, district, state, and PIN.',
+    message: addressAskMessage(),
   })
 }
 
@@ -391,22 +411,42 @@ async function continueAddress(input: {
     return false
   }
 
-  let parsed: Record<string, unknown> | null = null
-  try {
-    parsed = await completeJson<Record<string, unknown>>(ADDRESS_PROMPT, input.text)
-  } catch (err) {
-    console.error('[inbox-ai] checkout address parse failed', err)
+  const phone = input.conversation.customer_wa_number
+  const previous = input.checkout.address
+  const previousMissing = previous ? missingAddressFields(previous) : []
+  const skipLlm =
+    Boolean(parseCommaAddress(input.text)) ||
+    isAddressAlreadySaid(input.text) ||
+    Boolean(previous && fillSingleMissingField(previous, input.text, previousMissing))
+
+  let llmRaw: Record<string, unknown> | undefined
+  if (!skipLlm) {
+    try {
+      llmRaw = (await completeJson<Record<string, unknown>>(ADDRESS_PROMPT, input.text)) ?? undefined
+    } catch (err) {
+      console.error('[inbox-ai] checkout address parse failed', err)
+    }
   }
-  const address = addressFromCheckoutParse(parsed, input.conversation.customer_wa_number)
-  if (!address.ok) {
-    const missing = address.missing.filter((field) => field !== 'phone')
+  const result = nextAddressDraft({
+    text: input.text,
+    previous,
+    phone,
+    previousMissing,
+    llmRaw,
+  })
+
+  if (!result.ok) {
+    const missing = result.missing
+    await save(input.store.id, input.conversation.id, {
+      ...input.checkout,
+      status: 'need_address',
+      address: result.draft,
+    })
     await reply({
       storeId: input.store.id,
       conversationId: input.conversation.id,
-      to: input.conversation.customer_wa_number,
-      message: missing.length
-        ? `I still need ${missing.join(', ')}.`
-        : 'Send the delivery details in one message: name, address, city, district, state, and PIN.',
+      to: phone,
+      message: missing.length ? addressMissingMessage(missing) : addressAskMessage(),
     })
     return true
   }
@@ -414,13 +454,13 @@ async function continueAddress(input: {
   const checkout: PendingCheckout = {
     ...input.checkout,
     status: 'awaiting_proof',
-    address: address.address,
+    address: result.address,
   }
   await save(input.store.id, input.conversation.id, checkout)
   await sendPaymentRequest({
     store: input.store,
     conversationId: input.conversation.id,
-    to: input.conversation.customer_wa_number,
+    to: phone,
     total: input.total,
   })
   return true

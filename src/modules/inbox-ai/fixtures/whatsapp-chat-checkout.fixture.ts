@@ -8,10 +8,13 @@ import {
   addressFromCheckoutParse,
   buyQuantity,
   checkoutProductFromUrl,
+  emptyAddressDraft,
   isBuyPhrase,
   isQuantityReply,
   lastCheckoutProduct,
+  nextAddressDraft,
   nextCheckoutClaim,
+  parseCommaAddress,
   paymentAmountMatches,
   readImageDecision,
   variantForSize,
@@ -186,6 +189,90 @@ test('an address without a PIN is not complete', () => {
   )
   assert.equal(parsed.ok, false)
   if (!parsed.ok) assert.ok(parsed.missing.includes('PIN'))
+})
+
+test('comma address with Alappuzha completes in one shot', () => {
+  const text = 'nuaim, mannancherry po, mannancherry, alappuzha, kerala, 688538'
+  const comma = parseCommaAddress(text)
+  assert.equal(comma?.district.toLowerCase(), 'alappuzha')
+  const parsed = nextAddressDraft({
+    text,
+    previous: null,
+    phone: '919876543210',
+  })
+  assert.equal(parsed.ok, true)
+  if (parsed.ok) {
+    assert.equal(parsed.address.name, 'nuaim')
+    assert.equal(parsed.address.city.toLowerCase(), 'mannancherry')
+    assert.equal(parsed.address.district.toLowerCase(), 'alappuzha')
+    assert.equal(parsed.address.postcode, '688538')
+  }
+})
+
+test('district alone merges onto a saved draft', () => {
+  const draft = {
+    ...emptyAddressDraft('919876543210'),
+    name: 'nuaim',
+    address: 'mannancherry po',
+    city: 'mannancherry',
+    state: 'kerala',
+    postcode: '688538',
+  }
+  const incomplete = nextAddressDraft({
+    text: 'please check my earlier message for the full home address details',
+    previous: draft,
+    phone: '919876543210',
+    previousMissing: [],
+    llmRaw: {
+      name: 'nuaim',
+      address: 'mannancherry po',
+      city: 'mannancherry',
+      state: 'kerala',
+      postcode: '688538',
+      district: '',
+    },
+  })
+  assert.equal(incomplete.ok, false)
+  if (!incomplete.ok) assert.ok(incomplete.missing.includes('district'))
+
+  const second = nextAddressDraft({
+    text: 'alappuzha',
+    previous: draft,
+    phone: '919876543210',
+    previousMissing: ['district'],
+  })
+  assert.equal(second.ok, true)
+  if (second.ok) assert.equal(second.address.district.toLowerCase(), 'alappuzha')
+})
+
+test('i already write that keeps a saved draft', () => {
+  const draft = {
+    name: 'nuaim',
+    phone_number: '919876543210',
+    address: 'mannancherry po',
+    city: 'mannancherry',
+    district: 'alappuzha',
+    state: 'kerala',
+    postcode: '688538',
+  }
+  const parsed = nextAddressDraft({
+    text: 'i already write that',
+    previous: draft,
+    phone: '919876543210',
+  })
+  assert.equal(parsed.ok, true)
+  if (parsed.ok) assert.equal(parsed.address.district.toLowerCase(), 'alappuzha')
+
+  const incomplete = nextAddressDraft({
+    text: 'i already write that',
+    previous: { ...draft, district: '' },
+    phone: '919876543210',
+  })
+  assert.equal(incomplete.ok, false)
+  if (!incomplete.ok) {
+    assert.ok(incomplete.missing.includes('district'))
+    assert.equal(incomplete.draft.name, 'nuaim')
+  }
 })
 
 if (failed > 0) {

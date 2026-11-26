@@ -144,9 +144,24 @@ function questionAfter(text: string, fromIndex: number): string | null {
   return lines[lines.length - 1] ?? null
 }
 
+const BOOK_ASK =
+  /\b(book\s+cheyy\w*|order\s+cheyy\w*|ithu\s+book|bood\s+cheyy\w*|would you like to (?:place an )?order|shall i book|want to (?:buy|order)|order cheyyano)\b/i
+
+function bookAskQuestion(text: string): string | null {
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    if (BOOK_ASK.test(lines[i])) return lines[i]
+  }
+  return null
+}
+
 /**
- * The product we offered in our latest turn, when we ended it with a question
- * ("Would you like to order it?"). A newer store turn without that offer closes it.
+ * The product we offered in our latest turn, when we asked to book/order.
+ * URL and question may be in different store bubbles of the same visit.
+ * A newer store turn with no book ask closes the offer.
  */
 export function extractOpenOffer(lines: ConversationHistoryLine[]): OpenOffer | null {
   let i = lines.length - 1
@@ -156,6 +171,7 @@ export function extractOpenOffer(lines: ConversationHistoryLine[]): OpenOffer | 
     lastTurn.unshift(lines[i])
     i -= 1
   }
+  if (lastTurn.length === 0) return null
 
   for (const line of lastTurn) {
     if (isAlsoListText(line.text)) continue
@@ -167,7 +183,18 @@ export function extractOpenOffer(lines: ConversationHistoryLine[]): OpenOffer | 
     if (!title || !question) continue
     return { title, url: match[0], question }
   }
-  return null
+
+  let question: string | null = null
+  for (let j = lastTurn.length - 1; j >= 0; j -= 1) {
+    if (isAlsoListText(lastTurn[j].text)) continue
+    question = bookAskQuestion(lastTurn[j].text)
+    if (question) break
+  }
+  const ask = question
+  if (!ask) return null
+  const product = extractLastShownProduct(lines)
+  if (!product?.url) return null
+  return { title: product.title, url: product.url, question: ask }
 }
 
 export type SessionTopic = 'order' | 'product' | 'missing' | null

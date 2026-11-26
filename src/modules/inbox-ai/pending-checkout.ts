@@ -92,11 +92,119 @@ export function parsePendingCheckout(raw: unknown): PendingCheckout | null {
   }
 }
 
+/** Draft or full address while collecting delivery details. Empty strings are allowed. */
+export function emptyAddressDraft(phone = ''): PendingCheckoutAddress {
+  return {
+    name: '',
+    phone_number: phone.trim(),
+    address: '',
+    city: '',
+    district: '',
+    state: '',
+    postcode: '',
+  }
+}
+
 function parseStoredAddress(raw: unknown): PendingCheckoutAddress | null {
-  if (raw == null) return null
-  const parsed = storefrontShippingAddressSchema.safeParse(raw)
-  if (!parsed.success) return null
-  return parsed.data
+  if (raw == null || typeof raw !== 'object') return null
+  const row = raw as Record<string, unknown>
+  return {
+    name: asText(row.name),
+    phone_number: asText(row.phone_number) || asText(row.phone),
+    address: asText(row.address) || asText(row.street),
+    city: asText(row.city),
+    district: asText(row.district),
+    state: asText(row.state),
+    postcode: asText(row.postcode) || asText(row.pin) || asText(row.pincode),
+  }
+}
+
+export function mergeAddressDraft(
+  previous: PendingCheckoutAddress | null | undefined,
+  next: Partial<PendingCheckoutAddress> | null | undefined,
+  phone = ''
+): PendingCheckoutAddress {
+  const base = previous ?? emptyAddressDraft(phone)
+  const patch = next ?? {}
+  return {
+    name: asText(patch.name) || base.name,
+    phone_number: asText(patch.phone_number) || base.phone_number || phone.trim(),
+    address: asText(patch.address) || base.address,
+    city: asText(patch.city) || base.city,
+    district: asText(patch.district) || base.district,
+    state: asText(patch.state) || base.state,
+    postcode: asText(patch.postcode) || base.postcode,
+  }
+}
+
+export function missingAddressFields(draft: PendingCheckoutAddress): string[] {
+  const parsed = storefrontShippingAddressSchema.safeParse(draft)
+  if (parsed.success) return []
+  return [
+    ...new Set(
+      parsed.error.issues
+        .map((issue) => issue.path[0])
+        .filter((field): field is string => typeof field === 'string')
+        .map((field) => ADDRESS_LABELS[field] ?? field)
+        .filter((field) => field !== 'phone')
+    ),
+  ]
+}
+
+/** name, street, city, district, state, 6-digit PIN */
+export function parseCommaAddress(text: string): PendingCheckoutAddress | null {
+  const parts = text
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+  if (parts.length < 6) return null
+  const postcode = parts[parts.length - 1].replace(/\s+/g, '')
+  if (!/^\d{6}$/.test(postcode)) return null
+  const state = parts[parts.length - 2]
+  const district = parts[parts.length - 3]
+  const city = parts[parts.length - 4]
+  const name = parts[0]
+  const address = parts.slice(1, parts.length - 4).join(', ')
+  if (!name || !address || !city || !district || !state) return null
+  return {
+    name,
+    phone_number: '',
+    address,
+    city,
+    district,
+    state,
+    postcode,
+  }
+}
+
+const FIELD_FROM_LABEL: Record<string, keyof PendingCheckoutAddress> = {
+  name: 'name',
+  address: 'address',
+  city: 'city',
+  district: 'district',
+  state: 'state',
+  PIN: 'postcode',
+  pin: 'postcode',
+  postcode: 'postcode',
+}
+
+/** One short reply after "district mathram koodi…" fills only that field. */
+export function fillSingleMissingField(
+  draft: PendingCheckoutAddress,
+  text: string,
+  missing: string[]
+): PendingCheckoutAddress | null {
+  if (missing.length !== 1) return null
+  const key = FIELD_FROM_LABEL[missing[0]]
+  if (!key) return null
+  const value = text.trim()
+  if (!value || value.split(/\s+/).length > 6) return null
+  if (/already|ezhuthi|wrote that|same/i.test(value)) return null
+  return { ...draft, [key]: value }
+}
+
+export function isAddressAlreadySaid(text: string): boolean {
+  return /\b(already|i already|njaan ezhuthi|ezhuthiyath|same details|athu thanne)\b/i.test(text.trim())
 }
 
 export function isCheckoutExpired(checkout: PendingCheckout, nowMs: number = Date.now()): boolean {
@@ -281,13 +389,13 @@ function pick(raw: Record<string, unknown>, keys: string[]): string {
   return ''
 }
 
-export function addressFromCheckoutParse(
+export function addressDraftFromRaw(
   raw: unknown,
   whatsappNumber: string
-): { ok: true; address: PendingCheckoutAddress } | { ok: false; missing: string[] } {
+): PendingCheckoutAddress {
   const row = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const phone = pick(row, ['phone_number', 'phone']) || whatsappNumber.trim()
-  const candidate = {
+  return {
     name: pick(row, ['name']),
     phone_number: phone,
     address: pick(row, ['address', 'street']),
@@ -296,11 +404,65 @@ export function addressFromCheckoutParse(
     state: pick(row, ['state']),
     postcode: pick(row, ['postcode', 'pin', 'pincode']),
   }
-  const parsed = storefrontShippingAddressSchema.safeParse(candidate)
-  if (parsed.success) return { ok: true, address: parsed.data }
-  const missing = parsed.error.issues
-    .map((issue) => issue.path[0])
-    .filter((field): field is string => typeof field === 'string')
-    .map((field) => ADDRESS_LABELS[field] ?? field)
-  return { ok: false, missing: [...new Set(missing)] }
+}
+
+export function addressFromCheckoutParse(
+  raw: unknown,
+  whatsappNumber: string
+): { ok: true; address: PendingCheckoutAddress } | { ok: false; missing: string[]; draft: PendingCheckoutAddress } {
+  const candidate = addressDraftFromRaw(raw, whatsappNumber)
+  const missing = missingAddressFields(candidate)
+  if (missing.length === 0) {
+    const parsed = storefrontShippingAddressSchema.safeParse(candidate)
+    if (parsed.success) return { ok: true, address: parsed.data }
+  }
+  return { ok: false, missing, draft: candidate }
+}
+
+/**
+ * Build the next address draft from this message + any saved draft.
+ * Comma lists and one-field replies do not need the LLM.
+ */
+export function nextAddressDraft(input: {
+  text: string
+  previous: PendingCheckoutAddress | null
+  phone: string
+  previousMissing?: string[]
+  llmRaw?: unknown
+}): { ok: true; address: PendingCheckoutAddress } | { ok: false; missing: string[]; draft: PendingCheckoutAddress } {
+  const phone = input.phone.trim()
+  const previous = input.previous ?? emptyAddressDraft(phone)
+
+  if (isAddressAlreadySaid(input.text)) {
+    const missing = missingAddressFields({ ...previous, phone_number: previous.phone_number || phone })
+    if (missing.length === 0) {
+      const parsed = storefrontShippingAddressSchema.safeParse({
+        ...previous,
+        phone_number: previous.phone_number || phone,
+      })
+      if (parsed.success) return { ok: true, address: parsed.data }
+    }
+    return { ok: false, missing, draft: previous }
+  }
+
+  const single = fillSingleMissingField(previous, input.text, input.previousMissing ?? [])
+  if (single) {
+    const draft = mergeAddressDraft(previous, single, phone)
+    const missing = missingAddressFields(draft)
+    if (missing.length === 0) {
+      const parsed = storefrontShippingAddressSchema.safeParse(draft)
+      if (parsed.success) return { ok: true, address: parsed.data }
+    }
+    return { ok: false, missing, draft }
+  }
+
+  const fromComma = parseCommaAddress(input.text)
+  const fromLlm = input.llmRaw !== undefined ? addressDraftFromRaw(input.llmRaw, phone) : null
+  const draft = mergeAddressDraft(previous, fromComma ?? fromLlm ?? emptyAddressDraft(phone), phone)
+  const missing = missingAddressFields(draft)
+  if (missing.length === 0) {
+    const parsed = storefrontShippingAddressSchema.safeParse(draft)
+    if (parsed.success) return { ok: true, address: parsed.data }
+  }
+  return { ok: false, missing, draft }
 }

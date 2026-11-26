@@ -6,7 +6,8 @@ import assert from 'node:assert/strict'
 import type { LlmToolCall, LlmToolDefinition } from '../../../shared/llm/types.js'
 import type { Store } from '../../stores/types/store.types.js'
 import type { OrderWithDetails } from '../../orders/repositories/order.repository.js'
-import type { CatalogMatch } from '../services/catalog-search.service.js'
+import { captionListingTitle, type CatalogMatch } from '../services/catalog-search.service.js'
+import { isBuyPhrase } from '../pending-checkout.js'
 import type { Product } from '../../products/types/product.types.js'
 import { detectLanguageAndScript } from '../../../shared/lib/detect-language-script.js'
 import { replyUsesOnlyToolFacts, sanitizeAgentSpoken } from '../agent/agent-guard.js'
@@ -1299,6 +1300,63 @@ async function main(): Promise<void> {
     })
     assert.equal(result?.reply.primaryMatch?.variant?.options?.Colour, 'Beige')
     assert.equal(result?.reply.primaryMatch?.variant?.options?.Size, '36')
+  })
+
+  await test('white variant caption drops black from the listing name', async () => {
+    const title = captionListingTitle(forceWhite)
+    assert.match(title, /White/)
+    assert.doesNotMatch(title, /Black/)
+  })
+
+  await test('bood cheyyahnam on the last card is a buy, not an order lookup', async () => {
+    const called: string[] = []
+    const card = {
+      role: 'store' as const,
+      text: `Yes sir, ithu nokku.\n${forceWhite.url}`,
+    }
+    assert.equal(isBuyPhrase('enick bood cheyyahnam ith', [card]), true)
+    assert.equal(looksLikePlacedOrderAsk('enick bood cheyyahnam ith'), false)
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'enick bood cheyyahnam ith',
+      recentMessages: [card],
+      customerPhone: '919999999999',
+      conversationId: 11,
+      shopSells: ['T Shirt'],
+      deps: {
+        searchCatalog: async () => [forceTee],
+        collectOrders: async () => {
+          called.push('collectOrders')
+          return []
+        },
+      },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'get_my_orders', args: { scope: 'latest' } })
+        return 'How can I assist you today?'
+      }) as Completer,
+    })
+    assert.equal(called.includes('collectOrders'), false)
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /ethu vendath parayu/i)
+  })
+
+  await test('quantity 1 after a quantity ask keeps the last card', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: '1',
+      recentMessages: [
+        { role: 'store', text: `Yes sir, ithu nokku.\n${forceWhite.url}` },
+        { role: 'store', text: 'Ith Force Men T-Shirt, size S undu. Ningal entha quantity venam?' },
+      ],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['T Shirt'],
+      deps: { searchCatalog: async () => [forceTee] },
+      completeWithTools: (async () => 'How can I assist you today?') as Completer,
+    })
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /ethu vendath parayu/i)
+    assert.match(result?.reply.primaryText ?? '', /ithu nokku|here it is|White|Force/i)
   })
 
   await test('spoken black is rewritten when the card is white', async () => {

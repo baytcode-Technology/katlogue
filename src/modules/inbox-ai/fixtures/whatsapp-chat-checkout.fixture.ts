@@ -9,6 +9,7 @@ import {
   buyQuantity,
   checkoutProductFromUrl,
   isBuyPhrase,
+  isQuantityReply,
   lastCheckoutProduct,
   nextCheckoutClaim,
   paymentAmountMatches,
@@ -62,10 +63,34 @@ test('product id and variant come from the store link', () => {
 test('a buy phrase uses the one product link in this visit', () => {
   assert.equal(isBuyPhrase('ok'), false)
   assert.equal(isBuyPhrase('yes'), false)
-  assert.equal(isBuyPhrase('venam'), true)
+  assert.equal(isBuyPhrase('venam'), false)
   assert.equal(isBuyPhrase('order cheyyam'), true)
   assert.equal(buyQuantity('venam'), 1)
   assert.equal(buyQuantity('2 venam'), 2)
+
+  const teeCard = {
+    role: 'store' as const,
+    text: 'Force Men Printed Round Neck Cotton Blend Black T-Shirt\nhttps://eatomatic.co.in/product/force-men-printed-round-neck-cotton-blend-black-t-shirt-21?variant=116',
+  }
+  assert.equal(isBuyPhrase('enick bood cheyyahnam ith', [teeCard]), true)
+  assert.equal(isBuyPhrase('enick t shirt vehnam', []), false)
+  assert.equal(isBuyPhrase('pants vehnam', [teeCard]), false)
+  assert.equal(isBuyPhrase('venam', [teeCard]), true)
+  assert.equal(
+    isQuantityReply('1', [
+      teeCard,
+      { role: 'store', text: 'Ith Force Men T-Shirt, size S undu. Ningal entha quantity venam?' },
+    ]),
+    true
+  )
+  assert.equal(
+    isBuyPhrase('1', [
+      teeCard,
+      { role: 'store', text: 'Ningal entha quantity venam?' },
+    ]),
+    true
+  )
+  assert.equal(buyQuantity('1'), 1)
 
   const shown = lastCheckoutProduct([
     {

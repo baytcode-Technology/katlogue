@@ -336,7 +336,7 @@ export function wantsReturnPolicy(text: string): boolean {
 }
 
 export function wantsCheckout(text: string): boolean {
-  return /\b(order cheyyam|order cheyam|order cheyyan|how to order|book it|i want to order)\b/i.test(
+  return /\b(order cheyyam|order cheyam|order cheyyan|order cheyyahnam|how to order|book it|book cheyy\w*|bood cheyy\w*|i want to order)\b/i.test(
     text
   )
 }

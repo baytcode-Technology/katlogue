@@ -760,6 +760,45 @@ export function getMatchImageUrl(match: CatalogMatch): string | null {
   )
 }
 
+const CAPTION_COLOUR_WORDS = [
+  'black',
+  'white',
+  'beige',
+  'cream',
+  'grey',
+  'gray',
+  'blue',
+  'green',
+  'red',
+  'yellow',
+  'maroon',
+  'purple',
+  'brown',
+  'pink',
+  'navy',
+]
+
+export function captionListingTitle(match: CatalogMatch): string {
+  const color = match.variant ? getVariantOptions(match.variant).color : null
+  let name = match.product.name
+  if (color) {
+    const shown = color.toLowerCase()
+    name = name
+      .replace(new RegExp(`\\b(${CAPTION_COLOUR_WORDS.join('|')})\\b`, 'gi'), (word) => {
+        const lower = word.toLowerCase()
+        if (shown === lower || shown.includes(lower) || lower.includes(shown)) return word
+        return ''
+      })
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+  }
+  if (!match.variant) return name
+  const { color: optionColor, size } = getVariantOptions(match.variant)
+  const optionBits = [optionColor, size].filter(Boolean)
+  if (optionBits.length > 0) return `${name} — ${optionBits.join(' / ')}`
+  return `${name} — ${match.variant.name}`
+}
+
 function formatVariantDetails(match: CatalogMatch): string {
   const parts: string[] = []
   const { color, size } = match.variant ? getVariantOptions(match.variant) : { color: null, size: null }
@@ -769,9 +808,7 @@ function formatVariantDetails(match: CatalogMatch): string {
 }
 
 export function formatProductCaption(match: CatalogMatch, currency: string): string {
-  const title = match.variant
-    ? `${match.product.name} — ${match.variant.name}`
-    : match.product.name
+  const title = captionListingTitle(match)
   const lines = [title, formatMoney(match.price, currency)]
 
   const variantDetails = formatVariantDetails(match)
@@ -792,7 +829,7 @@ export function formatOtherMatches(
   if (matches.length === 0) return ''
 
   const lines = matches.map((m) => {
-    const title = m.variant ? `${m.product.name} — ${m.variant.name}` : m.product.name
+    const title = captionListingTitle(m)
     return `• ${title} — ${formatMoney(m.price, currency)}\n  ${m.url}`
   })
 

@@ -23,6 +23,7 @@ import {
   type ConversationHistoryLine,
   type ParsedCustomerIntent,
 } from '../services/parse-customer-intent.service.js'
+import { isBuyPhrase } from '../pending-checkout.js'
 import { staffConnectLine, type StaffHandoffAction } from '../services/staff-handoff.service.js'
 import { isAgentReplyHonest, isHelpdeskEnglish, sanitizeAgentSpoken } from './agent-guard.js'
 import { buildInboxAgentSystemPrompt } from './inbox-agent-prompt.js'
@@ -352,8 +353,11 @@ export async function runInboxAgent(input: {
       : detected.language === 'Malayalam'
         ? 'Sheri sir, ethu vendath parayu.'
         : 'What do you need?'
-  if (detected.language === 'Malayalam' && isHelpdeskEnglish(spoken)) {
-    spoken = tools.state.shown ? cannedProduct : cannedAskWhat
+  const keepLastCard = Boolean(tools.state.shown || lastShown)
+  const buyingThisCard = isBuyPhrase(input.customerText, input.recentMessages) || checkout
+  if (isHelpdeskEnglish(spoken)) {
+    if (keepLastCard || buyingThisCard) spoken = cannedProduct
+    else if (detected.language === 'Malayalam') spoken = cannedAskWhat
   }
   const boardLine = boardSpokenOverride(
     input.customerText,
@@ -443,6 +447,8 @@ export async function runInboxAgent(input: {
       spoken = cannedClose
     } else if (storeShare || looksLikeGreeting) {
       spoken = storeShare ? cannedStore : cannedGreeting
+    } else if (keepLastCard || buyingThisCard) {
+      spoken = cannedProduct
     } else if (detected.language === 'Malayalam') {
       spoken = cannedAskWhat
     } else {

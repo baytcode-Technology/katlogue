@@ -276,7 +276,7 @@ async function continueVariant(input: {
   }
   const matched = matchCheckoutVariant(sellable, input.text)
   if (!matched) {
-    if (isProductQuestion(input.text)) {
+    if (isProductQuestion(input.text, [])) {
       await clear(input.store.id, input.conversation.id)
       return false
     }
@@ -420,7 +420,7 @@ export async function handleWhatsAppCheckoutText(input: {
   }
 
   if (!checkout) {
-    if (!isBuyPhrase(input.text)) return false
+    if (!isBuyPhrase(input.text, recentMessages)) return false
     return beginCheckout({ ...input, recentMessages })
   }
 
@@ -470,7 +470,7 @@ export async function handleWhatsAppCheckoutText(input: {
       })
       return true
     }
-    if (isProductQuestion(input.text)) {
+    if (isProductQuestion(input.text, recentMessages)) {
       await clear(input.store.id, input.conversation.id)
       return false
     }
@@ -493,7 +493,7 @@ export async function handleWhatsAppCheckoutText(input: {
     })
   }
 
-  if (isProductQuestion(input.text)) {
+  if (isProductQuestion(input.text, recentMessages)) {
     await clear(input.store.id, input.conversation.id)
     return false
   }

@@ -1314,7 +1314,7 @@ async function main(): Promise<void> {
       role: 'store' as const,
       text: `Yes sir, ithu nokku.\n${forceWhite.url}`,
     }
-    assert.equal(isBuyPhrase('enick bood cheyyahnam ith', [card]), true)
+    assert.equal(isBuyPhrase('enick bood cheyyahnam ith'), true)
     assert.equal(looksLikePlacedOrderAsk('enick bood cheyyahnam ith'), false)
     const result = await runInboxAgent({
       store,

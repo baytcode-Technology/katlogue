@@ -7,7 +7,7 @@ import {
 import type { ScriptStyle } from '../services/parse-customer-intent.service.js'
 
 const HELPDESK_ENGLISH =
-  /\b(how can i assist|what can i help you|let me know if you need|could you please let me know|view and purchase|need any (more )?help|here is what i found|if you have any other questions|you can check it out|feel free to let me know)\b/i
+  /\b(how can i assist|what can i help you|let me know if you need|could you please let me know|view and purchase|need any (more )?help|here is what i found|if you have any other questions|you can check it out|feel free to let me know|whatsapp.{0,30}not available|booking .{0,20}not available)\b/i
 
 export function isHelpdeskEnglish(reply: string): boolean {
   return HELPDESK_ENGLISH.test(reply)

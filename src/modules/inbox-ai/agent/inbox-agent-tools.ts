@@ -7,6 +7,7 @@ import {
 import { parseStoredPaymentConfig } from '../../payments/lib/payment-config.js'
 import type { Store } from '../../stores/types/store.types.js'
 import { applyChatSrcToUrl } from '../lib/chat-src.js'
+import { BOOK_PHRASE } from '../pending-checkout.js'
 import type { InboxAiChannel } from '../services/conversation-history.service.js'
 import {
   filterMatchesByScore,
@@ -336,9 +337,7 @@ export function wantsReturnPolicy(text: string): boolean {
 }
 
 export function wantsCheckout(text: string): boolean {
-  return /\b(order cheyyam|order cheyam|order cheyyan|order cheyyahnam|how to order|book it|book cheyy\w*|bood cheyy\w*|i want to order)\b/i.test(
-    text
-  )
+  return BOOK_PHRASE.test(text)
 }
 
 export function wantsDeliveryEta(text: string): boolean {

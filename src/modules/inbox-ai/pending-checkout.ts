@@ -38,10 +38,10 @@ export type CheckoutVariantChoice = {
   options: Record<string, unknown>
 }
 
-const BOOK_PHRASE =
+export const BOOK_PHRASE =
   /\b(order cheyyam|order cheyam|order cheyyan|order cheyyahnam|how to order|book it|book cheyy\w*|bood cheyy\w*|i want to order|i want this|i want it|buy this|take this)\b/i
 
-const WANT_PHRASE = /\b(venam|vehnam|vehnadth)\b/i
+export const WANT_PHRASE = /\b(venam|vehnam|vehnadth)\b/i
 
 const QUANTITY_ASK = /\b(quantity|entha quantity|ethra venam)\b/i
 
@@ -105,25 +105,6 @@ export function isCheckoutExpired(checkout: PendingCheckout, nowMs: number = Dat
   return nowMs - time > SESSION_MAX_AGE_MS
 }
 
-function lastStoreProductLine(lines: ConversationHistoryLine[]): string | null {
-  const shown = lastCheckoutProduct(lines)
-  if (!shown) return null
-  for (let i = lines.length - 1; i >= 0; i -= 1) {
-    const line = lines[i]
-    if (line.role !== 'store') continue
-    if (line.text.includes(shown.url)) return line.text
-  }
-  return shown.url
-}
-
-function namedDepartment(text: string): 'tshirt' | 'shirt' | 'pants' | null {
-  const lower = text.toLowerCase()
-  if (/\bt[\s-]?shirts?\b|\btees?\b/.test(lower)) return 'tshirt'
-  if (/\bshirts?\b/.test(lower)) return 'shirt'
-  if (/\bpants?\b|\btrousers?\b/.test(lower)) return 'pants'
-  return null
-}
-
 function lastStoreAskedQuantity(lines: ConversationHistoryLine[]): boolean {
   for (let i = lines.length - 1; i >= 0; i -= 1) {
     if (lines[i].role !== 'store') continue
@@ -139,20 +120,8 @@ export function isQuantityReply(
   return QUANTITY_ONLY.test(text.trim()) && lastStoreAskedQuantity(recentMessages)
 }
 
-export function isBuyPhrase(
-  text: string,
-  recentMessages: ConversationHistoryLine[] = []
-): boolean {
-  const trimmed = text.trim()
-  if (BOOK_PHRASE.test(trimmed)) return true
-  if (isQuantityReply(trimmed, recentMessages)) return true
-  if (!WANT_PHRASE.test(trimmed)) return false
-  const lastLine = lastStoreProductLine(recentMessages)
-  if (!lastLine) return false
-  const asked = namedDepartment(trimmed)
-  const shown = namedDepartment(lastLine)
-  if (asked && shown && asked !== shown) return false
-  return true
+export function isBuyPhrase(text: string): boolean {
+  return BOOK_PHRASE.test(text.trim())
 }
 
 export function buyQuantity(text: string): number {
@@ -176,7 +145,7 @@ export function isProductQuestion(
   text: string,
   recentMessages: ConversationHistoryLine[] = []
 ): boolean {
-  if (checkoutChoice(text) || isBuyPhrase(text, recentMessages)) return false
+  if (checkoutChoice(text) || isBuyPhrase(text)) return false
   return PRODUCT_QUESTION.test(text)
 }
 

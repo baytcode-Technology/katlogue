@@ -1471,7 +1471,7 @@ function normalizeLastQuestionAnswer(value: unknown): LastQuestionAnswer {
 }
 
 /** Short reply with no new product, e.g. a one-word answer to our offer. */
-function isShortReplyToOffer(trimmed: string): boolean {
+export function isShortReplyToOffer(trimmed: string): boolean {
   return trimmed.split(/\s+/).filter(Boolean).length <= 3
 }
 

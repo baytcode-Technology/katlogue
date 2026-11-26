@@ -23,8 +23,8 @@ import {
   type ConversationHistoryLine,
   type ParsedCustomerIntent,
 } from '../services/parse-customer-intent.service.js'
-import { isBuyPhrase } from '../pending-checkout.js'
 import { staffConnectLine, type StaffHandoffAction } from '../services/staff-handoff.service.js'
+import { routeCustomerTurn, type TurnRoute } from '../lib/route-turn.js'
 import { isAgentReplyHonest, isHelpdeskEnglish, sanitizeAgentSpoken } from './agent-guard.js'
 import { buildInboxAgentSystemPrompt } from './inbox-agent-prompt.js'
 import {
@@ -34,16 +34,12 @@ import {
   extraHitsIdentity,
   extraOptionVariants,
   INBOX_AGENT_TOOLS,
-  looksLikePlacedOrderAsk,
   matchAllShopDepartments,
   optionBoardLine,
   optionPhotoKey,
   queryIdentityTokens,
   stayOnLastProduct,
   wantsAlsoList,
-  wantsCheckout,
-  wantsReturnPolicy,
-  wantsDeliveryEta,
   wantsOptionPhotos,
   wantsOtherModels,
   wantsWholeStoreShare,
@@ -155,6 +151,7 @@ export async function runInboxAgent(input: {
   customerPhone: string | null
   conversationId: number | null
   shopSells: string[]
+  route?: TurnRoute
   deps?: InboxAgentToolDeps
   completeWithTools?: LlmProvider['completeWithTools']
 }): Promise<InboxAgentResult | null> {
@@ -217,14 +214,22 @@ export async function runInboxAgent(input: {
 
   tools.showBestSearchMatch()
 
+  const route =
+    input.route ??
+    routeCustomerTurn({
+      text: input.customerText,
+      recentMessages: input.recentMessages,
+      shopSells: input.shopSells,
+    })
   const stay = stayOnLastProduct(input.customerText, lastShown?.title ?? null, input.shopSells)
   const storeShare = wantsWholeStoreShare(input.customerText)
   const optionPhotos = wantsOptionPhotos(input.customerText)
-  const placedOrder = looksLikePlacedOrderAsk(input.customerText)
+  const placedOrder = route.kind === 'placed_order'
   const otherModels = wantsOtherModels(input.customerText)
-  const checkout = wantsCheckout(input.customerText)
-  const returnPolicy = wantsReturnPolicy(input.customerText)
-  const deliveryEta = wantsDeliveryEta(input.customerText)
+  const checkout = route.kind === 'book'
+  const returnPolicy = route.kind === 'shop_fact' && route.ask === 'returns'
+  const deliveryEta = route.kind === 'shop_fact' && route.ask === 'delivery'
+  const looksLikeGreeting = route.kind === 'greeting'
   const sessionTopic = detectSessionTopic(input.recentMessages)
   const thanksOnly =
     /^(ok(?:ay)?|thanks?|thank you|sheri)[\s.!,]*$/i.test(input.customerText.trim())
@@ -296,7 +301,6 @@ export async function runInboxAgent(input: {
       : detected.language === 'Malayalam'
         ? `Hi sir, swagatham. Catalog ithu: ${homeUrl}`
         : `Hi, welcome. Browse our catalog.\n${homeUrl}`
-  const looksLikeGreeting = /^(hi|hello|hey|hai|namaste)\b/i.test(input.customerText.trim())
 
   let spoken = sanitizeAgentSpoken(rawSpoken, { stripUrls: Boolean(tools.state.shown) })
 
@@ -354,7 +358,7 @@ export async function runInboxAgent(input: {
         ? 'Sheri sir, ethu vendath parayu.'
         : 'What do you need?'
   const keepLastCard = Boolean(tools.state.shown || lastShown)
-  const buyingThisCard = isBuyPhrase(input.customerText, input.recentMessages) || checkout
+  const buyingThisCard = route.kind === 'book'
   if (isHelpdeskEnglish(spoken)) {
     if (keepLastCard || buyingThisCard) spoken = cannedProduct
     else if (detected.language === 'Malayalam') spoken = cannedAskWhat

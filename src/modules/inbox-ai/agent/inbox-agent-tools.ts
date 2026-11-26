@@ -7,7 +7,12 @@ import {
 import { parseStoredPaymentConfig } from '../../payments/lib/payment-config.js'
 import type { Store } from '../../stores/types/store.types.js'
 import { applyChatSrcToUrl } from '../lib/chat-src.js'
-import { BOOK_PHRASE } from '../pending-checkout.js'
+import {
+  BOOK_PHRASE,
+  QUANTITY_WORD,
+  isQuantityNumber,
+  sizeTokens,
+} from '../pending-checkout.js'
 import type { InboxAiChannel } from '../services/conversation-history.service.js'
 import {
   filterMatchesByScore,
@@ -276,6 +281,8 @@ const FOLLOW_UP_TOKENS = new Set([
   'ithu',
   'ithinte',
   'mathi',
+  'math',
+  'okay',
   'undo',
   'undu',
   'onda',
@@ -452,14 +459,38 @@ export function extractAskedSize(text: string): string | null {
   return sizes[sizes.length - 1] ?? null
 }
 
+const LETTER_SIZE = /^(xxxl|xxl|xl|xxs|xs|s|m|l)$/i
+
+const SIZE_FILLER = new Set([
+  'aah', 'aa', 'ah', 'okay', 'ok', 'mathi', 'math', 'venam', 'vehnam', 'vendath', 'aanu',
+  'aahn', 'sir', 'size', 'sz', 'ith', 'ithu', 'enick', 'enik', 'encik', 'no', 'yes', 'pinne',
+])
+
 export function extractAskedSizes(text: string): string[] {
-  if (!/\b(size|sz)\b/i.test(text)) return []
-  const nums = [...text.matchAll(/\b(\d{1,3})\b/g)]
-    .map((match) => match[1])
-    .filter((num) => !(num === '1' && /\b1\s+mathi\b/i.test(text)))
-  if (nums.length > 0) return nums
-  const labeled = text.match(/\b(?:size|sz)\s*[:#-]?\s*(xxxl|xxl|xl|xxs|xs|s|m|l)\b/i)
-  return labeled?.[1] ? [labeled[1].toUpperCase()] : []
+  const tokens = sizeTokens(text)
+  const hasSizeWord = tokens.some((token) => token === 'size' || token === 'sz')
+  if (hasSizeWord) {
+    const labeled =
+      text.match(/\b(?:size|sz)\s*[:#-]?\s*(xxxl|xxl|xl|xxs|xs|s|m|l)\b/i) ??
+      text.match(/\b(xxxl|xxl|xl|xxs|xs|s|m|l)\s+(?:size|sz)\b/i)
+    if (labeled?.[1]) return [labeled[1].toUpperCase()]
+    const nums = tokens
+      .map((token, index) => ({ token, index }))
+      .filter(({ token, index }) => /^\d{1,3}$/.test(token) && !isQuantityNumber(tokens, index))
+      .filter(({ token, index }) => !(token === '1' && tokens[index + 1] === 'mathi'))
+      .map(({ token }) => token)
+    if (nums.length > 0) return nums
+  }
+  const letters = tokens.filter((token) => LETTER_SIZE.test(token))
+  if (letters.length !== 1) return []
+  const onlyFiller = tokens.every(
+    (token, index) =>
+      token === letters[0] ||
+      SIZE_FILLER.has(token) ||
+      QUANTITY_WORD.test(token) ||
+      (/^\d{1,2}$/.test(token) && isQuantityNumber(tokens, index))
+  )
+  return onlyFiller ? [letters[0].toUpperCase()] : []
 }
 
 const VALUE_ALIASES: Record<string, string[]> = {
@@ -493,7 +524,8 @@ export function askedBoardConstraints(
   for (const key of board.optionKeys) {
     const values = board.optionValues[key] ?? []
     if (/size/i.test(key)) {
-      const asked = extractAskedSizes(text)
+      const lettersOnly = values.length > 0 && values.every((value) => !/^\d+$/.test(value.trim()))
+      const asked = extractAskedSizes(text).filter((size) => !(lettersOnly && /^\d+$/.test(size)))
       const onBoard = asked.filter((size) =>
         values.some((value) => value.toLowerCase() === size.toLowerCase())
       )
@@ -612,11 +644,34 @@ function aliasOf(word: string, value: string): boolean {
   return words.some((alias) => alias === left || alias === right)
 }
 
+const DENIAL_AFTER = /^(illa|not|out|unavailable|stock)$/
+
+/** "Size S illa" / "S, M sizes not available" while the card shows S. */
+function deniesShownValue(text: string, shownValues: string[]): boolean {
+  const words = text.split(/[^a-z0-9']+/).filter(Boolean)
+  return shownValues.some((value) => {
+    const parts = value.toLowerCase().split(/[^a-z0-9']+/).filter(Boolean)
+    if (parts.length === 0) return false
+    return words.some((_, start) => {
+      if (!parts.every((part, offset) => words[start + offset] === part)) return false
+      const after = words.slice(start + parts.length, start + parts.length + 5)
+      return after.some((word, index) => {
+        if (!DENIAL_AFTER.test(word)) return false
+        if (word === 'not') return after[index + 1] === 'available' || after[index + 1] === 'in'
+        if (word === 'out') return after[index + 1] === 'of'
+        if (word === 'stock') return after.slice(index + 1, index + 3).includes('illa')
+        return true
+      })
+    })
+  })
+}
+
 export function spokenConflictsWithVariant(spoken: string, match: CatalogMatch): boolean {
   const board = match.variantBoard
   if (!board) return false
   const text = spoken.toLowerCase()
   const options = match.variant?.options ?? {}
+  if (deniesShownValue(text, Object.values(options).map((value) => String(value)))) return true
   for (const [key, values] of Object.entries(board.optionValues)) {
     const shown = String(options[key] ?? '').toLowerCase()
     for (const value of values) {

@@ -1359,6 +1359,75 @@ async function main(): Promise<void> {
     assert.match(result?.reply.primaryText ?? '', /ithu nokku|here it is|White|Force/i)
   })
 
+  const letterBase = { ...catalogMatch(22, 'Plain Round Neck T-Shirt', 399), categoryName: 'T Shirt' }
+  const letterS = variantOf(letterBase, 201, 'S / Black', { Color: 'Black', Size: 'S' })
+  const letterM = variantOf(letterBase, 202, 'M / Black', { Color: 'Black', Size: 'M' })
+  const letterL = variantOf(letterBase, 203, 'L / Black', { Color: 'Black', Size: 'L' })
+  const letterXl = variantOf(letterBase, 204, 'XL / Black', { Color: 'Black', Size: 'XL' })
+  const letterTee = productWithVariants(letterS, [letterS, letterM, letterL, letterXl])
+  const letterCard = { role: 'store' as const, text: `Yes sir, ithu nokku.\n${letterS.url}` }
+
+  await test('s size 1 quantity on a letter board is not a missing size 1', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 's size 1 quantity',
+      recentMessages: [letterCard],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['T Shirt'],
+      deps: { searchCatalog: async () => [letterTee] },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 's size' } })
+        await runTool({ name: 'show_product', args: { productId: 22, variantId: 201 } })
+        return 'Yes sir, Size S und.'
+      }) as Completer,
+    })
+    assert.equal(result?.reply.primaryMatch?.variant?.options?.Size, 'S')
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /\b1\b.{0,30}illa/i)
+  })
+
+  await test('spoken Size S illa is rewritten when the card is S', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'size undo',
+      recentMessages: [letterCard],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['T Shirt'],
+      deps: { searchCatalog: async () => [letterTee] },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'size' } })
+        await runTool({ name: 'show_product', args: { productId: 22, variantId: 201 } })
+        return 'Size S illa sir, M, L, XL und.'
+      }) as Completer,
+    })
+    assert.equal(result?.reply.primaryMatch?.variant?.options?.Size, 'S')
+    assert.doesNotMatch(result?.reply.primaryText ?? '', /S illa/i)
+    assert.match(result?.reply.primaryText ?? '', /Size S/)
+  })
+
+  await test('M math after an S card shows the M variant', async () => {
+    const result = await runInboxAgent({
+      store,
+      channel: 'whatsapp',
+      customerText: 'aah okay M math',
+      recentMessages: [letterCard],
+      customerPhone: null,
+      conversationId: 11,
+      shopSells: ['T Shirt'],
+      deps: { searchCatalog: async () => [letterTee] },
+      completeWithTools: (async (_system, _history, _tools, runTool) => {
+        await runTool({ name: 'search_products', args: { query: 'M' } })
+        await runTool({ name: 'show_product', args: { productId: 22, variantId: 201 } })
+        return 'Yes sir, ithu nokku.'
+      }) as Completer,
+    })
+    assert.equal(result?.reply.primaryMatch?.product.id, 22)
+    assert.equal(result?.reply.primaryMatch?.variant?.options?.Size, 'M')
+  })
+
   await test('spoken black is rewritten when the card is white', async () => {
     const result = await runInboxAgent({
       store,

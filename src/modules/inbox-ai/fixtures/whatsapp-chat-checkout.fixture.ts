@@ -14,6 +14,7 @@ import {
   nextCheckoutClaim,
   paymentAmountMatches,
   readImageDecision,
+  variantForSize,
   type PendingCheckout,
 } from '../pending-checkout.js'
 
@@ -58,6 +59,24 @@ test('product id and variant come from the store link', () => {
     productId: 42,
     variantId: null,
   })
+})
+
+test('the size they said wins over the card and keeps its colour', () => {
+  const rows = [
+    { id: 1, name: 'S / Black', options: { Size: 'S', Color: 'Black' } },
+    { id: 2, name: 'M / Black', options: { Size: 'M', Color: 'Black' } },
+    { id: 3, name: 'M / White', options: { Size: 'M', Color: 'White' } },
+  ]
+  assert.equal(variantForSize(rows, rows[0], 'M')?.id, 2)
+  assert.equal(variantForSize(rows, rows[0], 'XL'), null)
+  assert.equal(variantForSize(rows, null, 'M'), null)
+})
+
+test('a number next to a quantity word is the count, not the size', () => {
+  assert.equal(buyQuantity('black t shirt s size 1 quantity book cheyyahnam'), 1)
+  assert.equal(buyQuantity('size 32 2 qty'), 2)
+  assert.equal(buyQuantity('size 32 venam'), 1)
+  assert.equal(buyQuantity('3 ennam venam'), 3)
 })
 
 test('a buy phrase uses the one product link in this visit', () => {

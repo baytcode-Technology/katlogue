@@ -2,7 +2,11 @@ import * as instagramChatRepository from '../../instagram/repositories/instagram
 import * as whatsappChatRepository from '../../whatsapp/repositories/whatsapp-chat.repository.js'
 import type { ConversationHistoryLine } from './parse-customer-intent.service.js'
 
-const HISTORY_LIMIT = 6
+/** Enough of this visit to still see the last product card after a few size replies. */
+const SESSION_FETCH_LIMIT = 20
+
+/** What the model reads. Keeps the prompt the same size as before. */
+const MODEL_HISTORY_LINES = 6
 
 /** A later "hi" must not revive a product from days ago. Follow-ups stay in this window. */
 export const SESSION_MAX_AGE_MS = 4 * 60 * 60 * 1000
@@ -19,12 +23,12 @@ export async function fetchRecentConversationHistory(input: {
       ? await whatsappChatRepository.listMessages({
           storeId: input.storeId,
           conversationId: input.conversationId,
-          limit: HISTORY_LIMIT,
+          limit: SESSION_FETCH_LIMIT,
         })
       : await instagramChatRepository.listMessages({
           storeId: input.storeId,
           conversationId: input.conversationId,
-          limit: HISTORY_LIMIT,
+          limit: SESSION_FETCH_LIMIT,
         })
 
   return messages
@@ -46,7 +50,10 @@ export async function fetchRecentConversationHistory(input: {
 
 export function formatConversationHistory(lines: ConversationHistoryLine[]): string | null {
   if (lines.length === 0) return null
-  return lines.map((l) => `${l.role === 'customer' ? 'Customer' : 'Store'}: ${l.text}`).join('\n')
+  return lines
+    .slice(-MODEL_HISTORY_LINES)
+    .map((l) => `${l.role === 'customer' ? 'Customer' : 'Store'}: ${l.text}`)
+    .join('\n')
 }
 
 /**

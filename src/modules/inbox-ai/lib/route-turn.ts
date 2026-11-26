@@ -1,4 +1,5 @@
 import {
+  extractAskedSizes,
   looksLikePlacedOrderAsk,
   matchShopDepartment,
   wantsDeliveryEta,
@@ -11,6 +12,7 @@ import {
   checkoutChoice,
   isQuantityReply,
   lastCheckoutProduct,
+  sizeTokens,
 } from '../pending-checkout.js'
 import {
   extractLastShownProduct,
@@ -31,8 +33,6 @@ export type TurnRoute =
   | { kind: 'greeting' }
 
 const BARE_HELLO = /^(hi|hello|hey|hai|namaste)\b/i
-const SIZE_ON_CARD = /\b(size|sz)\b/i
-
 function namesAnotherDepartment(text: string, shopSells: string[], lastTitle: string | null): boolean {
   const asked = matchShopDepartment(text, shopSells)
   if (!asked) return false
@@ -53,11 +53,12 @@ export function routeCustomerTurn(input: {
   const lastTitle = extractLastShownProduct(recentMessages)?.title ?? null
   const otherDepartment = namesAnotherDepartment(text, input.shopSells, lastTitle)
   const offer = extractOpenOffer(recentMessages)
+  const sizes = extractAskedSizes(text)
+  const hasCount = sizeTokens(text).some((token) => /^\d{1,2}$/.test(token) && !sizes.includes(token))
+  const sizeOnly = sizes.length > 0 && !hasCount
   const agreedToOffer =
-    Boolean(offer) && isShortReplyToOffer(text) && !isRefuseMessage(text)
-  const sizeOrQuantity =
-    isQuantityReply(text, recentMessages) ||
-    (SIZE_ON_CARD.test(text) && /\b([1-9]|1\d|20|xxxl|xxl|xl|xxs|xs|s|m|l)\b/i.test(text))
+    Boolean(offer) && isShortReplyToOffer(text) && !isRefuseMessage(text) && !sizeOnly
+  const sizeOrQuantity = isQuantityReply(text, recentMessages) || (sizes.length > 0 && hasCount)
   const wantThis = WANT_PHRASE.test(text) && !matchShopDepartment(text, input.shopSells)
 
   if (

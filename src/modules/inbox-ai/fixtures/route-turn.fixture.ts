@@ -86,6 +86,44 @@ test('return cheyan parumo is the returns fact', () => {
   assert.deepEqual(route, { kind: 'shop_fact', ask: 'returns' })
 })
 
+const longThread = [
+  card,
+  { role: 'customer' as const, text: 'size undo' },
+  { role: 'store' as const, text: 'Yes sir, Size S, M, L, XL und.' },
+  { role: 'customer' as const, text: 'S' },
+  { role: 'store' as const, text: 'Yes sir, ithu Size S aanu.' },
+  { role: 'customer' as const, text: 'aah okay M math' },
+  { role: 'store' as const, text: 'Yes sir, Size M und.' },
+  { role: 'customer' as const, text: 'price ethra' },
+  { role: 'store' as const, text: 'Rs 499 sir.' },
+]
+
+test('book cheyyahnam with the card 8 lines back is a book', () => {
+  const route = routeCustomerTurn({
+    text: 'encik ith book cheyyahnam',
+    recentMessages: longThread,
+    shopSells: sells,
+  })
+  assert.equal(route.kind, 'book')
+})
+
+test('s size 1 quantity book cheyyahnam is a book of 1', () => {
+  const route = routeCustomerTurn({
+    text: 'black t shirt s size 1 quantity book cheyyahnam',
+    recentMessages: longThread,
+    shopSells: sells,
+  })
+  assert.equal(route.kind, 'book')
+  if (route.kind === 'book') assert.equal(route.quantity, 1)
+})
+
+test('a bare size after the card stays on the product', () => {
+  for (const text of ['S', 'aah okay M math']) {
+    const route = routeCustomerTurn({ text, recentMessages: longThread, shopSells: sells })
+    assert.equal(route.kind, 'product', text)
+  }
+})
+
 test('ys with no card is not a book', () => {
   const route = routeCustomerTurn({ text: 'ys', recentMessages: [], shopSells: sells })
   assert.notEqual(route.kind, 'book')

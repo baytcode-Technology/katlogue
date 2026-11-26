@@ -21,9 +21,15 @@ import {
   notifyWhatsAppChat,
 } from '../../notifications/services/send-store-notification.service.js'
 import { composeInboxAiReply } from './compose-inbox-ai-reply.service.js'
+import { routeCustomerTurn } from '../lib/route-turn.js'
+import {
+  formatShopCategories,
+  getStoreCatalogSummary,
+} from './catalog-search.service.js'
 import { shouldSkipAutomatedInbound } from './skip-automated-inbound.js'
 import {
   fetchRecentConversationHistory,
+  filterSessionHistory,
   type InboxAiChannel,
 } from './conversation-history.service.js'
 import { sendAutoReplyInstagramText } from './send-auto-reply-instagram.service.js'
@@ -31,7 +37,10 @@ import {
   sendAutoReplyWhatsAppImage,
   sendAutoReplyWhatsAppText,
 } from './send-auto-reply-whatsapp.service.js'
-import { handleWhatsAppCheckoutText } from './whatsapp-chat-checkout.service.js'
+import {
+  handleWhatsAppCheckoutText,
+  startWhatsAppBookCheckout,
+} from './whatsapp-chat-checkout.service.js'
 
 export type { InboxAiChannel } from './conversation-history.service.js'
 
@@ -158,11 +167,13 @@ async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
   try {
     const { store, conversation } = replyContext
 
-    const recentMessages = await fetchRecentConversationHistory({
-      channel: input.channel,
-      storeId: input.storeId,
-      conversationId: input.conversationId,
-    })
+    const recentMessages = filterSessionHistory(
+      await fetchRecentConversationHistory({
+        channel: input.channel,
+        storeId: input.storeId,
+        conversationId: input.conversationId,
+      })
+    )
 
     if (input.channel === 'whatsapp' && 'customer_wa_number' in conversation) {
       const handled = await handleWhatsAppCheckoutText({
@@ -183,6 +194,24 @@ async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
       return
     }
 
+    const shopSells = formatShopCategories(await getStoreCatalogSummary(input.storeId))
+    const route = routeCustomerTurn({ text, recentMessages, shopSells })
+    if (
+      route.kind === 'book' &&
+      input.channel === 'whatsapp' &&
+      'customer_wa_number' in conversation
+    ) {
+      const started = await startWhatsAppBookCheckout({
+        store,
+        conversation,
+        text,
+        recentMessages,
+        payHere: route.payHere,
+        quantity: route.quantity,
+      })
+      if (started) return
+    }
+
     const customerPhone =
       input.channel === 'whatsapp' && 'customer_wa_number' in conversation
         ? conversation.customer_wa_number
@@ -196,6 +225,8 @@ async function processInbound(input: HandleInboundInboxAiInput): Promise<void> {
       customerPhone,
       conversationId: input.conversationId,
       staffWarnedAt: conversation.staff_warned_at,
+      shopSells,
+      route,
     })
 
     const { intent, lastShownProduct, reply, staffHandoff } = composed

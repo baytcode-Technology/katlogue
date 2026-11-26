@@ -24,7 +24,6 @@ import * as whatsappChatRepository from '../../whatsapp/repositories/whatsapp-ch
 import type { WhatsAppConversation } from '../../whatsapp/types/whatsapp-chat.types.js'
 import {
   addressFromCheckoutParse,
-  isBuyPhrase,
   isCheckoutExpired,
   isProductQuestion,
   lastCheckoutProduct,
@@ -189,6 +188,8 @@ async function beginCheckout(input: {
   conversation: WhatsAppConversation
   text: string
   recentMessages: ConversationHistoryLine[]
+  payHere?: boolean
+  quantity?: number
 }): Promise<boolean> {
   const shown = lastCheckoutProduct(input.recentMessages)
   if (!shown) return false
@@ -202,6 +203,7 @@ async function beginCheckout(input: {
   const sellable = (grouped.get(product.id) ?? []).filter((variant) => isVariantSellable(product, variant))
   if (sellable.length === 0 && !isSimpleProductSellable(product)) return false
 
+  const quantity = input.quantity ?? buyQuantity(input.text)
   const fromUrl = shown.variantId ? sellable.find((variant) => variant.id === shown.variantId) ?? null : null
   const fromText = matchCheckoutVariant(sellable, input.text)
   const variant = fromUrl ?? (sellable.length === 1 ? sellable[0] : fromText)
@@ -210,7 +212,7 @@ async function beginCheckout(input: {
       status: 'need_variant',
       product_id: product.id,
       variant_id: null,
-      quantity: buyQuantity(input.text),
+      quantity,
       title: product.name,
       address: null,
       created_at: new Date().toISOString(),
@@ -229,10 +231,19 @@ async function beginCheckout(input: {
     status: 'choosing',
     product_id: product.id,
     variant_id: variant?.id ?? null,
-    quantity: buyQuantity(input.text),
+    quantity,
     title: variant ? `${product.name} — ${variant.name}` : product.name,
     address: null,
     created_at: new Date().toISOString(),
+  }
+  if (input.payHere) {
+    await beginPayHere({
+      store: input.store,
+      conversation: input.conversation,
+      checkout,
+      url: productUrl(input.store, product, variant?.id ?? null),
+    })
+    return true
   }
   await save(input.store.id, input.conversation.id, checkout)
   await reply({
@@ -242,6 +253,17 @@ async function beginCheckout(input: {
     message: choiceMessage(checkout.title),
   })
   return true
+}
+
+export async function startWhatsAppBookCheckout(input: {
+  store: Store
+  conversation: WhatsAppConversation
+  text: string
+  recentMessages: ConversationHistoryLine[]
+  payHere: boolean
+  quantity: number
+}): Promise<boolean> {
+  return beginCheckout(input)
 }
 
 async function continueVariant(input: {
@@ -419,10 +441,7 @@ export async function handleWhatsAppCheckoutText(input: {
     checkout = null
   }
 
-  if (!checkout) {
-    if (!isBuyPhrase(input.text, recentMessages)) return false
-    return beginCheckout({ ...input, recentMessages })
-  }
+  if (!checkout) return false
 
   if (checkout.status === 'creating') {
     await reply({

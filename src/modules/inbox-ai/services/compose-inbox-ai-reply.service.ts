@@ -12,6 +12,7 @@ import {
 } from './conversation-history.service.js'
 import { stayOnLastProduct } from '../agent/inbox-agent-tools.js'
 import { inboxAgentEnabled, runInboxAgent } from '../agent/run-inbox-agent.js'
+import { routeCustomerTurn, type TurnRoute } from '../lib/route-turn.js'
 import {
   parseCustomerIntent,
   parseCustomerIntentOffline,
@@ -37,6 +38,8 @@ export type ComposeInboxAiReplyInput = {
   customerPhone?: string | null
   conversationId?: number | null
   staffWarnedAt?: string | null
+  shopSells?: string[]
+  route?: TurnRoute
 }
 
 export type ComposeInboxAiReplyResult = {
@@ -71,7 +74,10 @@ export async function composeInboxAiReply(
   const text = input.customerText.trim()
   const recentMessages = filterSessionHistory(input.recentMessages ?? [])
   const conversationHistory = formatConversationHistory(recentMessages)
-  const shopSells = formatShopCategories(await getStoreCatalogSummary(input.store.id))
+  const shopSells =
+    input.shopSells ?? formatShopCategories(await getStoreCatalogSummary(input.store.id))
+  const route =
+    input.route ?? routeCustomerTurn({ text, recentMessages, shopSells })
 
   if (inboxAgentEnabled()) {
     const offline = parseCustomerIntentOffline(text, {
@@ -105,6 +111,7 @@ export async function composeInboxAiReply(
         customerPhone: input.customerPhone ?? null,
         conversationId: input.conversationId ?? null,
         shopSells,
+        route,
       })
       if (agent) {
         const wouldSendImage =

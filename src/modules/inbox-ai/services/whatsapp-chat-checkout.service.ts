@@ -33,8 +33,10 @@ import {
   nextCheckoutClaim,
   parsePendingCheckout,
   readImageDecision,
+  variantForSize,
   type PendingCheckout,
 } from '../pending-checkout.js'
+import { extractAskedSize } from '../agent/inbox-agent-tools.js'
 import {
   claimWhatsAppPendingCheckout,
   clearWhatsAppPendingCheckout,
@@ -183,6 +185,19 @@ async function sendPaymentRequest(input: {
   }
 }
 
+/** Size in this message, else the latest size the customer named this visit. */
+function latestAskedSize(text: string, recentMessages: ConversationHistoryLine[]): string | null {
+  const now = extractAskedSize(text)
+  if (now) return now
+  for (let i = recentMessages.length - 1; i >= 0; i -= 1) {
+    const line = recentMessages[i]
+    if (line.role !== 'customer') continue
+    const size = extractAskedSize(line.text)
+    if (size) return size
+  }
+  return null
+}
+
 async function beginCheckout(input: {
   store: Store
   conversation: WhatsAppConversation
@@ -205,8 +220,10 @@ async function beginCheckout(input: {
 
   const quantity = input.quantity ?? buyQuantity(input.text)
   const fromUrl = shown.variantId ? sellable.find((variant) => variant.id === shown.variantId) ?? null : null
+  const chosenSize = latestAskedSize(input.text, input.recentMessages)
+  const fromSize = chosenSize ? variantForSize(sellable, fromUrl, chosenSize) : null
   const fromText = matchCheckoutVariant(sellable, input.text)
-  const variant = fromUrl ?? (sellable.length === 1 ? sellable[0] : fromText)
+  const variant = fromSize ?? fromUrl ?? (sellable.length === 1 ? sellable[0] : fromText)
   if (sellable.length > 0 && !variant) {
     const checkout: PendingCheckout = {
       status: 'need_variant',

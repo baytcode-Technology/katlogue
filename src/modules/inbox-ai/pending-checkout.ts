@@ -124,10 +124,27 @@ export function isBuyPhrase(text: string): boolean {
   return BOOK_PHRASE.test(text.trim())
 }
 
+export const QUANTITY_WORD = /^(quantity|qty|ennam|rennam|piece|pieces|pcs|nos|book)$/i
+
+export function sizeTokens(text: string): string[] {
+  return text.toLowerCase().split(/[\s,.!?]+/).filter(Boolean)
+}
+
+/** A number next to a quantity word ("1 quantity", "qty 2", "1 rennam") is a count, not a size. */
+export function isQuantityNumber(tokens: string[], index: number): boolean {
+  return QUANTITY_WORD.test(tokens[index + 1] ?? '') || QUANTITY_WORD.test(tokens[index - 1] ?? '')
+}
+
 export function buyQuantity(text: string): number {
-  const match = /\b(\d{1,2})\b/.exec(text)
-  if (!match) return 1
-  const quantity = Number(match[1])
+  const tokens = sizeTokens(text)
+  const numbers = tokens
+    .map((token, index) => ({ token, index }))
+    .filter(({ token }) => /^\d{1,2}$/.test(token))
+  const counted =
+    numbers.find(({ index }) => isQuantityNumber(tokens, index)) ??
+    numbers.find(({ index }) => !/^(size|sz)$/.test(tokens[index - 1] ?? ''))
+  if (!counted) return 1
+  const quantity = Number(counted.token)
   if (quantity < 1 || quantity > 20) return 1
   return quantity
 }
@@ -200,6 +217,25 @@ export function matchCheckoutVariant(
   const matches = variants.filter((variant) => optionValues(variant).some((value) => mentions(text, value)))
   if (matches.length !== 1) return null
   return matches[0]
+}
+
+const sameValue = (a: unknown, b: unknown) =>
+  String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase()
+
+/** The size they said, keeping the shown card's other options (colour). */
+export function variantForSize<T extends CheckoutVariantChoice>(
+  variants: T[],
+  shown: T | null,
+  size: string
+): T | null {
+  const matches = variants.filter((variant) => {
+    const entries = Object.entries(variant.options)
+    const sizeHit = entries.some(([key, value]) => /size/i.test(key) && sameValue(value, size))
+    if (!sizeHit) return false
+    if (!shown) return true
+    return entries.every(([key, value]) => /size/i.test(key) || sameValue(value, shown.options[key]))
+  })
+  return matches.length === 1 ? matches[0] : null
 }
 
 export function paymentAmountMatches(catalogTotal: number, shownAmount: number): boolean {

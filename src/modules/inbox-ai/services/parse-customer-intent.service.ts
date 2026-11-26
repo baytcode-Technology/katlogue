@@ -1964,8 +1964,9 @@ function buildIntentPrompt(
   const offerLine = offer
     ? `Our last question to the customer (about ${offer.title}): ${offer.question}\n\n`
     : ''
-  const customerOnly = recentMessages.filter((m) => m.role === 'customer')
-  const history = (customerOnly.length > 0 ? customerOnly : recentMessages)
+  const recent = recentMessages.slice(-6)
+  const customerOnly = recent.filter((m) => m.role === 'customer')
+  const history = (customerOnly.length > 0 ? customerOnly : recent)
     .map((m) => `${m.role === 'customer' ? 'Customer' : 'Store'}: ${m.text}`)
     .join('\n')
   return `${shopLine}Recent conversation (customer messages only — for follow-ups like color-only replies). Latest message product type overrides earlier products:\n${history}\n\n${offerLine}Latest customer message:\n${text}`

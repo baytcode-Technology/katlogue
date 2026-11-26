@@ -71,7 +71,8 @@ export function routeCustomerTurn(input: {
     return {
       kind: 'book',
       quantity: buyQuantity(text),
-      payHere: checkoutChoice(text) === 'pay_here',
+      // WhatsApp closes in chat unless they ask for the website.
+      payHere: checkoutChoice(text) !== 'website',
     }
   }
 

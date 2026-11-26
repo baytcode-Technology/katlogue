@@ -27,8 +27,7 @@ console.log('\n=== Route turn ===')
 
 test('ys after order cheyyano is a book', () => {
   const route = routeCustomerTurn({ text: 'ys', recentMessages: [card], shopSells: sells })
-  assert.equal(route.kind, 'book')
-  if (route.kind === 'book') assert.equal(route.quantity, 1)
+  assert.deepEqual(route, { kind: 'book', quantity: 1, payHere: true })
 })
 
 test('1, size s on the last card is a book', () => {
@@ -38,7 +37,10 @@ test('1, size s on the last card is a book', () => {
     shopSells: sells,
   })
   assert.equal(route.kind, 'book')
-  if (route.kind === 'book') assert.equal(route.quantity, 1)
+  if (route.kind === 'book') {
+    assert.equal(route.quantity, 1)
+    assert.equal(route.payHere, true)
+  }
 })
 
 test('book through whatsapp pays in chat', () => {
@@ -48,6 +50,33 @@ test('book through whatsapp pays in chat', () => {
     shopSells: sells,
   })
   assert.deepEqual(route, { kind: 'book', quantity: 1, payHere: true })
+})
+
+test('yes cheyyam books when the ask is in a later bubble than the link', () => {
+  const route = routeCustomerTurn({
+    text: 'yes cheyyam',
+    recentMessages: [
+      {
+        role: 'store',
+        text: 'Force Men Printed Round Neck Cotton Blend Black T-Shirt\nhttps://eatomatic.co.in/product/force-men-printed-round-neck-cotton-blend-black-t-shirt-21?variant=117',
+      },
+      {
+        role: 'store',
+        text: 'Ad kandittu ithu thanne aano? Ithu Black, Size S aanu. Ithu book cheyyamo?',
+      },
+    ],
+    shopSells: sells,
+  })
+  assert.deepEqual(route, { kind: 'book', quantity: 1, payHere: true })
+})
+
+test('website after the card stays on the website path', () => {
+  const route = routeCustomerTurn({
+    text: 'website link venam',
+    recentMessages: [card],
+    shopSells: sells,
+  })
+  assert.deepEqual(route, { kind: 'book', quantity: 1, payHere: false })
 })
 
 test('t shirt vehnam with no card is a product search', () => {
